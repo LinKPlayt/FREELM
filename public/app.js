@@ -197,7 +197,7 @@ function ensureModel() {
   if (env.cloud) next = { provider: "cloud", id: "claude" };
   else if (env.ollama.available && env.ollama.models.length)
     next = { provider: "ollama", id: [...env.ollama.models].sort((x, y) => y.size - x.size)[0].name }; // most capable installed
-  else if (env.webgpu.ok) {
+  else if (env.webgpu.ok && !env.webgpu.software) {
     const cached = browserAI.BROWSER_MODELS.find((m) => env.cached.has(m.id));
     next = { provider: "browser", id: (cached || browserAI.BROWSER_MODELS.find((m) => m.recommended)).id };
   }
@@ -276,9 +276,11 @@ function renderModelMenu() {
   // Browser
   const browserBody = [];
   if (env.webgpu.checked && !env.webgpu.ok) browserBody.push(h("div", { class: "menu-note" }, env.webgpu.reason));
-  else
+  else {
+    if (env.webgpu.software) browserBody.push(h("div", { class: "menu-note" }, "⚠ No hardware GPU detected — these will be very slow here."));
     for (const m of browserAI.BROWSER_MODELS)
       browserBody.push(menuItem({ provider: "browser", id: m.id }, m.label, env.cached.has(m.id) ? "Ready" : `${m.gb} GB`));
+  }
   sections.push(h("div", { class: "menu-section" }, menuHead("browser"), browserBody));
 
   sections.push(
@@ -1113,6 +1115,16 @@ function renderBrowserPanel() {
         { class: "fine" },
         "Browser models need WebGPU: Chrome or Edge 113+ on Windows, Mac or ChromeOS, Safari 26+, or Chrome on recent Android phones. The page must be opened over https:// or on localhost.",
       ),
+    );
+  } else if (env.webgpu.software) {
+    kids.push(
+      h(
+        "div",
+        { class: "status bad" },
+        h("span", { class: "dot" }),
+        h("span", { class: "grow" }, "Your browser is using software rendering instead of a real GPU, so browser models will be extremely slow here."),
+      ),
+      h("p", { class: "fine" }, "Turn on hardware acceleration in your browser settings, update your graphics drivers, or use “This computer” (Ollama) instead."),
     );
   } else {
     kids.push(

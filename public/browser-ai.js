@@ -18,6 +18,7 @@ const CONTEXT_CHARS = 9000; // these builds have a 4K-token window; keep history
 
 let webllm = null;
 let engine = null;
+let worker = null;
 let loadedId = null;
 let loading = null;
 let hasF16 = true;
@@ -28,7 +29,10 @@ export async function webgpuStatus() {
     const adapter = await navigator.gpu.requestAdapter();
     if (!adapter) return { ok: false, reason: "No compatible GPU was found on this device." };
     hasF16 = adapter.features.has("shader-f16");
-    return { ok: true, f16: hasF16 };
+    const info = adapter.info || {};
+    // Software rendering (no real GPU available to the browser) works but is extremely slow.
+    const software = Boolean(adapter.isFallbackAdapter || info.isFallbackAdapter || /swiftshader|llvmpipe|software/i.test(`${info.architecture} ${info.description}`));
+    return { ok: true, f16: hasF16, software };
   } catch {
     return { ok: false, reason: "WebGPU is turned off or unavailable on this device." };
   }
@@ -69,7 +73,7 @@ export async function load(id, onProgress = () => {}) {
   loading = (async () => {
     const report = (r) => onProgress({ progress: r.progress ?? 0, text: r.text || "" });
     if (!engine) {
-      const worker = new Worker(new URL("./llm-worker.js", import.meta.url), { type: "module" });
+      worker = new Worker(new URL("./llm-worker.js", import.meta.url), { type: "module" });
       engine = await l.CreateWebWorkerMLCEngine(worker, resolve(id), { initProgressCallback: report });
     } else {
       engine.setInitProgressCallback(report);
@@ -81,12 +85,29 @@ export async function load(id, onProgress = () => {}) {
   try {
     return await loading;
   } catch (err) {
-    loadedId = null;
-    throw err;
+    reset();
+    throw friendly(err);
   } finally {
     loading = null;
   }
 }
+
+// Throw away a broken engine (e.g. after the GPU device was lost) so the next load starts fresh.
+function reset() {
+  worker?.terminate();
+  worker = null;
+  engine = null;
+  loadedId = null;
+}
+
+function friendly(err) {
+  const msg = String(err?.message || err);
+  if (/device (was )?lost|instance reference|out of memory|allocation/i.test(msg))
+    return new Error("Your GPU ran out of memory for this model. Try a smaller one from the model menu.");
+  return err instanceof Error ? err : new Error(msg);
+}
+
+const STALL_MS = 180_000; // no output for 3 minutes = the GPU has given up
 
 function fitHistory(messages) {
   // Always keep the newest message; add older ones while they fit.
@@ -143,9 +164,31 @@ export async function chat({ id, system, messages, effort, signal, onThinking, o
     text = a.length > text.length ? a : text;
   };
 
+  // If the GPU dies, the engine may never answer again — not even to an interrupt —
+  // so every wait races a watchdog (no output for STALL_MS) and the user's Stop button.
+  let stalled = false;
+  let watchdog;
+  let bail;
+  const bailout = new Promise((_, reject) => (bail = reject));
+  bailout.catch(() => {});
+  const arm = () => {
+    clearTimeout(watchdog);
+    watchdog = setTimeout(() => {
+      stalled = true;
+      eng.interruptGenerate();
+      bail(new Error("stalled"));
+    }, STALL_MS);
+  };
+  const onHardAbort = () => setTimeout(() => bail(new Error("aborted")), 3000); // grace period for a clean interrupt
+  signal?.addEventListener("abort", onHardAbort);
+  arm();
   try {
-    const stream = await eng.chat.completions.create(request);
-    for await (const chunk of stream) {
+    const stream = await Promise.race([eng.chat.completions.create(request), bailout]);
+    const it = stream[Symbol.asyncIterator]();
+    while (true) {
+      const { value: chunk, done } = await Promise.race([it.next(), bailout]);
+      if (done) break;
+      arm();
       const delta = chunk.choices?.[0]?.delta?.content;
       if (delta) {
         raw += delta;
@@ -156,8 +199,14 @@ export async function chat({ id, system, messages, effort, signal, onThinking, o
       if (finish === "abort") stopReason = "aborted";
       if (chunk.usage) usage = chunk.usage;
     }
+  } catch (err) {
+    reset();
+    if (stalled) throw new Error("The model stopped responding — your GPU may be too slow or short on memory. Try a smaller model.");
+    if (!signal?.aborted) throw friendly(err);
   } finally {
+    clearTimeout(watchdog);
     signal?.removeEventListener("abort", onAbort);
+    signal?.removeEventListener("abort", onHardAbort);
   }
   if (signal?.aborted) {
     const e = new Error("Stopped");
