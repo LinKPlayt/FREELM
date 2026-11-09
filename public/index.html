@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>FREELM</title>
+  <meta name="theme-color" content="#0b0d12" />
+  <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/vendor/hl-light.css" id="hl-light" />
+  <link rel="stylesheet" href="/vendor/hl-dark.css" id="hl-dark" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="app" id="app">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar" aria-label="Conversations">
+      <div class="sidebar-top">
+        <div class="brand">
+          <div class="orb orb-sm" aria-hidden="true"></div>
+          <span class="brand-name" data-ai-name>FREELM</span>
+        </div>
+        <button class="icon-btn only-mobile" id="close-sidebar" aria-label="Close sidebar">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+
+      <button class="new-chat" id="new-chat">
+        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        New chat
+        <kbd>Ctrl K</kbd>
+      </button>
+
+      <div class="search">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input id="search" type="search" placeholder="Search chats" autocomplete="off" />
+      </div>
+
+      <nav class="chat-list" id="chat-list"></nav>
+
+      <div class="sidebar-bottom">
+        <button class="ghost-btn" id="open-settings">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+          Customize your AI
+        </button>
+      </div>
+    </aside>
+    <div class="scrim" id="scrim"></div>
+
+    <!-- Main -->
+    <main class="main">
+      <header class="topbar">
+        <button class="icon-btn only-mobile" id="open-sidebar" aria-label="Open sidebar">
+          <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
+        </button>
+        <div class="topbar-title" id="chat-title">New chat</div>
+        <div class="mode" role="radiogroup" aria-label="Response mode" id="mode">
+          <button role="radio" data-effort="low" title="Fast, conversational replies">Quick</button>
+          <button role="radio" data-effort="medium" title="More careful reasoning">Balanced</button>
+          <button role="radio" data-effort="high" title="Deepest reasoning for hard problems">Deep</button>
+        </div>
+        <button class="icon-btn" id="theme-toggle" aria-label="Toggle theme">
+          <svg class="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          <svg class="moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        </button>
+      </header>
+
+      <section class="thread" id="thread" aria-live="polite">
+        <div class="empty" id="empty">
+          <div class="orb orb-lg" aria-hidden="true"></div>
+          <h1 id="greeting">Hey, I'm <span data-ai-name>FREELM</span>.</h1>
+          <p class="sub">Your own AI. Ask me anything — I'm here to think it through with you.</p>
+          <div class="suggestions" id="suggestions"></div>
+        </div>
+        <div class="messages" id="messages"></div>
+      </section>
+
+      <footer class="composer-wrap">
+        <form class="composer" id="composer">
+          <textarea id="input" rows="1" placeholder="Message FREELM…" aria-label="Message"></textarea>
+          <button type="submit" class="send" id="send" aria-label="Send" disabled>
+            <svg class="i-send" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            <svg class="i-stop" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
+          </button>
+        </form>
+        <p class="hint"><kbd>Enter</kbd> to send · <kbd>Shift</kbd>+<kbd>Enter</kbd> for a new line</p>
+      </footer>
+    </main>
+  </div>
+
+  <!-- Settings dialog -->
+  <dialog class="modal" id="settings">
+    <form method="dialog" class="modal-card" id="settings-form">
+      <header class="modal-head">
+        <div class="orb orb-md" aria-hidden="true"></div>
+        <div>
+          <h2>Customize your AI</h2>
+          <p>Give it a name, a personality and a look. Changes apply to new chats.</p>
+        </div>
+      </header>
+
+      <label class="field">
+        <span>Name</span>
+        <input name="name" maxlength="40" placeholder="FREELM" required />
+      </label>
+
+      <label class="field">
+        <span>Personality & instructions</span>
+        <textarea name="personality" rows="5" maxlength="4000" placeholder="e.g. Witty and direct. Explain things like I'm a smart beginner. Keep answers short unless I ask for detail."></textarea>
+      </label>
+
+      <div class="field">
+        <span>Presets</span>
+        <div class="chips" id="presets"></div>
+      </div>
+
+      <div class="field">
+        <span>Accent color</span>
+        <div class="swatches" id="swatches"></div>
+      </div>
+
+      <footer class="modal-foot">
+        <button type="button" class="ghost-btn danger" id="clear-all">Delete all chats</button>
+        <div class="spacer"></div>
+        <button value="cancel" class="ghost-btn" formnovalidate>Cancel</button>
+        <button value="save" class="primary-btn" id="save-settings">Save</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <!-- Password dialog -->
+  <dialog class="modal" id="unlock">
+    <form class="modal-card narrow" id="unlock-form">
+      <header class="modal-head">
+        <div class="orb orb-md" aria-hidden="true"></div>
+        <div>
+          <h2>Welcome back</h2>
+          <p>This app is password protected.</p>
+        </div>
+      </header>
+      <label class="field">
+        <span>Password</span>
+        <input type="password" name="password" autocomplete="current-password" required />
+      </label>
+      <p class="form-error" id="unlock-error" hidden>That password didn't work.</p>
+      <footer class="modal-foot">
+        <div class="spacer"></div>
+        <button class="primary-btn">Unlock</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status"></div>
+
+  <script src="/vendor/marked.js"></script>
+  <script src="/vendor/purify.js"></script>
+  <script src="/vendor/highlight.js"></script>
+  <script src="/app.js" type="module"></script>
+</body>
+</html>
