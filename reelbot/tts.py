@@ -72,7 +72,11 @@ class Speaker:
             audio = _resample(np.concatenate(parts) if parts else np.zeros(1), rate)
         else:
             audio = self._espeak(text, speed)
-        return _trim(audio)
+        audio = _trim(audio)
+        peak = float(np.max(np.abs(audio))) if len(audio) else 0.0
+        if peak > 0:  # voices differ a lot in loudness: bring every line to the same level
+            audio = audio * (0.89 / peak)
+        return audio
 
     def _espeak(self, text: str, speed: float) -> np.ndarray:
         exe = shutil.which("espeak-ng") or shutil.which("espeak")
