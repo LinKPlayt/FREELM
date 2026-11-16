@@ -98,6 +98,39 @@ Each scene's picture is chosen from the line being spoken, not from a fixed list
 - **Posting kit.** Each reel in the Library also has a **Cover image** (a 1080×1920 thumbnail
   with the title, for the cover frame on TikTok, Reels or Shorts) and a **Captions (.srt)** file
   with exact timings, for platforms that accept uploaded subtitles.
+- **Full story (2–3 min).** A longer format for Shorts (up to 3 minutes) and TikTok, in up to five
+  chapters: *what it is*, *where it came from* (dated facts in time order), *why it matters*,
+  *the risks and the catch*, and *what you can do*. A chapter only appears when the research really
+  has material for it; there are no filler chapters.
+
+### Research depth and fact checking
+
+- **Research depth** (under Length): *Quick*, *Standard*, *Deep* or *Maximum*. Each step searches
+  more articles, follows leads further out (up to three steps) and reads more of them **in full**,
+  section by section (history, how it works, criticism, regulation…), not just their summaries.
+  *Maximum* reads 16 full articles and keeps up to 48 facts.
+- **Fact check** (on by default). Before the review screen, every line of an explainer, your own
+  topic or an Idea Lab idea is checked against the sources:
+  - **✓ Verified · N sources**: a source sentence says the same thing, and every number in the line
+    appears in that source. Paraphrases are matched by meaning, using the on-phone model, and
+    numbers must still match exactly.
+  - **✓ Verified by calculation**: money maths ("at 10% a year, money doubles in about 7 years")
+    is worked out, and a wrong figure is flagged.
+  - **≈ Partly verified**, **⚠ Not verified** and **⚠ Source disagrees** (a source on the same
+    subject gives a different number).
+  - **Tip** and **Takeaway**: advice and opinions, which aren't claims of fact.
+
+  Tap any badge to see the evidence: the exact source sentences, with the article and section
+  they come from. Edit a line and it is checked again as you type. At *Deep* and *Maximum*, lines
+  the library can't confirm are also checked against live Wikipedia, which catches figures that
+  have changed since the library was built.
+- **Strict accuracy** (on by default). Facts that no source confirms are swapped for verified
+  facts from the research, or left out. The review screen shows a fact-check summary (for
+  example, "10 of 11 facts verified · 13 sources · 47 articles researched"). If anything is still
+  unverified, a button swaps or removes it.
+- **Honest limits.** A check proves that a line matches Wikipedia, or a calculation, and shows
+  you where. It can't prove Wikipedia itself is right or current. For money decisions, check
+  the original sources.
 
 ### Style
 
@@ -137,7 +170,10 @@ it uses ships with the app and stays on your phone.
   rewrites titles to be catchier. It's checked against the research: a rewrite is used only if it
   adds no new claims or numbers. Tap **Remove** to free the space.
 
-The library holds the opening sections of several thousand Wikipedia articles (CC BY-SA). Details,
+The library holds 20,038 Wikipedia articles on finance, business and economics (CC BY-SA). Their
+opening sections are the search index, which is always on the phone. Their full text (255,023
+sentences, section by section) is split into small files that load as deep research needs them. To
+research in full offline, tap **Save offline** on the Full-text library card. Details,
 models and licenses: [app/ai/README.md](app/ai/README.md). To refresh it, run
 `python scripts/build_corpus.py` and then `python scripts/embed_library.py`.
 

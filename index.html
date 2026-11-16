@@ -107,6 +107,12 @@
   @media (prefers-reduced-motion: reduce) { .writing { animation: none; } }
   .coach { background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 0 0 8px; }
   .coach-score { display: flex; align-items: baseline; gap: 6px; } .coach-score b { font-size: 30px; } .coach-score span { color: var(--muted); font-size: 14px; }
+  .fact { margin: 6px 0 2px; font-size: 13px; color: var(--muted); }
+  .fact summary { cursor: pointer; font-weight: 700; list-style: none; } .fact summary::-webkit-details-marker { display: none; }
+  .fact.s-verified summary { color: var(--good); } .fact.s-partial summary { color: var(--accent); }
+  .fact.s-unverified summary, .fact.s-conflict summary { color: var(--bad); }
+  .fact ul { margin: 6px 0 0; padding-left: 18px; } .fact li { margin-bottom: 6px; color: var(--text); } .fact small { color: var(--muted); }
+  .fact p { margin: 6px 0 0; }
   .hidden { display: none !important; }
 </style>
 </head>
@@ -178,6 +184,13 @@
         <div class="chips" id="speeds"></div>
         <label class="field">Length</label>
         <div class="chips" id="lengths"></div>
+        <label class="field">Research depth</label>
+        <div class="chips" id="depths"></div>
+        <p class="meta" id="depth-note" style="margin:6px 0 0"></p>
+        <div class="row" style="margin-top:14px"><div>Fact check<small>Checks every fact in the script against its sources, and shows you the evidence</small></div>
+          <label class="switch"><input id="factcheck" type="checkbox" checked><span></span></label></div>
+        <div class="row"><div>Strict accuracy<small>Facts no source confirms are swapped for verified ones or left out</small></div>
+          <label class="switch"><input id="strict" type="checkbox" checked><span></span></label></div>
         <div class="row" style="margin-top:14px"><div>Number pops<small>Show key figures big on screen, like “20%”</small></div>
           <label class="switch"><input id="pops" type="checkbox" checked><span></span></label></div>
         <div class="row"><div>Sound effects<small>A whoosh between scenes, a pop when a number lands</small></div>
@@ -207,6 +220,11 @@
       <div class="row" style="padding:0"><div><b>On-device AI</b><small id="ai-sub">Optional: rewrites titles to be catchier (checked against the research). One-time 270 MB download from this app, then it works offline.</small></div>
         <button class="btn" id="ai-load" style="flex:none">Download</button></div>
       <div class="progress hidden" id="ai-progress"><div></div></div>
+    </div>
+    <div class="card" id="lib-card">
+      <div class="row" style="padding:0"><div><b>Full-text library</b><small id="lib-sub">Deep research reads whole articles, section by section. They load as needed; save them all to research in full offline.</small></div>
+        <button class="btn" id="lib-save" style="flex:none">Save offline</button></div>
+      <div class="progress hidden" id="lib-progress"><div></div></div>
     </div>
     <div class="card hidden" id="brief"></div>
     <div id="idea-feed"></div>

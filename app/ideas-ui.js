@@ -1,5 +1,6 @@
 // Idea Lab screen. Research and ideas run entirely on the phone (see app/ai/).
-import { library, deepResearch, startSemantic } from "./ai/research.js";
+import { library, deepResearch, startSemantic, saveLibraryOffline, DEPTHS } from "./ai/research.js";
+const depthPref = () => { try { return Number(localStorage.getItem("depth")) || 2; } catch { return 2; } };
 import { ideaStream, ideasFromBrief, improveTitle } from "./ai/ideas.js";
 import { loadLLM, llmReady, unloadLLM, MODEL_MB } from "./ai/llm.js";
 
@@ -19,6 +20,19 @@ export async function init(hooks) {
     (sem ? "Semantic search ✓ (understands meaning)." : "Keyword search.");
   $("lib-info").textContent = info(false);
   startSemantic().then((ok) => { $("lib-info").textContent = info(ok); });
+  if (lib.depthInfo) {
+    $("lib-sub").textContent = `Deep research reads whole articles: ${lib.depthInfo.sentences.toLocaleString()} sentences from the full text of ${lib.docs.length.toLocaleString()} articles. They load as needed; save them all to research in full offline.`;
+    if (H.store.get("libSaved") === lib.built) { $("lib-save").textContent = "Saved ✓"; $("lib-save").disabled = true; }
+    $("lib-save").addEventListener("click", async () => {
+      const btn = $("lib-save"), bar = $("lib-progress");
+      btn.disabled = true; btn.textContent = "Saving…"; bar.classList.remove("hidden");
+      try {
+        await saveLibraryOffline((done, total) => { bar.firstElementChild.style.width = `${Math.round(100 * done / total)}%`; });
+        H.store.set("libSaved", lib.built); btn.textContent = "Saved ✓";
+      } catch (e) { btn.disabled = false; btn.textContent = "Save offline"; H.toast("Couldn't save: " + e.message); }
+      bar.classList.add("hidden");
+    });
+  } else $("lib-card").classList.add("hidden");
   $("idea-research").addEventListener("click", () => startResearch($("idea-q").value.trim()));
   $("idea-q").addEventListener("keydown", (e) => { if (e.key === "Enter") startResearch($("idea-q").value.trim()); });
   $("idea-surprise").addEventListener("click", () => startStream(null));
@@ -95,7 +109,7 @@ async function startResearch(query) {
   brief.innerHTML = `<h2>Researching "${H.esc(query)}"…</h2><p id="brief-step"></p>`;
   const step = (t) => { const el = $("brief-step"); if (el) el.textContent = t; };
   const t0 = performance.now();
-  const b = await deepResearch(query, { niche: H.niche(), onStep: step });
+  const b = await deepResearch(query, { niche: H.niche(), onStep: step, depth: depthPref() });
   busy = false;
   if (!b) { brief.innerHTML = `<h2>Nothing found for "${H.esc(query)}"</h2><p>Try a broader money topic, like "credit", "stocks" or "housing".</p>`; return; }
   renderBrief(b, performance.now() - t0);
@@ -107,8 +121,10 @@ function renderBrief(b, ms) {
     <span class="tag">Research brief</span><span class="src">${Math.max(1, Math.round(ms))} ms on this phone</span>
     <h3 style="margin:8px 0 4px">${H.esc(b.main.title)}</h3>
     <p style="color:var(--text)">${H.esc(b.summary.join(" "))}</p>
-    <div class="meta" style="margin-top:8px"><b>Key facts</b></div>
-    <ul style="padding-left:18px;color:var(--muted);font-size:14px;margin:6px 0">${b.facts.slice(0, 6).map((f) => `<li>${H.esc(f.text)} <span class="src">(${H.esc(f.source)})</span></li>`).join("")}</ul>
+    <div class="meta" style="margin-top:8px"><b>Key facts</b> · ${DEPTHS[b.depth]?.name || ""} research: ${b.read} articles${b.bodyDocs?.length ? `, ${b.bodyDocs.length} read in full` : ""}</div>
+    <ul style="padding-left:18px;color:var(--muted);font-size:14px;margin:6px 0">${b.facts.slice(0, b.depth >= 3 ? 14 : 8).map((f) => `<li>${H.esc(f.text)} <span class="src">(${H.esc(f.source)}${f.section ? " — " + H.esc(f.section) : ""})</span></li>`).join("")}</ul>
+    ${b.sections?.length ? `<details style="margin:6px 0"><summary class="meta"><b>Read the full article by section</b> (${b.sections.length} sections)</summary>
+      ${b.sections.map((sec) => `<div class="meta" style="margin-top:8px"><b>${H.esc(sec.heading)}</b></div><ul style="padding-left:18px;color:var(--muted);font-size:14px;margin:4px 0">${sec.sentences.map((x) => `<li>${H.esc(x)}</li>`).join("")}</ul>`).join("")}</details>` : ""}
     <div class="meta" style="margin-top:8px"><b>Related</b>: tap to research</div>
     <div>${b.related.slice(0, 8).map((d) => `<span class="chiplink" data-topic="${H.esc(d.title)}">${H.esc(d.title)}</span>`).join("")}</div>
     <p class="src" style="margin-top:10px">Leads followed: ${H.esc(b.leads.join(", ") || "none")} · Sources: ${b.sources.length} Wikipedia articles</p>`;

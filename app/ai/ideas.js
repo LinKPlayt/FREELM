@@ -11,7 +11,7 @@ const pick = (a) => a[Math.floor(Math.random() * a.length)];
 // Wikipedia titles capitalise their first letter ("Index fund"). Mid-sentence, common nouns read
 // better in lower case; names and acronyms ("Warren Buffett", "Roth IRA", "S&P 500") keep theirs.
 const short = (t) => {
-  t = t.replace(/\s*\(.*\)$/, "");
+  t = t.replace(/\s+\(.*\)$/, "");
   const words = t.split(" ");
   const common = /^[A-Z][a-z]+$/.test(words[0]) && words.slice(1).every((w) => !/[A-Z]/.test(w));
   return common && words.length > 0 && !/^(Bitcoin|Ethereum|Wall|Medicare|Medicaid|Social|Federal)$/.test(words[0]) ? t.charAt(0).toLowerCase() + t.slice(1) : t;

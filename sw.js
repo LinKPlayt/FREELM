@@ -1,6 +1,6 @@
 // Service worker: keeps the app and its big, never-changing files (voice model, WebAssembly,
 // fonts) on the phone so they download once. Live data (news, photos) always uses the network.
-const VERSION = "reelbot-v12";
+const VERSION = "reelbot-v13";
 const HEAVY = /\/(app\/vendor|app\/ai\/vendor|app\/ai\/models|app\/ai\/data|assets\/voices|assets\/fonts)\//;   // large and immutable: cache first
 
 self.addEventListener("install", () => self.skipWaiting());

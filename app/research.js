@@ -134,6 +134,12 @@ export function trimDefinition(s) {
   return n >= 6 && n <= 34 && /\b(is|are|refers to)\b/.test(t) ? t : "";
 }
 
+// Removes asides in parentheses, but keeps codes like 401(k), 403(b) and 501(c)(3).
+export function dropParentheticals(text) {
+  for (let i = 0; i < 3; i++) text = text.replace(/(\d|\u2039[a-z0-9]{1,2}\u203a)\(([a-z0-9]{1,2})\)/g, "$1\u2039$2\u203a");
+  return text.replace(/\s*\([^()]*(?:\([^()]*\)[^()]*)*\)/g, "").replace(/\u2039/g, "(").replace(/\u203a/g, ")");
+}
+
 // Research any topic the user types: find the best Wikipedia article and return its key sentences.
 export async function wikipediaTopic(query) {
   const api = "https://en.wikipedia.org/w/api.php?format=json&origin=*&";
@@ -149,9 +155,10 @@ export async function wikipediaTopic(query) {
     const res = await fetchT(api + new URLSearchParams({ action: "query", prop: "extracts", exsentences: "14", explaintext: "1", exsectionformat: "plain", redirects: "1", titles: hit.title }), 10000);
     if (!res.ok) continue;
     const page = Object.values((await res.json()).query?.pages || {})[0];
-    const text = (page?.extract || "").replace(/\n+[A-Z][^.\n]{0,60}\n/g, "\n").replace(/\s*\([^()]*(?:\([^()]*\)[^()]*)*\)/g, "").replace(/\s*\[[^\]]*\]/g, "").replace(/\s+/g, " ").trim();
-    if (!text || /may refer to/i.test(text)) continue;
-    const all = text.split(/(?<=[.!?])\s+(?=[A-Z])/).map((x) => x.trim());
+    const text = (page?.extract || "").replace(/\n+[A-Z][^.\n]{0,60}\n/g, "\n").replace(/\s+/g, " ");
+    const text2 = dropParentheticals(text).replace(/\s*\[[^\]]*\]/g, "").replace(/\s+/g, " ").trim();
+    if (!text2 || /may refer to/i.test(text)) continue;
+    const all = text2.split(/(?<=[.!?])\s+(?=[A-Z])/).map((x) => x.trim());
     const sentences = [];
     let prevKept = false;
     all.forEach((x, i) => {

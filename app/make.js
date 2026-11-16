@@ -11,7 +11,8 @@ import { StatBg, IllusBg } from "./graphics.js";
 
 const GAP = 0.28, TAIL = 0.8;
 // Reel length presets: [shortest, longest] in seconds.
-export const LENGTHS = { short: [20, 30], standard: [30, 45], long: [40, 60], deep: [60, 90] };
+export const LENGTHS = { short: [20, 30], standard: [30, 45], long: [40, 60], deep: [60, 90], full: [120, 180] };
+const isDeep = (length) => length === "deep" || length === "full";
 let MIN_S = 30, MAX_S = 45;
 function setLength(name) { [MIN_S, MAX_S] = LENGTHS[name] || LENGTHS.standard; }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -142,8 +143,9 @@ export async function planReel(opts, ui) {
   const script = opts.mode === "custom"
     ? await customScript(opts, generic, say)
     : await writeScript(opts, data, (t) => say(t, 0.1));
-  if (opts.length === "deep") { say("Researching more detail for the deep dive…", 0.15); await deepen(script, opts); }
-  return attachPhotos(script, generic, opts, say);
+  if (isDeep(opts.length)) { say("Researching more detail for the deep dive…", 0.15); await deepen(script, { ...opts, depth: opts.depth || 2 }); }
+  const fact = await checkFacts(script, opts, say);
+  return { ...(await attachPhotos(script, generic, opts, say)), fact };
 }
 
 // Finds a photo for every scene (skipped in offline mode: scenes then use animated backgrounds).
@@ -175,8 +177,25 @@ export async function planFromIdea(idea, opts, ui) {
   const generic = data.generic_visuals[opts.niche] || data.generic_visuals["personal finance"];
   const script = scriptFromIdea(idea, { niche: opts.niche, cta: opts.cta, generic, visualFor: visualMatch });
   const say = (text, f = 0) => ui.say(text, Math.min(1, Math.max(0, f)));
-  if (opts.length === "deep") { say("Researching more detail for the deep dive…", 0.1); await deepen(script, opts); }
-  return attachPhotos(script, generic, opts, say);
+  if (isDeep(opts.length)) { say("Researching more detail for the deep dive…", 0.1); await deepen(script, { ...opts, depth: opts.depth || 2 }); }
+  const fact = await checkFacts(script, opts, say);
+  return { ...(await attachPhotos(script, generic, opts, say)), fact };
+}
+
+// Fact check (explainers, your topics and ideas): every factual line is checked against the research
+// library, and at depth 3+ (when online) against live Wikipedia too. With strict accuracy on, facts
+// that can't be verified are swapped for verified ones or removed.
+async function checkFacts(script, opts, say) {
+  if (opts.factCheck === false || !["evergreen", "custom", "idea"].includes(script.kind)) return null;
+  try {
+    const { factCheck, enforceAccuracy, summarize } = await import("./ai/factcheck.js");
+    const depth = opts.depth || 2;
+    const r = await factCheck(script.lines, { topic: (script.topicTitle || script.title).replace(/\s*#Shorts$/, ""), niche: script.niche, depth,
+      online: !opts.offline && depth >= 3, onStep: (t) => say(t, 0.18), extras: script.extras.filter((l) => l.kind === "media") });
+    let fixed = null;
+    if (opts.strict) fixed = enforceAccuracy(script, r.ctx);
+    return { ctx: r.ctx, summary: summarize(script.lines), fixed };
+  } catch (e) { console.warn("fact check failed", e); return null; }
 }
 
 async function customScript(opts, generic, say) {
@@ -186,16 +205,19 @@ async function customScript(opts, generic, say) {
   let found = null;
   try {
     const { deepResearch } = await import("./ai/research.js");
-    const brief = await deepResearch(topic, { niche: opts.niche });
+    const brief = await deepResearch(topic, { niche: opts.niche, depth: opts.depth || 2 });
     const tl = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
     // Use the local library when it has an article on exactly this topic ("Mortgage" shouldn't become
     // "Mortgage servicer"); otherwise ask Wikipedia online. Offline, a close match is better than nothing.
-    const base = (t) => tl(t.replace(/\s*\(.*\)$/, "")).replace(/(es|s)$/, "");
+    const base = (t) => tl(t.replace(/\s+\(.*\)$/, "")).replace(/(es|s)$/, "");
     const exact = brief && base(brief.main.title) === base(topic);
-    const close = brief && (tl(brief.main.title).includes(tl(topic)) || tl(topic).includes(tl(brief.main.title.replace(/\s*\(.*\)$/, ""))));
+    const close = brief && (tl(brief.main.title).includes(tl(topic)) || tl(topic).includes(tl(brief.main.title.replace(/\s+\(.*\)$/, ""))));
     if (exact || (close && opts.offline)) {
       const own = brief.facts.filter((f) => f.source === brief.main.title).map((f) => f.text);
-      const sentences = [...new Set([...brief.summary, ...own, ...brief.facts.map((f) => f.text)])];
+      // The defining first sentence always leads, trimmed to its core when it's too long to say.
+      const first = brief.main.sentences[0] || "", n = first.split(/\s+/).length;
+      const definition = n <= 34 ? first : research.trimDefinition(first);
+      const sentences = [...new Set([definition, ...brief.summary, ...own, ...brief.facts.map((f) => f.text)].filter(Boolean))];
       if (sentences.length >= 3) found = { title: brief.main.title, sentences, url: "https://en.wikipedia.org/wiki/" + encodeURIComponent(brief.main.title.replaceAll(" ", "_")) };
     }
   } catch (e) { console.warn("local research failed", e); }
@@ -315,7 +337,9 @@ export function releasePlan(plan) {
 // Photos are found again when a draft is opened (your own photos aren't kept, to save space).
 export function draftFromPlan(plan, label) {
   const strip = (l) => ({ text: l.text, visual: l.visual, query: l.query, kind: l.kind, chart: l.chart || null, vmode: l.vmode, concrete: l.concrete,
-    source: l.source, hold: l.hold, items: l.items, num: l.num, label: l.label,
+    source: l.source, hold: l.hold, items: l.items, num: l.num, label: l.label, section: l.section, tip: l.tip,
+    check: l.check ? { status: l.check.status, kind: l.check.kind, sources: l.check.sources, live: l.check.live,
+      evidence: (l.check.evidence || []).slice(0, 2).map((e) => ({ text: e.text, source: e.source, section: e.section })) } : undefined,
     mine: l.asset && !l.asset.credit ? true : undefined });
   const { script } = plan;
   return {

@@ -29,10 +29,16 @@ const TOPIC_ADVICE = [
   [/bitcoin|crypto|coin|token|blockchain|nft|defi/i, ["Never put in more than you could afford to lose completely.", "Use well-known platforms, turn on two-factor login, and never share your recovery phrase."]],
 ];
 const ADVICE_ANY = ["Before you decide anything about {t}, compare at least two options side by side.", "Read the fine print and the fees on any {t} offer before you sign."];
-const short = (t) => t.replace(/\s*\(.*\)$/, "");
+const short = (t) => t.replace(/\s+\(.*\)$/, "");
 // A real sentence (has a verb and enough words), not a list fragment like "Payment of taxes and insurance."
 const CORE_VERB = /\b(is|are|was|were|be|been|has|have|had|can|could|may|might|will|would|should|must|does|do|did)\b/i;
-const sentence = (t) => t.split(/\s+/).length >= 5 && /[.!?]$/.test(t.trim()) && !(/^[A-Z][a-z]+ (of|for|and|with|from|to)\b/.test(t) && !CORE_VERB.test(t));
+// "…popularized by the media that U.S." is a sentence cut at an abbreviation, not a sentence.
+const CUT = /\b(U\.S|U\.K|U\.N|E\.U|Inc|Corp|Co|Ltd|Jr|Sr|Mr|Mrs|Ms|Dr|St|vs|No|Gen|Gov|Sen|Rep|approx|e\.g|i\.e)\.$/i;
+const LOST_NUMBER = /\b(?:(?:equal to|equivalent to|approximately|nearly|roughly|totaling|totalling|an estimated) (?:US\$ ?|\$ ?)?(?:million|billion|trillion|thousand|hundred|percent|per cent|dollars|euros|pounds|yen|people|users|bitcoins?|ether|units|tons|tonnes|years|months|days|employees|members|times|shares|households|workers)|(?:valued at|reached|around|about|some|over|under|than|by|of|the|out of the|to|from) (?:US\$ ?|\$ ?)?(?:million|billion|trillion|percent|per cent)(?! of\b))\b/;
+const POINTER = /\b(shown below|see below|as follows|the following|listed below|in the table|this table|the figure|shown above|see above)\b/i;
+const sentence = (t) => t.split(/\s+/).length >= 5 && /[.!?]$/.test(t.trim()) && !CUT.test(t.trim()) && !LOST_NUMBER.test(t) && !POINTER.test(t)
+  && !/^(Difference between|Comparison|Comparison with|History of|Overview|Types of|Background|Definition|Etymology|Criticism)\b[^.]*? [a-z]+ [A-Z][a-z]/.test(t)
+  && !((/^[A-Z][a-z]+ (of|for|and|with|from|to)\b/.test(t) || /^[A-Z][a-z]+ing\b/.test(t)) && !CORE_VERB.test(t));
 
 // A short recap item for a line: its number if it has one ("50% NEEDS"), else its opening clause.
 function recapItem(text) {
@@ -41,15 +47,37 @@ function recapItem(text) {
   if (st?.type === "range") return `${st.lo}–${st.hi} ${st.unit.toLowerCase()}${st.label ? " of " + st.label.toLowerCase() : ""}`;
   if (st?.type === "growth" && st.every) return `Doubles every ${st.every} years`;
   if (st?.type === "money") return `$${Math.round(st.value).toLocaleString("en-US")} ${(st.label || "").toLowerCase()}`.trim();
-  const clause = text.split(/[,;:]|\s(?:and|but|so|which|because)\s/)[0].replace(/\.$/, "").trim();
+  // Skip a short lead-in ("In practice, …", "However, …") and take the clause that says something.
+  const parts = text.split(/[,;:]|\s(?:and|but|so|which|because)\s/).map((x) => x.trim()).filter(Boolean);
+  const pick = parts.find((x) => x.split(/\s+/).length >= 4) || parts[0] || text;
+  const clause = pick.replace(/\.$/, "").replace(/^./, (c) => c.toUpperCase());
   const words = clause.split(/\s+/);
   return words.length <= 11 ? clause : words.slice(0, 10).join(" ") + "…";
 }
 
-// Turns a script into a 60–90 second deep dive: more researched facts (from the on-phone library),
-// three chapter cards and a recap card. Facts keep their sources.
-export async function deepen(script, { offline } = {}) {
+// Kinds of article sections, from their headings.
+const SEC_HISTORY = /histor|origin|background|development|etymology|early|founding|timeline|evolution/i;
+const SEC_HOW = /how|mechan|operation|process|types?\b|structure|method|calculat|overview|function|features|uses?\b|design|principle|definition|concept|characteristics|components/i;
+const SEC_RISK = /critic|risk|controvers|problem|disadvantage|regulat|legal|debate|limitation|effect|impact|fraud|collapse|scandal|issue|concern|failure|crisis/i;
+const RISKY = /\b(risk|risks|criticis\w*|fraud|loss|losses|lose|collapse\w*|crash\w*|scandal|lawsuit|danger\w*|downside|volatil\w*|default\w*|bankrupt\w*|warn\w*|scam\w*|penalt\w*|fees?)\b/i;
+const firstYear = (t) => { const m = t.match(/\b(1[5-9]\d\d|20\d\d)\b/); return m ? Number(m[1]) : null; };
+
+// Chapter layouts: a deep dive has three chapters, the full story five.
+const CHAPTERS = {
+  deep: ["what", "why", "todo"],
+  full: ["what", "history", "why", "risks", "todo"],
+};
+const CHAPTER_TEXT = { what: ["what it is", "WHAT IT IS"], history: ["where it came from", "THE HISTORY"], why: ["why it matters", "WHY IT MATTERS"],
+  risks: ["the risks and the catch", "THE RISKS"], todo: ["what you can do", "WHAT TO DO"] };
+const ORDINAL = ["First", "Next", "Then", "Now", "Finally"];
+
+// Turns a script into a deep dive (60–90 s, three chapters) or the full story (2–3 min, five chapters):
+// more researched facts from the on-phone library (including the full text of the main articles),
+// chapter cards and a recap card. Every researched fact keeps its source and section.
+export async function deepen(script, { offline, length = "deep", depth = 2 } = {}) {
   if (!["evergreen", "custom", "idea"].includes(script.kind)) return script;
+  const layout = CHAPTERS[length] || CHAPTERS.deep, full = layout.length > 3;
+  const perChapter = full ? 4 : 3, want = full ? 18 : 9;
   const lines = script.lines.filter((l) => l.kind === "media"), outro = script.lines.find((l) => l.kind === "outro");
   const hook = lines.shift();
   // Researched lines must read as stand-alone sentences; hand-written ones are always kept.
@@ -60,67 +88,87 @@ export async function deepen(script, { offline } = {}) {
   const words = (t) => new Set(t.toLowerCase().match(/[a-z0-9]+/g)?.filter((w) => w.length > 2) || []);
   const kept = pool.map((l) => words(l.text));
   const similar = (t) => { const a = words(t); return kept.some((b) => { let n = 0; for (const w of a) if (b.has(w)) n++; return n / Math.max(1, Math.min(a.size, b.size)) > 0.6; }); };
+  let brief = null;
   // Pull more on-topic facts from the research library (runs on the phone; no network).
   try {
     const { deepResearch } = await import("./ai/research.js");
     const topic = short(script.topicTitle || script.title);
-    const brief = await deepResearch(topic, { niche: script.niche });
+    brief = await deepResearch(topic, { niche: script.niche, depth: Math.max(depth, full ? 3 : 2) });
     if (brief) {
       const re = new RegExp("\\b" + short(brief.main.title).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").split(/\s+/).join("\\s+") + "(?:s|es)?\\b", "i");
-      for (const f of brief.facts) {
+      // The main article's own sections first (in reading order), then the ranked facts.
+      const fromSections = (brief.sections || []).flatMap((sec) => sec.sentences.map((text) => ({ text, source: brief.main.title, section: sec.heading })));
+      const candidates = [...brief.facts.filter((f) => !f.section), ...fromSections, ...brief.facts.filter((f) => f.section && f.source !== brief.main.title)];
+      for (const f of candidates) {
         if (seen.has(f.text.toLowerCase()) || !(f.source === brief.main.title || re.test(f.text))) continue;
+        if (f.text.split(/\s+/).length > 30) continue;                                     // too long to follow when spoken
         if (/^(It|This|These|They|He|She|Its|And|Or|But|Also|Examples?)\b/.test(f.text) || similar(f.text) || !sentence(f.text)) continue;
         // Facts from other articles must be about the topic: named early, not in passing at the end.
         if (f.source !== brief.main.title) { const m = re.exec(f.text); if (!m || m.index > f.text.length * 0.5) continue; }
         seen.add(f.text.toLowerCase()); kept.push(words(f.text));
-        pool.push({ text: f.text, visual: "", kind: "media", chart: null, source: "Wikipedia · " + f.source });
-        if (pool.length >= 9) break;
+        pool.push({ text: f.text, visual: "", kind: "media", chart: null, section: f.section || null,
+          source: "Wikipedia · " + f.source + (f.section ? " — " + f.section : "") });
+        if (pool.length >= want + 6) break;
       }
     }
   } catch (e) { console.warn("deep research unavailable", e); }
+  script.research = brief ? { depth: brief.depth, read: brief.read, sources: brief.sources, fullText: brief.bodyDocs?.map((d) => d.title) || [] } : null;
+  if (brief) script.sources = [...new Set([...(script.sources || []), ...brief.sources.slice(0, 8).map((t) => "https://en.wikipedia.org/wiki/" + encodeURIComponent(t.replaceAll(" ", "_")))])];
 
-  // Sort into chapters: definitions, numbers/evidence, then advice.
+  // Sort into chapters.
   const isAdvice = (t) => /^(start|keep|set|pay|use|try|automate|avoid|don't|never|always|check|compare|aim|pick|look|save|invest|build|before|think|watch|budget|read|decide|ask)\b/i.test(t) || /\byou (should|can|could|need)\b/i.test(t);
   const isDefinition = (t) => /\b(is|are|means|refers to|was)\b/i.test(t.split(/\s+/).slice(0, 8).join(" "));
-  const what = [], why = [], todo = [];
+  const kindOf = (l) => {
+    if (isAdvice(l.text)) return "todo";
+    if (full && (SEC_HISTORY.test(l.section || "") || (firstYear(l.text) && !analyzeLine(l.text).stat))) return "history";
+    if (full && (SEC_RISK.test(l.section || "") || RISKY.test(l.text))) return "risks";
+    if (analyzeLine(l.text).stat) return "why";
+    if (isDefinition(l.text) || SEC_HOW.test(l.section || "")) return "what";
+    return "why";
+  };
+  const buckets = Object.fromEntries(layout.map((k) => [k, []]));
   for (const l of pool) {
-    if (isAdvice(l.text)) todo.push(l);
-    else if (analyzeLine(l.text).stat) why.push(l);
-    else if (isDefinition(l.text) && what.length < 3) what.push(l);
-    else (why.length <= todo.length ? why : todo).push(l);
+    let k = kindOf(l);
+    if (!buckets[k]) k = k === "history" || k === "risks" ? "why" : "what";
+    if (k === "what" && buckets.what.length >= perChapter) k = "why";
+    buckets[k].push(l);
   }
-  // Keep each chapter to 1–3 lines and make sure none is empty.
-  const chapters = [what, why, todo].map((c) => c.slice(0, 3));
+  if (buckets.history) buckets.history.sort((a, b) => (firstYear(a.text) ?? 9999) - (firstYear(b.text) ?? 9999));   // in time order
+  const chapters = layout.map((k) => buckets[k].slice(0, perChapter));
   const spare = pool.filter((l) => !chapters.flat().includes(l));
-  for (const c of chapters) while (c.length < 1 && spare.length) c.push(spare.shift());
+  // "What it is" and "why it matters" borrow from the spares when short; history and risks only run
+  // when the research really has them (no filler chapters).
+  chapters.forEach((c, i) => { if (layout[i] === "what" || layout[i] === "why") while (c.length < (full ? 2 : 1) && spare.length) c.push(spare.shift()); });
   // Every deep dive gets a real "what you can do" chapter: if the research had no advice, add practical steps.
-  const todoCh = chapters[2], tipCount = todoCh.filter((l) => isAdvice(l.text)).length;
-  if (tipCount < 2) {
-    const full = short(script.topicTitle || script.title), name = /^[A-Z]{2}/.test(full) ? full : full.replace(/^./, (c) => c.toLowerCase());
-    const byTopic = TOPIC_ADVICE.find(([re]) => re.test(full))?.[1] || [];
-    const tips = [...byTopic, ...(ADVICE[script.niche] || []), ...ADVICE_ANY].map((x) => x.replaceAll("{t}", name))
-      .filter((x) => !similar(x)).slice(0, 2 - tipCount);
-    // Facts that aren't advice move up to "why it matters" (if there's room) or back to the spares.
-    for (const l of todoCh.filter((x) => !isAdvice(x.text))) (chapters[1].length < 3 ? chapters[1] : spare).push(l);
-    todoCh.splice(0, todoCh.length, ...todoCh.filter((x) => isAdvice(x.text)), ...tips.map((text) => ({ text, visual: "", kind: "media", chart: null })));
+  const todoCh = chapters[layout.indexOf("todo")], tipCount = todoCh.filter((l) => isAdvice(l.text)).length, needTips = full ? 3 : 2;
+  if (tipCount < needTips) {
+    const fullName = short(script.topicTitle || script.title), name = /^[A-Z]{2}/.test(fullName) ? fullName : fullName.replace(/^./, (c) => c.toLowerCase());
+    const byTopic = TOPIC_ADVICE.find(([re]) => re.test(fullName))?.[1] || [];
+    const tips = [...new Set([...byTopic, ...(ADVICE[script.niche] || []), ...ADVICE_ANY].map((x) => x.replaceAll("{t}", name)))]
+      .filter((x) => !similar(x)).slice(0, needTips - tipCount);
+    for (const l of todoCh.filter((x) => !isAdvice(x.text))) (chapters[layout.indexOf("why")].length < perChapter ? chapters[layout.indexOf("why")] : spare).push(l);
+    todoCh.splice(0, todoCh.length, ...todoCh.filter((x) => isAdvice(x.text)), ...tips.map((text) => ({ text, visual: "", kind: "media", chart: null, tip: true })));
   }
-  // A hook promising "thirty seconds" is wrong for a 60–90 second video.
-  hook.text = hook.text.replace(/\b(in )?(thirty|30) seconds\b/i, (m, inn) => (inn ? "in " : "") + "under 90 seconds");
-  const out = [hook];
-  const recap = [];
+  // A hook promising "thirty seconds" is wrong for a longer video.
+  hook.text = hook.text.replace(/\b(in )?(thirty|30) seconds\b/i, (m, inn) => (inn ? "in " : "") + (full ? "under 3 minutes" : "under 90 seconds"));
+  const out = [hook], recap = [];
+  let n = 0;
   chapters.forEach((c, i) => {
     if (!c.length) return;
-    // "What you can do" only when the chapter actually has advice in it.
-    const [say, lab] = i === 2 && !c.some((l) => isAdvice(l.text)) ? ["Finally: what else to know.", "GOOD TO KNOW"] : SECTION_NAMES[i];
-    out.push({ text: say, kind: "section", label: lab, num: i + 1, hold: 0.35 });
+    const key = layout[i];
+    let [phrase, label] = CHAPTER_TEXT[key];
+    if (key === "todo" && !c.some((l) => isAdvice(l.text))) [phrase, label] = ["what else to know", "GOOD TO KNOW"];
+    const ord = i === layout.length - 1 ? "Finally" : ORDINAL[Math.min(n, ORDINAL.length - 2)];
+    out.push({ text: `${ord}: ${phrase}.`, kind: "section", label, num: ++n, hold: 0.35 });
     out.push(...c);
     recap.push(recapItem(c[0].text));
   });
-  if (recap.length >= 2) out.push({ text: "Quick recap.", kind: "recap", items: recap, hold: 3.2 });
+  if (recap.length >= 2) out.push({ text: "Quick recap.", kind: "recap", items: recap.slice(0, 4), hold: 3.2 + (recap.length > 3 ? 0.8 : 0) });
   out.push(outro);
   script.lines = out;
   script.extras = spare;
   script.deep = true;
+  script.format = full ? "full" : "deep";
   return script;
 }
 
@@ -231,11 +279,12 @@ export function hookOptions(script) {
   const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
   const numberLine = script.lines.find((l) => l.kind === "media" && analyzeLine(l.text).stat && l.text.split(/\s+/).length <= 22);
   const opts = [];
-  if (numberLine) opts.push(`Did you know? ${numberLine.text}`);
+  // "Instead, Tether only had…" can't open a video: drop the linking word.
+  if (numberLine) opts.push(`Did you know? ${cap(numberLine.text.replace(/^(Instead|However|But|Also|In fact|Moreover|Still|Yet|So|And|Meanwhile|Today|Now),?\s+/i, ""))}`);
   opts.push(`Most people get ${t} completely wrong. Here's the truth.`);
   opts.push(`If you ignore ${t}, it could cost you thousands.`);
   opts.push(`Why does nobody explain ${t} like this?`);
-  opts.push(`${cap(t)}, explained in under a minute.`);
+  opts.push(`${cap(t)}, explained in ${script.format === "full" ? "under 3 minutes" : script.deep ? "90 seconds" : "under a minute"}.`);
   opts.push(`Stop scrolling. This is the simplest way to understand ${t}.`);
   return opts;
 }
@@ -254,12 +303,16 @@ export function coach(lines, { estimate, range, visuals = [] }) {
   add(/\?|\byou\b|\byour\b|\d|\b(never|stop|secret|mistake|wrong|truth)\b/i.test(hook), 12, "Make the hook personal or surprising: ask a question, say 'you', or lead with a number.");
   add(estimate >= range[0] - 2 && estimate <= range[1] + 2, 14, `Aim for ${range[0]}–${range[1]} seconds (now about ${Math.round(estimate)}).`);
   const long = media.filter((l) => l.text.split(/\s+/).length > 26);
-  add(!long.length, 12, `Split long lines: ${long.length} line${long.length === 1 ? " is" : "s are"} over 26 words, which is hard to follow on screen.`);
+  add(!long.length, 10, `Split long lines: ${long.length} line${long.length === 1 ? " is" : "s are"} over 26 words, which is hard to follow on screen.`);
   add(media.some((l) => analyzeLine(l.text).stat), 12, "Add a concrete number (a percentage, amount or timeframe). Numbers make charts and stick in memory.");
   const kinds = new Set(visuals.filter((v) => v && v.type).map((v) => v.type));
-  add(kinds.size >= 2, 10, "Mix visuals: switch a scene to a Chart or Picture so it isn't all one style.");
+  add(kinds.size >= 2, 8, "Mix visuals: switch a scene to a Chart or Picture so it isn't all one style.");
   add(media.length >= 3, 8, "Add another point (+ Add a line) so the video delivers enough value.");
-  add(lines.some((l) => l.source) || lines.length > 6, 6, "Back up facts: researched lines show their source on screen.");
+  // Accuracy: every fact should be backed by a source (see the fact check badges).
+  const facts = lines.map((l) => l.check).filter((c) => c && c.kind === "fact");
+  const shaky = facts.filter((c) => c.status === "unverified" || c.status === "conflict").length;
+  if (facts.length) add(!shaky, 10, `${shaky} fact${shaky === 1 ? "" : "s"} couldn't be verified. Tap "Swap or remove unverified", or edit them.`);
+  else add(lines.some((l) => l.source) || lines.length > 6, 10, "Back up facts: researched lines show their source on screen.");
   add(lines.some((l) => l.kind === "outro" && l.text.trim().length > 8), 8, "End with a call to action, like asking people to follow or save.");
   const score = checks.reduce((s, c) => s + (c.ok ? c.points : 0), 0);
   return { score, tips: checks.filter((c) => !c.ok).sort((a, b) => b.points - a.points).map((c) => c.tip) };

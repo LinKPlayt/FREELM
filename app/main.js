@@ -3,6 +3,7 @@ import { appData, planReel, produceReel, releasePlan, estimateSeconds, lengthRan
 import { StatBg, IllusBg } from "./graphics.js";
 import { describeStat } from "./visuals.js";
 import { hookOptions, coach } from "./extras.js";
+const factModule = () => import("./ai/factcheck.js");
 import { listReels, saveReel, deleteReel, clearReels, listDrafts, saveDraft, deleteDraft } from "./store.js";
 import { platformCaptions } from "./script.js";
 import { encoderInfo, renderReel, loadFonts, previewFrame } from "./render.js";
@@ -17,7 +18,11 @@ const SPEEDS = { slow: 0.92, normal: 1.0, fast: 1.1 };
 const CAPTION_STYLES = { bold: "Bold", boxed: "Boxed", clean: "Clean" };
 const CAPTION_POS = { low: "Low", middle: "Middle" };
 const MOODS = { lofi: "Lo-fi", upbeat: "Upbeat", cinematic: "Cinematic", calm: "Calm", none: "None" };
-const LENGTH_LABELS = { short: "Short 20–30s", standard: "Standard 30–45s", long: "Long 40–60s", deep: "Deep dive 60–90s" };
+const LENGTH_LABELS = { short: "Short 20–30s", standard: "Standard 30–45s", long: "Long 40–60s", deep: "Deep dive 60–90s", full: "Full story 2–3 min" };
+const DEPTH_LABELS = { 1: "Quick", 2: "Standard", 3: "Deep", 4: "Maximum" };
+const DEPTH_NOTES = { 1: "Reads about 6 article summaries. Fastest.", 2: "Reads about 8 articles and the full text of the top 3.",
+  3: "Follows leads two steps out, reads 8 full articles, and checks open facts against live Wikipedia.",
+  4: "Follows leads three steps out, reads 16 full articles, keeps up to 48 facts, and checks open facts against live Wikipedia." };
 // A small chip group whose choice is remembered on the phone.
 function prefChips(id, labels, key, fallback, after) {
   const saved = store.get(key), value = labels[saved] ? saved : fallback;
@@ -180,6 +185,7 @@ function options() {
     music: state.mood, accent: state.accent, voiceSpeed: SPEEDS[state.speed] || 1, length: state.length,
     captionStyle: state.capStyle, captionPos: state.capPos, pops: $("pops").checked, offline: $("offline").checked,
     sfx: $("sfx").checked, showSources: $("sources").checked,
+    depth: Number(state.depth) || 2, factCheck: $("factcheck").checked, strict: $("factcheck").checked && $("strict").checked,
     forceEncoder: params.get("encoder") || undefined,
   };
 }
@@ -281,7 +287,14 @@ function updateEstimate() {
   const visuals = plan.script.lines.map((l, i) => decideVisual(l, i, plan.script.title));
   const c = coach(plan.script.lines, { estimate: secs, range: [lo, hi], visuals });
   const color = c.score >= 80 ? "var(--good)" : c.score >= 60 ? "var(--accent)" : "var(--bad)";
-  $("coach").innerHTML = `<div class="coach-score"><b style="color:${color}">${c.score}</b><span>/100 reel score</span></div>` +
+  const facts = plan.script.lines.map((l) => l.check).filter((x) => x && x.kind === "fact");
+  const ok = facts.filter((x) => x.status === "verified").length, bad = facts.filter((x) => x.status === "unverified" || x.status === "conflict").length;
+  const srcs = new Set(facts.flatMap((x) => x.sources || [])).size, r = plan.script.research;
+  const factLine = facts.length ? `<p class="meta" style="margin:6px 0 0"><b style="color:${bad ? "var(--bad)" : ok === facts.length ? "var(--good)" : "var(--accent)"}">Fact check: ${ok} of ${facts.length} facts verified</b>
+      · ${srcs} source${srcs === 1 ? "" : "s"}${r ? ` · ${r.read} articles researched (${DEPTH_LABELS[r.depth] || ""} depth)` : ""}
+      ${plan.fact?.fixed?.replaced || plan.fact?.fixed?.removed ? `<br>Strict accuracy swapped ${plan.fact.fixed.replaced} and removed ${plan.fact.fixed.removed} unverified line${plan.fact.fixed.replaced + plan.fact.fixed.removed === 1 ? "" : "s"}.` : ""}</p>
+      ${bad ? `<div class="mini"><button data-strict="1">Swap or remove ${bad} unverified</button></div>` : ""}` : "";
+  $("coach").innerHTML = `<div class="coach-score"><b style="color:${color}">${c.score}</b><span>/100 reel score</span></div>` + factLine +
     (c.tips.length ? `<ul class="steps" style="margin:6px 0 0">${c.tips.slice(0, 3).map((t) => `<li>${esc(t)}</li>`).join("")}</ul>` : `<p class="meta" style="margin:4px 0 0">Looks great. Ready to make.</p>`);
 }
 // Thumbnail of a generated chart or illustration (drawn with the real renderer at full size, then scaled).
@@ -295,6 +308,22 @@ function drawGenerated(cv, v) {
   bg.dispose();
 }
 const VISUAL_NAMES = { photo: "Photo", stat: "Chart", illus: "Picture" };
+
+// Fact-check badge for a line, with the evidence (the source sentences) one tap away.
+const FACT_LABEL = { verified: "✓ Verified", partial: "≈ Partly verified", unverified: "⚠ Not verified", conflict: "⚠ Source disagrees", tip: "Tip · advice, not a fact claim", takeaway: "Takeaway · opinion, not a fact claim" };
+function factBadge(l, i) {
+  const c = l.check;
+  if (!c || !FACT_LABEL[c.status]) return `<span data-fact="${i}"></span>`;
+  if (c.stale) return `<div class="fact" data-fact="${i}"><span class="fact-label">Checking your edit…</span></div>`;
+  const n = (c.sources || []).length;
+  const label = FACT_LABEL[c.status] + (c.status === "verified" && !c.calc ? (n > 1 ? ` · ${n} sources` : " · 1 source") : "") + (c.live ? " · live Wikipedia" : "") + (c.calc ? " by calculation" : "");
+  const ev = (c.evidence || []).slice(0, 3).map((e) => `<li>“${esc(e.text)}”<br><small>${esc(e.source)}${e.section ? " — " + esc(e.section) : ""}</small></li>`).join("");
+  const why = c.status === "unverified" ? "<p>No source in the research says this. Edit it, remove it, or turn on Strict accuracy to swap it for a verified fact.</p>"
+    : c.status === "partial" ? "<p>The topic is backed up, but not every detail or number in this line was found in a source. Closest matches:</p>"
+    : c.status === "conflict" ? "<p>A source on the same subject gives a different number. Check it:</p>" : "";
+  if (c.status === "tip" || c.status === "takeaway") return `<div class="fact s-tip" data-fact="${i}"><span class="fact-label">${label}</span></div>`;
+  return `<details class="fact s-${c.status}" data-fact="${i}"><summary>${label}</summary>${why}${ev ? `<ul>${ev}</ul>` : ""}</details>`;
+}
 
 function showReview() {
   const { script } = state.plan;
@@ -317,7 +346,7 @@ function showReview() {
       : `<div class="mini"><button data-swap="${i}">New photo</button><button data-search="${i}">Search…</button><button data-mine="${i}">My photo</button>${content > 2 ? `<button class="del" data-del="${i}">Remove</button>` : ""}</div>`;
     const hookBtn = i === 0 ? `<div class="mini"><button data-hook="1">Another hook</button></div>` : "";
     return `<div class="scene"><div>${thumb}</div><div><div class="scene-tag"><span>${esc(tag)}</span></div>
-      <textarea data-line="${i}" rows="3">${esc(l.text)}</textarea>${hookBtn}${chips}${tools}</div></div>`;
+      <textarea data-line="${i}" rows="3">${esc(l.text)}</textarea>${factBadge(l, i)}${hookBtn}${chips}${tools}</div></div>`;
   }).join("");
   script.lines.forEach((l, i) => {
     const cv = document.querySelector(`[data-thumb="${i}"]`), v = visuals[i];
@@ -334,16 +363,37 @@ $("scenes").addEventListener("input", (e) => {
   line.text = e.target.value.replace(/\s+/g, " ").trim();
   line.analysis = null;                                  // re-read numbers and concepts from the new text
   state.plan.edited = true; updateEstimate();
+  // Re-check an edited fact against the evidence already gathered (instant, on the phone).
+  if (line.check) line.check = { ...line.check, stale: true };
+  clearTimeout(line.recheck);
+  if (state.plan.fact?.ctx) line.recheck = setTimeout(async () => {
+    const { checkLine } = await factModule();
+    await checkLine(line, +i, state.plan.fact.ctx);
+    const badge = document.querySelector(`[data-fact="${i}"]`);
+    if (badge) badge.outerHTML = factBadge(line, +i);
+    updateEstimate();
+  }, 700);
 });
 async function setAsset(i, assetPromise, label) {
   const line = state.plan.script.lines[i];
   const btn = document.querySelector(`[data-swap="${i}"]`); if (btn) btn.textContent = label;
   const asset = await assetPromise.catch(() => null);
-  if (asset) { line.asset?.bitmap?.close?.(); line.asset = { ...asset, relevant: true }; line.vmode = "photo"; }   // you chose it else toast("No other photo found. Try Search…");
+  // A photo you chose counts as fitting.
+  if (asset) { line.asset?.bitmap?.close?.(); line.asset = { ...asset, relevant: true }; line.vmode = "photo"; } else toast("No other photo found. Try Search…");
   showReview();
 }
 $("scenes").addEventListener("change", (e) => { if (e.target.dataset.line != null) showReview(); });   // update visuals after editing
-$("scenes").addEventListener("click", (e) => {
+// "Swap or remove unverified" in the score card.
+$("coach").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-strict]"), plan = state.plan; if (!b || !plan) return;
+  if (!plan.fact?.ctx) return toast("Fact check isn't available for this script.");
+  const { enforceAccuracy } = await factModule();
+  const r = enforceAccuracy(plan.script, plan.fact.ctx);
+  plan.fact.fixed = r; plan.edited = true;
+  toast(r.replaced + r.removed ? `Swapped ${r.replaced}, removed ${r.removed}.` : "Too few verified facts left to remove more; edit those lines instead.");
+  showReview();
+});
+$("scenes").addEventListener("click", async (e) => {
   const b = e.target.closest("button"); if (!b) return;
   const plan = state.plan;
   if (b.dataset.hook != null) {
@@ -510,9 +560,11 @@ async function init() {
   prefChips("cap-pos", CAPTION_POS, "capPos", "low", drawStylePreview);
   prefChips("moods", MOODS, "mood", store.get("musicOff") === "1" ? "none" : "lofi");
   prefChips("lengths", LENGTH_LABELS, "length", "standard", updateEstimate);
+  const depthNote = () => { $("depth-note").textContent = DEPTH_NOTES[state.depth] || ""; };
+  prefChips("depths", DEPTH_LABELS, "depth", "2", depthNote); depthNote();
   $("handle").value = store.get("handle") || "";
   $("handle").addEventListener("change", () => { $("handle").value = cleanHandle($("handle").value); store.set("handle", $("handle").value); });
-  for (const [id, key] of [["sfx", "sfx"], ["sources", "sources"]]) {
+  for (const [id, key] of [["sfx", "sfx"], ["sources", "sources"], ["factcheck", "factcheck"], ["strict", "strict"]]) {
     $(id).checked = store.get(key) !== "0";
     $(id).addEventListener("change", () => store.set(key, $(id).checked ? "1" : "0"));
   }

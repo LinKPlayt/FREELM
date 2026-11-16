@@ -196,12 +196,19 @@ export function buildMarket(markets, headlines, opts) {
 
 // A script for any topic, built from the key sentences of its Wikipedia article.
 export function buildCustom(found, opts) {
-  const title = found.title.replace(/\s*\(.*\)$/, "");
+  const title = found.title.replace(/\s+\(.*\)$/, "");
+  // A common noun appears in lower case in the article's own first sentence ("A mortgage loan is…").
+  const common = title !== title.toLowerCase() && (found.sentences[0] || "").includes(" " + title.toLowerCase());
   const person = /\b(?:is|was) an? [\w\s,-]*?\b(?:investor|businessman|businesswoman|entrepreneur|economist|politician|philanthropist|executive|banker|financier|author|writer|businessperson|billionaire|trader|founder)\b/i.test(found.sentences[0] || "");
   const hook = pick(person ? [
     `Who is ${title}? Here's the quick version.`,
     `${title}, explained in thirty seconds.`,
     `Everyone has heard of ${title}. Here's why.`,
+  ] : common ? [
+    // Common nouns ("mortgage loan") read wrong capitalised mid-sentence or without "a", so these avoid both.
+    `${title}, explained in thirty seconds.`,
+    `${title}: here's what it actually means.`,
+    `Here's what ${title.toLowerCase()} really means, in plain English.`,
   ] : [
     `${title}, explained in thirty seconds.`,
     `What is ${title}? Here's the quick version.`,

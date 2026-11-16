@@ -44,3 +44,16 @@ export async function semanticSearch(query, k = 30) {
   const idx = Array.from(scores.keys()).sort((a, b) => scores[b] - scores[a]).slice(0, k);
   return idx.map((i) => [i, scores[i]]);
 }
+
+// Embeds sentences (unit vectors), for comparing a script line with source sentences by meaning.
+export async function embedTexts(texts) {
+  if (!embedder) return null;
+  const out = [];
+  for (let i = 0; i < texts.length; i += 16) {
+    const r = await embedder(texts.slice(i, i + 16), { pooling: "mean", normalize: true });
+    const d = r.dims.at(-1);
+    for (let k = 0; k < r.dims[0]; k++) out.push(r.data.slice(k * d, (k + 1) * d));
+  }
+  return out;
+}
+export const cosine = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * b[i]; return s; };
