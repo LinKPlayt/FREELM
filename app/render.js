@@ -451,7 +451,9 @@ async function encodeH264Pcm(job, target, vcfg, onProgress) {
     video: { width: vcfg.width, height: vcfg.height, fps: FPS, description, chunks },
     audio: { sampleRate: SR, channels: 2, pcm: pcm16Stereo(job.audio) },
   });
-  return { blob: new Blob(parts, { type: "video/quicktime" }), ext: "mov", how: `encoded on-device, ${vcfg.width}×${vcfg.height}, uncompressed sound` };
+  let peak = 0; for (let i = 0; i < job.audio.length; i += 16) peak = Math.max(peak, Math.abs(job.audio[i]));
+  return { blob: new Blob(parts, { type: "video/quicktime" }), ext: "mov", how: `encoded on-device, ${vcfg.width}×${vcfg.height}, uncompressed sound`,
+    written: { seconds: job.audio.length / SR, peakDb: peak > 0 ? 20 * Math.log10(peak) : -Infinity } };
 }
 
 // Decode the finished file and check it really contains sound: true, false, or null (can't tell).

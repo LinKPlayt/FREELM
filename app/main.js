@@ -143,7 +143,8 @@ async function produce() {
     screen("form");
     const soundNote = reel.sound === false
       ? `<p style="color:var(--bad)"><b>This video has no sound.</b> Your phone's browser didn't record the audio. Please run <b>Sound test</b> in the About tab and tell us what it says.</p>`
-      : reel.sound ? `<p style="color:var(--good)">Sound checked ✓</p>` : "";
+      : reel.sound ? `<p style="color:var(--good)">Sound checked ✓</p>`
+      : reel.written && reel.written.peakDb > -40 ? `<p style="color:var(--good)">Sound written into the video ✓</p>` : "";
     $("result").innerHTML = `<h2>Your reel is ready</h2><p>Made in ${Math.round((performance.now() - t0) / 1000)}s on this device (${esc(reel.how)}).${kept ? "" : " It couldn't be kept in the Library, so save it now."}</p>${soundNote}` + reelCard(reel, true);
     $("result").classList.remove("hidden");
     store.set("made", "1"); $("first-run").classList.add("hidden");
@@ -262,6 +263,16 @@ $("reroll").addEventListener("click", () => { if (state.plan) releasePlan(state.
 $("cancel-review").addEventListener("click", () => { if (state.plan) releasePlan(state.plan); state.plan = null; closeAudio(); screen("form"); });
 
 /* ---------- sound test (diagnostics) ---------- */
+// A beep straight through the speaker. "playback" makes it audible even with the Silent switch on,
+// the same way video sound is, so it only fails if the phone's own audio is muted or routed elsewhere.
+function playBeep() {
+  try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch { /* older iOS */ }
+  const ctx = unlockAudio(); if (!ctx) { toast("This browser can't play sound"); return; }
+  const t = ctx.currentTime + 0.05, osc = ctx.createOscillator(), g = ctx.createGain();
+  osc.frequency.value = 880; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.4, t + 0.03); g.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+  osc.connect(g); g.connect(ctx.destination); osc.start(t); osc.stop(t + 0.65);
+}
+
 async function soundTest() {
   const ctx = unlockAudio();   // inside the tap
   const btn = $("sound-test"), out = $("sound-out");
@@ -281,7 +292,9 @@ async function soundTest() {
     const t0 = performance.now();
     const r = await renderReel(job, cv, ctx, null, params.get("encoder") || undefined);
     const url = URL.createObjectURL(r.blob);
-    lines.push(`Sound in the file: <b style="color:${r.sound === false ? "var(--bad)" : r.sound ? "var(--good)" : "var(--muted)"}">${r.sound === false ? "none ✗" : r.sound ? "yes ✓" : "couldn't check"}</b>`);
+    const written = r.written ? `written by the app: ${r.written.seconds.toFixed(1)} s, loudest ${r.written.peakDb.toFixed(0)} dB` : "";
+    lines.push(`Sound in the file: <b style="color:${r.sound === false ? "var(--bad)" : (r.sound || written) ? "var(--good)" : "var(--muted)"}">${
+      r.sound === false ? "none ✗" : r.sound ? "yes ✓" + (written ? ` (${written})` : "") : written ? `yes ✓ (${written})` : "couldn't check"}</b>`);
     lines.push(`Method: ${esc(r.how)} · ${esc(r.blob.type || "?")} · ${(r.blob.size / 1024).toFixed(0)} KB · ${Math.round(performance.now() - t0)} ms`);
     out.innerHTML = `<video src="${url}" controls playsinline style="max-height:40vh;margin-top:10px"></video>`;
   } catch (e) {
@@ -290,9 +303,25 @@ async function soundTest() {
   const info = await encoderInfo();
   lines.push(`H.264 encoder: ${info.webcodecs ? "yes" : "no"} · AAC encoder: ${info.aac ? "yes" : "no"} · Recorder: ${info.recorder ? "yes" : "no"} · Audio: ${esc(ctx?.state || "unavailable")} at ${ctx?.sampleRate || "?"} Hz`);
   lines.push(`<span style="word-break:break-all">${esc(navigator.userAgent)}</span>`);
-  out.insertAdjacentHTML("beforeend", `<p class="meta" style="margin-top:10px">${lines.join("<br>")}</p>
-    <div class="btns"><button class="btn wide" id="copy-diag">Copy these results</button></div>`);
-  $("copy-diag").onclick = () => copy(out.querySelector("p").innerText);
+  out.insertAdjacentHTML("beforeend", `
+    <p style="margin-top:12px"><b>1. Play the clip above.</b> Do you hear three notes?</p>
+    <div class="btns"><button class="btn" data-ans="clip:heard">I hear them</button><button class="btn" data-ans="clip:silent">No sound</button></div>
+    <p style="margin-top:12px"><b>2. Speaker check.</b> Plays a short beep straight through your speaker.</p>
+    <div class="btns"><button class="btn wide" id="beep">Play beep</button>
+      <button class="btn" data-ans="beep:heard">I heard it</button><button class="btn" data-ans="beep:silent">No sound</button></div>
+    <p class="meta" style="margin-top:12px" id="diag">${lines.join("<br>")}</p>
+    <div class="btns"><button class="btn main wide" id="copy-diag">Copy these results</button></div>`);
+  const answers = {};
+  out.querySelectorAll("[data-ans]").forEach((b) => b.addEventListener("click", () => {
+    const [k, v] = b.dataset.ans.split(":"); answers[k] = v;
+    out.querySelectorAll(`[data-ans^="${k}:"]`).forEach((x) => x.classList.toggle("main", x === b));
+  }));
+  $("beep").onclick = () => playBeep();
+  $("copy-diag").onclick = () => copy([
+    `Clip: ${answers.clip === "heard" ? "heard the notes" : answers.clip === "silent" ? "NO sound" : "not answered"}`,
+    `Speaker beep: ${answers.beep === "heard" ? "heard" : answers.beep === "silent" ? "NO sound" : "not answered"}`,
+    $("diag").innerText,
+  ].join("\n"));
   btn.disabled = false; btn.textContent = "Run sound test";
 }
 
