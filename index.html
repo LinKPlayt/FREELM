@@ -73,6 +73,23 @@
     padding: 10px 16px; border-radius: 99px; font-weight: 600; font-size: 14px; opacity: 0; transition: .25s; pointer-events: none; z-index: 30; max-width: 90vw; text-align: center; }
   .toast.show { opacity: 1; }
   ol.steps, ul.steps { padding-left: 20px; margin: 8px 0; color: var(--muted); font-size: 14px; } .steps li { margin: 6px 0; } .steps b { color: var(--text); }
+  .swatches { display: flex; gap: 10px; flex-wrap: wrap; }
+  .swatch { width: 38px; height: 38px; border-radius: 50%; border: 3px solid transparent; cursor: pointer; box-shadow: inset 0 0 0 1px rgba(255,255,255,.25); }
+  .swatch.on { border-color: var(--text); }
+  .scene { display: grid; grid-template-columns: 76px 1fr; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+  .scene:first-of-type { border-top: 0; padding-top: 4px; }
+  .thumb { width: 76px; aspect-ratio: 9 / 16; border-radius: 8px; background: var(--surface-2); display: grid; place-items: center;
+    color: var(--muted); font-size: 11px; font-weight: 700; text-align: center; overflow: hidden; }
+  .thumb canvas { width: 100%; height: 100%; display: block; }
+  .scene textarea { width: 100%; min-height: 64px; resize: vertical; background: var(--surface-2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 10px; padding: 9px 10px; font: 15px/1.4 inherit; font-family: inherit; }
+  .scene-tag { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; margin-bottom: 6px; display: flex; justify-content: space-between; }
+  .mini { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .mini button, .mini label { background: var(--surface-2); color: var(--text); border: 1px solid var(--line); border-radius: 99px; padding: 6px 11px;
+    font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .mini .del { color: var(--bad); }
+  .sticky-actions { position: sticky; bottom: calc(var(--safe-bottom) + 76px); background: linear-gradient(transparent, var(--bg) 30%); padding-top: 18px; }
+  .estimate { font-weight: 700; } .estimate.warn { color: var(--accent); }
   .hidden { display: none !important; }
 </style>
 </head>
@@ -91,6 +108,20 @@
     </div>
     <div class="card hidden" id="result"></div>
 
+    <div id="review" class="hidden">
+      <div class="card">
+        <h2 id="review-title">Review your reel</h2>
+        <p>Edit any line, change photos, or remove scenes. Length: <span class="estimate" id="estimate"></span></p>
+        <div id="scenes"></div>
+        <div class="mini" style="margin-top:12px"><button id="add-line">+ Add a line</button><button id="reroll">New script</button></div>
+      </div>
+      <div class="sticky-actions">
+        <button class="primary" id="produce">Make the video</button>
+        <button class="btn" id="cancel-review" style="width:100%;margin-top:8px">Start over</button>
+      </div>
+    </div>
+    <input type="file" id="photo-pick" accept="image/*" class="hidden">
+
     <div id="form">
       <div class="card">
         <h2>Make a finance reel</h2>
@@ -103,10 +134,24 @@
           <label class="field">Topic</label>
           <select id="topic"></select>
         </div>
+        <div id="custom-wrap" class="hidden">
+          <label class="field">Your topic</label>
+          <input id="custom" type="text" maxlength="80" placeholder="e.g. Roth IRA, inflation, Warren Buffett" enterkeyhint="go">
+          <p class="meta" style="margin:6px 0 0">Researched on Wikipedia, then written into a script.</p>
+        </div>
         <label class="field">Brand name</label>
         <input id="brand" type="text" maxlength="30">
-        <div class="row" style="margin-top:12px"><div>Background music<small>Original, copyright-free</small></div>
+      </div>
+      <div class="card">
+        <h2>Style</h2>
+        <label class="field">Caption and brand colour</label>
+        <div class="swatches" id="swatches"></div>
+        <label class="field">Voice speed</label>
+        <div class="chips" id="speeds"></div>
+        <div class="row" style="margin-top:14px"><div>Background music<small>Original, copyright-free</small></div>
           <label class="switch"><input id="music" type="checkbox" checked><span></span></label></div>
+        <div class="row"><div>Review before making<small>Edit the script and photos first</small></div>
+          <label class="switch"><input id="review-on" type="checkbox" checked><span></span></label></div>
       </div>
       <button class="primary" id="go">Make my reel</button>
       <p class="meta" style="text-align:center;margin-top:10px" id="first-run">The first reel downloads the voice once (about 90 MB). Wi-Fi recommended.</p>

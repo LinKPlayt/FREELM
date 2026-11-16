@@ -1,6 +1,6 @@
 // The whole pipeline, on the phone: research -> script -> voice -> photos -> music -> render.
 import * as research from "./research.js";
-import { buildEvergreen, buildNews, buildMarket, buildMetadata, speakable } from "./script.js";
+import { buildEvergreen, buildNews, buildMarket, buildCustom, buildMetadata, speakable } from "./script.js";
 import { MediaFinder } from "./media.js";
 import { loadVoice, phonemize, synthesize, VOICE_RATE } from "./tts.js";
 import { generateMusic, mix, resample, SR } from "./music.js";
@@ -56,11 +56,11 @@ async function writeScript(opts, data, say) {
 
 const seconds = (clips) => clips.reduce((n, c) => n + c.length, 0) / VOICE_RATE + GAP * (clips.length - 1) + TAIL;
 
-async function voiceScript(script, say) {
+async function voiceScript(script, say, base = 1.0) {
   const all = [...script.lines, ...script.extras];
   const phon = await phonemize(all.map((l) => speakable(l.text)));
   all.forEach((l, i) => { l.phonemes = phon[i]; });
-  let speed = 1.0;
+  let speed = base;
   const speak = async (lines) => {
     const out = [];
     for (let i = 0; i < lines.length; i++) {
@@ -77,7 +77,7 @@ async function voiceScript(script, say) {
     clips.splice(clips.length - 1, 0, await synthesize(extra.phonemes, speed));
   }
   if (seconds(clips) > MAX_S) {                                     // too long: speak a little faster
-    speed = Math.min(1.18, Math.ceil((seconds(clips) / MAX_S) * 50) / 50 + 0.02);
+    speed = Math.min(base * 1.18, base * (Math.ceil((seconds(clips) / MAX_S) * 50) / 50 + 0.02));
     clips = await speak(script.lines);
   }
   while (seconds(clips) > MAX_S && script.lines.length > 4) {       // still too long: drop the longest middle line
@@ -85,7 +85,7 @@ async function voiceScript(script, say) {
     for (let i = 1; i < script.lines.length - 1; i++) if (script.lines[i].kind !== "chart" && clips[i].length > clips[drop].length) drop = i;
     script.lines.splice(drop, 1); clips.splice(drop, 1);
   }
-  if (seconds(clips) < MIN_S) { speed = 0.92; clips = await speak(script.lines); }
+  if (seconds(clips) < MIN_S && speed > base * 0.92) { speed = base * 0.92; clips = await speak(script.lines); }
   return clips;
 }
 
@@ -114,33 +114,63 @@ function assembleAudio(clips, withMusic) {
   return { audio: mix(voice, withMusic ? generateMusic(total) : null, 0.14), total };
 }
 
-// opts: { niche, mode, topicId, brand, cta, music, repo }   ui: { say(text, fraction), canvas, audioCtx }
-export async function makeReel(opts, ui) {
+// Rough spoken length of a script, for the review screen.
+export function estimateSeconds(lines, speed = 1.0) {
+  const words = lines.reduce((n, l) => n + speakable(l.text).split(/\s+/).filter(Boolean).length, 0);
+  return words / (2.75 * speed) + GAP * Math.max(0, lines.length - 1) + TAIL;
+}
+
+// Step 1: research, write the script and find a photo for every scene.
+// opts: { niche, mode, topicId, customTopic, cta, repo }   ui: { say(text, fraction) }
+export async function planReel(opts, ui) {
   const data = await appData();
-  const stage = (lo, hi) => (text, f = 0) => ui.say(text, lo + (hi - lo) * Math.min(1, Math.max(0, f)));
-
-  const script = await writeScript(opts, data, stage(0.02, 0.06));
-
-  // Start finding photos now; they download while the voice is being made.
   const generic = data.generic_visuals[opts.niche] || data.generic_visuals["personal finance"];
+  const say = (text, f = 0) => ui.say(text, Math.min(1, Math.max(0, f)));
+  const script = opts.mode === "custom"
+    ? await customScript(opts, generic, say)
+    : await writeScript(opts, data, (t) => say(t, 0.1));
+
   const finder = new MediaFinder(generic), usedQueries = new Set();
-  for (const line of [...script.lines, ...script.extras]) {
-    if (line.kind !== "media") continue;
+  const media = [...script.lines, ...script.extras].filter((l) => l.kind === "media");
+  for (const line of media) {
     let q = line.visual || generic[0];
     if (usedQueries.has(q)) q = generic.find((g) => !usedQueries.has(g)) || q;   // avoid repeating the same subject
     usedQueries.add(q);
+    line.query = q;
     line.asset = finder.find(q).catch(() => null);
   }
+  // Wait for the photos you'll see on the review screen; extras keep loading in the background.
+  let got = 0;
+  const shown = script.lines.filter((l) => l.kind === "media");
+  await Promise.all(shown.map(async (l) => { l.asset = await l.asset; say("Finding free photos…", 0.2 + 0.8 * (++got / shown.length)); }));
+  return { script, finder, generic, edited: false };
+}
 
-  const say = stage(0.06, 0.3);
+async function customScript(opts, generic, say) {
+  const topic = (opts.customTopic || "").trim();
+  if (topic.length < 2) throw new Error("Type a topic first, for example \"Roth IRA\" or \"inflation\".");
+  say(`Researching "${topic}" on Wikipedia…`, 0.05);
+  const found = await research.wikipediaTopic(topic);
+  if (!found) throw new Error(`Couldn't find "${topic}" on Wikipedia. Try different words.`);
+  return buildCustom(found, { niche: opts.niche, cta: opts.cta, generic });
+}
+
+// Step 2: voice, music and video, all on the device.
+// opts: { brand, accent, music, voiceSpeed, forceEncoder }   ui: { say, canvas, audioCtx }
+export async function produceReel(plan, opts, ui) {
+  const { script } = plan;
+  if (plan.edited) script.extras = [];      // you approved these exact lines: don't add any
+  const stage = (lo, hi) => (text, f = 0) => ui.say(text, lo + (hi - lo) * Math.min(1, Math.max(0, f)));
+
+  const say = stage(0, 0.25);
   say("Getting the voice ready (one-time download, about 90 MB)…");
   await Promise.all([loadVoice((f) => say("Getting the voice ready (one-time download, about 90 MB)…", f)), loadFonts()]);
 
-  const clips = await voiceScript(script, stage(0.3, 0.55));
+  const clips = await voiceScript(script, stage(0.25, 0.55), opts.voiceSpeed || 1.0);
   const { words, spans } = timings(script, clips);
   const { audio, total } = assembleAudio(clips, opts.music);
 
-  ui.say("Finding free photos…", 0.56);
+  ui.say("Preparing scenes…", 0.56);
   const scenes = [], credits = [];
   for (let i = 0; i < script.lines.length; i++) {
     const line = script.lines[i];
@@ -149,14 +179,14 @@ export async function makeReel(opts, ui) {
     else if (line.kind === "chart" && line.chart) { sc.kind = "chart"; sc.chart = line.chart; }
     else {
       const asset = await line.asset;
-      if (asset) { sc.kind = "image"; sc.bitmap = asset.bitmap; if (!credits.includes(asset.credit)) credits.push(asset.credit); }
+      if (asset) { sc.kind = "image"; sc.bitmap = asset.bitmap; if (asset.credit && !credits.includes(asset.credit)) credits.push(asset.credit); }
     }
     scenes.push(sc);
   }
 
-  const job = { title: script.title, brand: opts.brand, accent: "#FFD60A", scenes, words, audio };
+  const job = { title: script.title, brand: opts.brand, accent: opts.accent || "#FFD60A", scenes, words, audio };
   const result = await renderReel(job, ui.canvas, ui.audioCtx, (f) => ui.say("Rendering your reel on this device…", 0.6 + 0.4 * f), opts.forceEncoder);
-  for (const sc of scenes) sc.bitmap?.close?.();
+  releasePlan(plan);
 
   remember(script);
   const meta = buildMetadata(script, credits);
@@ -165,4 +195,11 @@ export async function makeReel(opts, ui) {
     ...meta, kind: script.kind, duration: total, created: Date.now(), blob: result.blob, ext: result.ext, how: result.how,
     script: script.lines.map((l) => l.text).join("\n"),
   };
+}
+
+// Free the decoded photos (they hold a lot of memory on a phone).
+export function releasePlan(plan) {
+  for (const l of [...plan.script.lines, ...plan.script.extras]) {
+    Promise.resolve(l.asset).then((a) => a?.bitmap?.close?.()).catch(() => {});
+  }
 }

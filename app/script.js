@@ -186,6 +186,31 @@ export function buildMarket(markets, headlines, opts) {
   };
 }
 
+// A script for any topic, built from the key sentences of its Wikipedia article.
+export function buildCustom(found, opts) {
+  const title = found.title.replace(/\s*\(.*\)$/, "");
+  const hook = pick([
+    `${title}, explained in thirty seconds.`,
+    `What is ${title}? Here's the quick version.`,
+    `Everyone talks about ${title}. Here's what it actually means.`,
+  ]);
+  const g = opts.generic;
+  const match = (text) => { const low = text.toLowerCase(); for (const [re, v] of HEADLINE_VISUALS) if (re.test(low)) return v; return null; };
+  // Abstract finance words make poor photo searches ("inflation" finds art), so map them to concrete
+  // subjects. Names of people, companies and places are searched as-is: that finds the right photo.
+  const titleVisual = match(title) || title;
+  const visual = (text, i) => match(text) || (i % 2 ? titleVisual : g[i % g.length]);
+  const [first, ...rest] = found.sentences;
+  const points = [first, ...rest.slice(0, 3)];
+  const lines = [line(hook, titleVisual), ...points.map((p, i) => line(p, visual(p, i + 1)))];
+  lines.push(line(opts.cta, "", "outro"));
+  const extras = rest.slice(3, 6).map((p, i) => line(p, visual(p, i + 5)));
+  return {
+    kind: "custom", topicId: "custom-" + slug(title).slice(0, 40), title, niche: opts.niche, lines, extras,
+    tags: [title, opts.niche, "explained"], sources: [found.url],
+  };
+}
+
 const hashtag = (s) => "#" + s.replace(/\b\w/g, (c) => c.toUpperCase()).replace(/[^A-Za-z0-9]/g, "");
 
 export function buildMetadata(script, credits) {

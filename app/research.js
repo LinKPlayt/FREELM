@@ -28,9 +28,16 @@ const NICHE_MARKETS = {
 };
 
 export async function fetchT(url, ms = 12000, opts = {}) {
-  const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), ms);
-  try { return await fetch(url, { ...opts, signal: ctl.signal }); } finally { clearTimeout(timer); }
+  for (let attempt = 0; ; attempt++) {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), ms);
+    try {
+      const res = await fetch(url, { ...opts, signal: ctl.signal });
+      // Busy (rate limited): wait a moment and try once more.
+      if (res.status === 429 && attempt === 0) { await new Promise((r) => setTimeout(r, 1500)); continue; }
+      return res;
+    } finally { clearTimeout(timer); }
+  }
 }
 
 const clean = (s) => { const d = document.createElement("div"); d.innerHTML = s || ""; return (d.textContent || "").replace(/\s+/g, " ").trim(); };
@@ -113,4 +120,36 @@ export async function wikipediaDefinition(title, maxWords = 30) {
     const wc = sent.split(/\s+/).length;
     return wc >= 6 && wc <= maxWords ? sent : "";
   } catch { return ""; }
+}
+
+// Research any topic the user types: find the best Wikipedia article and return its key sentences.
+export async function wikipediaTopic(query) {
+  const api = "https://en.wikipedia.org/w/api.php?format=json&origin=*&";
+  const search = await fetchT(api + new URLSearchParams({ action: "query", list: "search", srsearch: query, srlimit: "5", srnamespace: "0" }), 10000);
+  if (search.status === 429 || search.status >= 500) throw new Error("Wikipedia is busy right now. Try again in a minute.");
+  if (!search.ok) return null;
+  const hits = (await search.json()).query?.search || [];
+  for (const hit of hits.slice(0, 3)) {
+    const res = await fetchT(api + new URLSearchParams({ action: "query", prop: "extracts", exsentences: "14", explaintext: "1", exsectionformat: "plain", redirects: "1", titles: hit.title }), 10000);
+    if (!res.ok) continue;
+    const page = Object.values((await res.json()).query?.pages || {})[0];
+    const text = (page?.extract || "").replace(/\n+[A-Z][^.\n]{0,60}\n/g, "\n").replace(/\s*\([^()]*(?:\([^()]*\)[^()]*)*\)/g, "").replace(/\s*\[[^\]]*\]/g, "").replace(/\s+/g, " ").trim();
+    if (!text || /may refer to/i.test(text)) continue;
+    const all = text.split(/(?<=[.!?])\s+(?=[A-Z])/).map((x) => x.trim());
+    const sentences = [];
+    let prevKept = false;
+    all.forEach((x, i) => {
+      const n = x.split(/\s+/).length;
+      const max = i === 0 ? 48 : 34;   // always try to keep the defining first sentence
+      const dangling = /^(This|These|That|Those|Such|It|They)\b/.test(x) && !prevKept;   // refers to a dropped sentence
+      prevKept = n >= 6 && n <= max && !dangling && !/[;{}=]|\b(?:see also|citation)\b/i.test(x);
+      if (prevKept) sentences.push(x);
+    });
+    if (sentences.length >= 2) {
+      // "Compound interest or anatocism is …" -> "Compound interest is …"
+      sentences[0] = sentences[0].replace(/^([A-Z][\w '-]{2,40}?),? (?:or|also known as|also called) [\w' -]{2,30}?,? (is|are|refers to)\b/, "$1 $2");
+      return { title: page.title, sentences, url: "https://en.wikipedia.org/wiki/" + encodeURIComponent(page.title.replaceAll(" ", "_")) };
+    }
+  }
+  return null;
 }

@@ -1,0 +1,27 @@
+# One-off cleanup: deletes the old gh-pages branch, which held reels rendered online by an earlier
+# version of ReelBot. Reels are now made and kept on the phone only. Safe to delete this file.
+name: Delete old gh-pages branch
+
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/delete-gh-pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  delete:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete gh-pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/${GITHUB_REPOSITORY}/branches/gh-pages" --silent 2>/dev/null; then
+            gh api -X DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/gh-pages"
+            echo "Deleted gh-pages"
+          else
+            echo "gh-pages is already gone"
+          fi

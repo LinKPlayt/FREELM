@@ -1,14 +1,17 @@
 // UI glue for the phone app.
-import { appData, makeReel } from "./make.js";
+import { appData, planReel, produceReel, releasePlan, estimateSeconds } from "./make.js";
 import { listReels, saveReel, deleteReel, clearReels } from "./store.js";
 import { encoderInfo } from "./render.js";
 
 const $ = (id) => document.getElementById(id);
 const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } } };
-const MODES = ["auto", "evergreen", "news", "market"];
-const MODE_LABELS = { auto: "Auto", evergreen: "Explainer", news: "Today's news", market: "Market recap" };
+const MODES = ["auto", "evergreen", "news", "market", "custom"];
+const MODE_LABELS = { auto: "Auto", evergreen: "Explainer", news: "Today's news", market: "Market recap", custom: "Your topic" };
+const COLORS = ["#FFD60A", "#2ED573", "#00D2FF", "#FF6B81", "#FF9F1A", "#B388FF", "#FFFFFF"];
+const SPEEDS = { slow: 0.92, normal: 1.0, fast: 1.1 };
 const CTA = "Follow for a new money tip every day.";
-const state = { niche: "personal finance", mode: "auto", data: null, urls: new Map(), reels: new Map(), busy: false };
+const state = { niche: "personal finance", mode: "auto", data: null, urls: new Map(), reels: new Map(), busy: false,
+  accent: "#FFD60A", speed: "normal", plan: null };
 const params = new URLSearchParams(location.search);
 
 function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 3200); }
@@ -44,7 +47,15 @@ function renderTopics() {
   const list = state.data.topics.filter((t) => t.niches.includes(state.niche));
   $("topic").innerHTML = `<option value="">Surprise me</option>` + list.map((t) => `<option value="${esc(t.id)}">${esc(t.title)}</option>`).join("");
   $("topic-wrap").classList.toggle("hidden", state.mode !== "evergreen");
+  $("custom-wrap").classList.toggle("hidden", state.mode !== "custom");
 }
+function renderSwatches() {
+  $("swatches").innerHTML = COLORS.map((c) => `<button class="swatch${c === state.accent ? " on" : ""}" style="background:${c}" data-color="${c}" aria-label="Colour ${c}"></button>`).join("");
+}
+$("swatches").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-color]"); if (!b) return;
+  state.accent = b.dataset.color; store.set("accent", state.accent); renderSwatches();
+});
 
 /* ---------- reels ---------- */
 function urlFor(reel) { if (!state.urls.has(reel.id)) state.urls.set(reel.id, URL.createObjectURL(reel.blob)); return state.urls.get(reel.id); }
@@ -80,41 +91,157 @@ document.addEventListener("click", async (ev) => {
   }
 });
 
-/* ---------- making a reel ---------- */
+/* ---------- making a reel: plan -> review -> produce ---------- */
+function options() {
+  return {
+    niche: state.niche, mode: state.mode, topicId: state.mode === "evergreen" ? $("topic").value : "",
+    customTopic: $("custom").value, brand: $("brand").value.trim() || "Money Minute", cta: CTA, repo: repo(),
+    music: $("music").checked, accent: state.accent, voiceSpeed: SPEEDS[state.speed] || 1, forceEncoder: params.get("encoder") || undefined,
+  };
+}
+function screen(name) {   // form | job | review
+  $("form").classList.toggle("hidden", name !== "form");
+  $("job").classList.toggle("hidden", name !== "job");
+  $("review").classList.toggle("hidden", name !== "review");
+  if (name !== "form") $("result").classList.add("hidden");
+  window.scrollTo(0, 0);
+}
+const say = (text, f) => { $("job-step").textContent = text; if (f != null) $("bar").style.width = Math.round(f * 100) + "%"; };
+function showError(e, what) {
+  console.error(e);
+  $("result").innerHTML = `<h2>${esc(what)}</h2><p style="color:var(--bad)">${esc(e.message || e)}</p><p>Check your connection and try again. If it keeps failing, close other apps to free up memory.</p>`;
+  $("result").classList.remove("hidden");
+  window.__lastError = String(e?.stack || e);
+}
+
 async function start() {
   if (state.busy) return;
+  if (state.mode === "custom" && $("custom").value.trim().length < 2) { toast("Type a topic first"); $("custom").focus(); return; }
   state.busy = true;
-  // Audio must be unlocked by this tap; it's only needed if the phone falls back to real-time recording.
-  const AC = window.AudioContext || window.webkitAudioContext;
-  const audioCtx = AC ? new AC() : null; audioCtx?.resume?.().catch(() => {});
-  let wake = null; try { wake = await navigator.wakeLock?.request("screen"); } catch { /* not supported */ }
-
   store.set("brand", $("brand").value);
-  $("form").classList.add("hidden"); $("result").classList.add("hidden"); $("job").classList.remove("hidden");
-  $("job-title").textContent = "Making your reel…"; window.scrollTo(0, 0);
-  const say = (text, f) => { $("job-step").textContent = text; if (f != null) $("bar").style.width = Math.round(f * 100) + "%"; };
+  if (state.mode === "custom") store.set("custom", $("custom").value.trim());
+  // Audio has to be unlocked by this tap; it's only used if the phone falls back to real-time recording.
+  const AC = window.AudioContext || window.webkitAudioContext;
+  state.audioCtx = AC ? new AC() : null; state.audioCtx?.resume?.().catch(() => {});
+  screen("job"); $("job-title").textContent = "Writing your script…"; $("preview").classList.add("hidden"); say("Researching…", 0.02);
+  try {
+    state.plan = await planReel(options(), { say });
+    if ($("review-on").checked) { state.busy = false; return showReview(); }
+    await produce();
+  } catch (e) { screen("form"); showError(e, "That didn't work"); state.busy = false; closeAudio(); }
+}
+
+async function produce() {
+  state.busy = true;
+  screen("job"); $("job-title").textContent = "Making your reel…"; $("preview").classList.remove("hidden"); say("Starting…", 0);
+  let wake = null; try { wake = await navigator.wakeLock?.request("screen"); } catch { /* not supported */ }
+  if (!state.audioCtx) { const AC = window.AudioContext || window.webkitAudioContext; state.audioCtx = AC ? new AC() : null; }
+  state.audioCtx?.resume?.().catch(() => {});
   const t0 = performance.now();
   try {
-    const reel = await makeReel({
-      niche: state.niche, mode: state.mode, topicId: state.mode === "evergreen" ? $("topic").value : "",
-      brand: $("brand").value.trim() || "Money Minute", cta: CTA, music: $("music").checked, repo: repo(),
-      forceEncoder: params.get("encoder") || undefined,
-    }, { say, canvas: $("preview"), audioCtx });
+    const reel = await produceReel(state.plan, options(), { say, canvas: $("preview"), audioCtx: state.audioCtx });
+    state.plan = null;
     const kept = await saveReel(reel);
+    screen("form");
     $("result").innerHTML = `<h2>Your reel is ready</h2><p>Made in ${Math.round((performance.now() - t0) / 1000)}s on this device (${esc(reel.how)}).${kept ? "" : " It couldn't be kept in the Library, so save it now."}</p>` + reelCard(reel, true);
     $("result").classList.remove("hidden");
     store.set("made", "1"); $("first-run").classList.add("hidden");
     window.__lastReel = reel;
   } catch (e) {
-    console.error(e);
-    $("result").innerHTML = `<h2>That didn't work</h2><p style="color:var(--bad)">${esc(e.message || e)}</p><p>Check your connection and try again. If it keeps failing, close other apps to free up memory.</p>`;
-    $("result").classList.remove("hidden");
-    window.__lastError = String(e?.stack || e);
+    screen(state.plan ? "review" : "form");
+    if (state.plan) showReview();
+    showError(e, "The video couldn't be made");
   }
-  $("job").classList.add("hidden"); $("form").classList.remove("hidden");
-  audioCtx?.close?.().catch(() => {}); wake?.release?.().catch(() => {});
+  wake?.release?.().catch(() => {}); closeAudio();
   state.busy = false;
 }
+function closeAudio() { state.audioCtx?.close?.().catch(() => {}); state.audioCtx = null; }
+
+/* ---------- review screen ---------- */
+function drawThumb(cv, asset) {
+  const c = cv.getContext("2d"), bmp = asset.bitmap;
+  const s = Math.max(cv.width / bmp.width, cv.height / bmp.height), sw = cv.width / s, sh = cv.height / s;
+  c.drawImage(bmp, (bmp.width - sw) / 2, (bmp.height - sh) * 0.4, sw, sh, 0, 0, cv.width, cv.height);
+}
+function updateEstimate() {
+  const plan = state.plan; if (!plan) return;
+  const secs = Math.round(estimateSeconds(plan.script.lines, SPEEDS[state.speed] || 1));
+  const el = $("estimate");
+  const spare = plan.edited ? 0 : plan.script.extras.length;
+  el.textContent = `about ${secs} seconds` + (secs > 45 ? " (long: it will be sped up or trimmed to 45s)"
+    : secs < 30 ? (spare ? " (researched lines will be added to reach 30s)" : " (short: tap + Add a line, or the end card stays on longer)") : "");
+  el.classList.toggle("warn", secs > 45 || secs < 30);
+}
+function showReview() {
+  const { script } = state.plan;
+  $("review-title").textContent = script.title;
+  const content = script.lines.filter((l) => l.kind !== "outro").length;
+  $("scenes").innerHTML = script.lines.map((l, i) => {
+    const tag = i === 0 ? "Hook" : l.kind === "outro" ? "Ending" : l.kind === "chart" ? "Chart" : `Scene ${i}`;
+    const thumb = l.kind === "outro" ? `<div class="thumb">END<br>CARD</div>` : l.kind === "chart" ? `<div class="thumb">LIVE<br>CHART</div>`
+      : `<div class="thumb">${l.asset ? `<canvas width="152" height="270" data-thumb="${i}"></canvas>` : "NO<br>PHOTO"}</div>`;
+    const tools = l.kind !== "media" ? (l.kind === "chart" && content > 2 ? `<div class="mini"><button class="del" data-del="${i}">Remove</button></div>` : "")
+      : `<div class="mini"><button data-swap="${i}">New photo</button><button data-search="${i}">Search…</button><button data-mine="${i}">My photo</button>${content > 2 ? `<button class="del" data-del="${i}">Remove</button>` : ""}</div>`;
+    return `<div class="scene"><div>${thumb}</div><div><div class="scene-tag"><span>${tag}</span></div>
+      <textarea data-line="${i}" rows="3">${esc(l.text)}</textarea>${tools}</div></div>`;
+  }).join("");
+  script.lines.forEach((l, i) => { const cv = document.querySelector(`[data-thumb="${i}"]`); if (cv && l.asset) drawThumb(cv, l.asset); });
+  updateEstimate();
+  screen("review");
+}
+$("scenes").addEventListener("input", (e) => {
+  const i = e.target.dataset.line; if (i == null) return;
+  state.plan.script.lines[+i].text = e.target.value.replace(/\s+/g, " ").trim();
+  state.plan.edited = true; updateEstimate();
+});
+async function setAsset(i, assetPromise, label) {
+  const line = state.plan.script.lines[i];
+  const btn = document.querySelector(`[data-swap="${i}"]`); if (btn) btn.textContent = label;
+  const asset = await assetPromise.catch(() => null);
+  if (asset) { line.asset?.bitmap?.close?.(); line.asset = asset; } else toast("No other photo found. Try Search…");
+  showReview();
+}
+$("scenes").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  const plan = state.plan;
+  if (b.dataset.swap != null) { const i = +b.dataset.swap; setAsset(i, plan.finder.findImage(plan.script.lines[i].query || plan.generic[0]), "Finding…"); }
+  if (b.dataset.search != null) {
+    const i = +b.dataset.search, q = prompt("Search free photos for:", plan.script.lines[i].query || "");
+    if (q && q.trim()) { plan.script.lines[i].query = q.trim(); setAsset(i, plan.finder.findImage(q.trim()), "Searching…"); }
+  }
+  if (b.dataset.mine != null) { state.pickFor = +b.dataset.mine; $("photo-pick").value = ""; $("photo-pick").click(); }
+  if (b.dataset.del != null) {
+    const [gone] = plan.script.lines.splice(+b.dataset.del, 1);
+    gone.asset?.bitmap?.close?.(); plan.edited = true; showReview();
+  }
+});
+$("photo-pick").addEventListener("change", async () => {
+  const file = $("photo-pick").files[0], i = state.pickFor; if (!file || i == null) return;
+  try {
+    const bitmap = await createImageBitmap(file);
+    setAsset(i, Promise.resolve({ bitmap, credit: "", title: "Your photo" }), "Loading…");
+  } catch { toast("That photo couldn't be opened. Try a JPEG or PNG."); }
+});
+$("add-line").addEventListener("click", () => {
+  const plan = state.plan, lines = plan.script.lines;
+  // Offer the next researched line first; after that, a blank one to write yourself.
+  const extra = plan.script.extras.shift();
+  const q = extra?.query || plan.generic[lines.length % plan.generic.length];
+  const line = extra ? { ...extra, query: q } : { text: "", visual: q, query: q, kind: "media", asset: null };
+  if (extra) Promise.resolve(extra.asset).then((a) => { line.asset = a; if (a) showReview(); }).catch(() => {});
+  lines.splice(lines.length - 1, 0, line);
+  plan.edited = true; showReview();
+  const ta = document.querySelector(`[data-line="${lines.length - 2}"]`); ta?.focus(); ta?.scrollIntoView({ block: "center" });
+  if (!extra) plan.finder.findImage(q).then((a) => { if (a && !line.asset) { line.asset = a; showReview(); } }).catch(() => {});
+});
+$("produce").addEventListener("click", () => {
+  const lines = state.plan.script.lines;
+  for (let i = lines.length - 1; i >= 0; i--) if (!lines[i].text) lines.splice(i, 1);   // drop empty lines
+  if (lines.filter((l) => l.kind !== "outro").length < 2) { toast("Keep at least two lines"); return showReview(); }
+  produce();
+});
+$("reroll").addEventListener("click", () => { if (state.plan) releasePlan(state.plan); state.plan = null; start(); });
+$("cancel-review").addEventListener("click", () => { if (state.plan) releasePlan(state.plan); state.plan = null; closeAudio(); screen("form"); });
 
 async function init() {
   state.data = await appData();
@@ -124,6 +251,14 @@ async function init() {
   chips($("niches"), state.data.niches, state.niche, (v) => { state.niche = v; store.set("niche", v); renderTopics(); });
   chips($("modes"), MODES, state.mode, (v) => { state.mode = v; store.set("mode", v); renderTopics(); }, MODE_LABELS);
   $("brand").value = store.get("brand") || "Money Minute";
+  $("custom").value = store.get("custom") || "";
+  state.accent = COLORS.includes(store.get("accent")) ? store.get("accent") : "#FFD60A";
+  state.speed = SPEEDS[store.get("speed")] ? store.get("speed") : "normal";
+  renderSwatches();
+  chips($("speeds"), Object.keys(SPEEDS), state.speed, (v) => { state.speed = v; store.set("speed", v); updateEstimate(); });
+  $("review-on").checked = store.get("review") !== "0";
+  $("review-on").addEventListener("change", () => store.set("review", $("review-on").checked ? "1" : "0"));
+  $("custom").addEventListener("keydown", (e) => { if (e.key === "Enter") start(); });
   if (store.get("made")) $("first-run").classList.add("hidden");
   renderTopics();
   $("go").addEventListener("click", start);
