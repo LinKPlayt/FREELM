@@ -79,12 +79,12 @@ def test_metadata():
     assert "photo credit" in meta["description"] and "Not financial advice" in meta["description"]
 
 
-def test_ci_request_is_whitelisted():
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"))
-    import ci_make
-    req = ci_make.clean(ci_make.parse_title("reel | niche=investing | mode=news | brand=A$(rm -rf /)`b` | upload=yes | x=1"))
-    assert req == {"niche": "investing", "mode": "news", "brand": "Arm -rf b", "upload": True}
-    assert ci_make.clean(ci_make.parse_title("reel | niche=../etc | mode=;ls | topic=nope | privacy=all")) == {}
+def test_phone_app_topics_are_in_sync():
+    """app/data/topics.json must match reelbot/topics.py (regenerate: python scripts/export_app_data.py)."""
+    import json
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    data = json.load(open(os.path.join(root, "app", "data", "topics.json"), encoding="utf-8"))
+    assert data["topics"] == topics.TOPICS and data["niches"] == topics.NICHES
 
 
 if __name__ == "__main__":

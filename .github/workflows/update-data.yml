@@ -1,0 +1,52 @@
+# Publishes public market numbers and headlines for the phone app to the `data` branch.
+# Web pages can't call market-data sites directly, so this small job fetches them instead.
+# It handles numbers and headlines only. Videos are made and kept on the phone.
+name: Update market data
+
+on:
+  schedule:
+    - cron: "23 * * * *"    # hourly
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["scripts/snapshot_data.py", "reelbot/research.py", ".github/workflows/update-data.yml"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: reelbot-data
+  cancel-in-progress: true
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            reelbot
+            scripts
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Fetch data
+        run: |
+          pip install -q requests pyyaml
+          curl -sfL "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/data/snapshot.json" -o prev.json || true
+          mkdir -p _data
+          python scripts/snapshot_data.py prev.json > _data/snapshot.json
+      - name: Publish to the data branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd _data
+          git init -q -b data
+          git add -A
+          git -c user.name="reelbot" -c user.email="reelbot@users.noreply.github.com" commit -qm "Update market data"
+          for attempt in 1 2 3 4; do
+            if git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" data; then break; fi
+            if [ "$attempt" = 4 ]; then echo "::error::Could not publish data"; exit 1; fi
+            sleep $((attempt * 20))
+          done

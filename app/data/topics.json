@@ -1,0 +1,1080 @@
+{
+ "niches": [
+  "crypto",
+  "economy",
+  "investing",
+  "personal finance",
+  "real estate",
+  "side hustles"
+ ],
+ "topics": [
+  {
+   "id": "emergency-fund",
+   "title": "Build an Emergency Fund",
+   "niches": [
+    "personal finance"
+   ],
+   "wiki": "Emergency fund",
+   "hook": "One surprise bill can wreck your finances. Here's how to stop that from happening.",
+   "points": [
+    "An emergency fund is cash set aside only for true emergencies, like a job loss or a car repair.",
+    "Most experts suggest saving three to six months of essential expenses.",
+    "Start small. Your first goal is just one thousand dollars.",
+    "Keep it in a high yield savings account so it earns interest but stays easy to reach."
+   ],
+   "extras": [
+    "Automate a small transfer every payday so you never have to think about it.",
+    "If you have to use it, pause other goals and refill it first."
+   ],
+   "visuals": [
+    "piggy bank",
+    "savings jar coins",
+    "car repair garage",
+    "calculator bills",
+    "wallet cash"
+   ],
+   "tags": [
+    "emergency fund",
+    "saving money",
+    "budgeting"
+   ]
+  },
+  {
+   "id": "50-30-20",
+   "title": "The 50/30/20 Budget Rule",
+   "niches": [
+    "personal finance"
+   ],
+   "wiki": "Personal budget",
+   "hook": "If budgeting feels impossible, try the simplest rule in personal finance.",
+   "points": [
+    "Split your take home pay into three buckets.",
+    "Fifty percent goes to needs, like rent, groceries, insurance and minimum debt payments.",
+    "Thirty percent goes to wants, like eating out, hobbies and streaming.",
+    "Twenty percent goes to your future: savings, investing and paying off debt faster."
+   ],
+   "extras": [
+    "If your needs are above fifty percent, that's your signal to cut housing or transport costs.",
+    "It's a starting point, not a law. Adjust the numbers to fit your life."
+   ],
+   "visuals": [
+    "budget notebook",
+    "groceries shopping",
+    "restaurant dinner",
+    "calculator money",
+    "apartment rent"
+   ],
+   "tags": [
+    "budget",
+    "50/30/20",
+    "budgeting tips"
+   ]
+  },
+  {
+   "id": "pay-yourself-first",
+   "title": "Pay Yourself First",
+   "niches": [
+    "personal finance"
+   ],
+   "wiki": "Pay yourself first",
+   "hook": "Wealthy people don't save what's left after spending. They do the opposite.",
+   "points": [
+    "Paying yourself first means you save before you spend anything else.",
+    "The moment your paycheck lands, a set amount moves straight into savings or investments.",
+    "You then live on whatever is left, so saving never depends on willpower.",
+    "Even ten percent, automated, adds up to serious money over the years."
+   ],
+   "extras": [
+    "Raise the percentage by one point every time you get a raise and you'll barely notice it."
+   ],
+   "visuals": [
+    "paycheck salary",
+    "bank transfer phone",
+    "savings jar coins",
+    "money growth"
+   ],
+   "tags": [
+    "saving money",
+    "pay yourself first",
+    "automation"
+   ]
+  },
+  {
+   "id": "credit-score",
+   "title": "How Your Credit Score Works",
+   "niches": [
+    "personal finance"
+   ],
+   "wiki": "Credit score in the United States",
+   "hook": "Your credit score can cost you thousands. Here's what actually moves it.",
+   "points": [
+    "Payment history is the biggest factor, so never miss a due date.",
+    "Next is utilization: try to use less than thirty percent of your credit limit.",
+    "The age of your accounts matters too, so think twice before closing your oldest card.",
+    "Lots of new applications in a short time can drag your score down."
+   ],
+   "extras": [
+    "Set every card to autopay at least the minimum and you'll protect the biggest factor automatically."
+   ],
+   "visuals": [
+    "credit card",
+    "credit report document",
+    "bank loan",
+    "house keys"
+   ],
+   "tags": [
+    "credit score",
+    "credit cards",
+    "FICO"
+   ]
+  },
+  {
+   "id": "credit-card-interest",
+   "title": "The Real Cost of Credit Card Debt",
+   "niches": [
+    "personal finance"
+   ],
+   "wiki": "Credit card interest",
+   "hook": "Paying only the minimum on your credit card is a trap. Here's why.",
+   "points": [
+    "Credit cards often charge twenty percent interest or more per year.",
+    "Interest is charged on your unpaid balance, so a small debt can grow fast.",
+    "Paying only the minimum can stretch a few thousand dollars of debt over many years.",
+    "Pay the full statement balance every month and you pay zero interest."
+   ],
+   "extras": [
+    "Carrying a balance? Attack the highest interest card first. That's called the avalanche method."
+   ],
+   "visuals": [
+    "credit card",
+    "shopping bags",
+    "bills debt",
+    "calculator"
+   ],
+   "tags": [
+    "credit card debt",
+    "interest",
+    "debt"
+   ]
+  },
+  {
+   "id": "debt-snowball-avalanche",
+   "title": "Debt Snowball vs Debt Avalanche",
+   "niches": [
+    "personal finance"
+   ],
+   "wiki": "Debt snowball method",
+   "hook": "There are two famous ways to crush debt. Which one is right for you?",
+   "points": [
+    "With both methods, you pay the minimum on every debt and throw extra money at one target.",
+    "The avalanche targets the highest interest rate first. It saves the most money.",
+    "The snowball targets the smallest balance first. Quick wins keep you motivated.",
+    "The best method is the one you'll actually stick with."
+   ],
+   "extras": [
+    "When one debt is gone, roll its payment into the next one. That's where the momentum comes from."
+   ],
+   "visuals": [
+    "snowball snow",
+    "avalanche mountain",
+    "bills debt",
+    "credit card"
+   ],
+   "tags": [
+    "debt payoff",
+    "debt snowball",
+    "debt avalanche"
+   ]
+  },
+  {
+   "id": "high-yield-savings",
+   "title": "High Yield Savings Accounts",
+   "niches": [
+    "personal finance"
+   ],
+   "wiki": "Savings account",
+   "hook": "If your savings sit in a regular bank account, you're probably leaving money on the table.",
+   "points": [
+    "Traditional big banks often pay almost nothing on savings.",
+    "High yield savings accounts, usually from online banks, can pay many times more.",
+    "In the United States they're typically FDIC insured, just like regular accounts.",
+    "They're perfect for your emergency fund and short term goals."
+   ],
+   "extras": [
+    "Rates change over time, so compare a few banks before you switch."
+   ],
+   "visuals": [
+    "bank building",
+    "savings jar coins",
+    "smartphone banking",
+    "piggy bank"
+   ],
+   "tags": [
+    "savings account",
+    "high yield savings",
+    "banking"
+   ]
+  },
+  {
+   "id": "lifestyle-inflation",
+   "title": "Lifestyle Inflation",
+   "niches": [
+    "personal finance"
+   ],
+   "wiki": "Lifestyle creep",
+   "hook": "Why do people who earn more often feel just as broke? It's called lifestyle inflation.",
+   "points": [
+    "Lifestyle inflation is when your spending rises every time your income does.",
+    "A nicer car, a bigger apartment, more takeout. Each upgrade feels small.",
+    "Together they quietly eat every raise you ever get.",
+    "The fix: save at least half of every raise before you get used to it."
+   ],
+   "extras": [
+    "Upgrade on purpose, not on autopilot. Pick the one thing that truly makes you happier."
+   ],
+   "visuals": [
+    "luxury car",
+    "shopping bags",
+    "apartment interior",
+    "food delivery"
+   ],
+   "tags": [
+    "lifestyle creep",
+    "lifestyle inflation",
+    "spending"
+   ]
+  },
+  {
+   "id": "sinking-funds",
+   "title": "Sinking Funds",
+   "niches": [
+    "personal finance"
+   ],
+   "wiki": "Sinking fund",
+   "hook": "Christmas, car insurance, vacations. They're not surprises, so stop treating them like ones.",
+   "points": [
+    "A sinking fund is money you save a little at a time for a known future expense.",
+    "Take the total cost and divide it by the months until you need it.",
+    "Save that amount every month in a separate account or bucket.",
+    "When the bill arrives, the cash is already waiting."
+   ],
+   "extras": [
+    "Many online banks let you create multiple named savings buckets for free."
+   ],
+   "visuals": [
+    "calendar planning",
+    "christmas gifts",
+    "vacation beach",
+    "savings jar coins"
+   ],
+   "tags": [
+    "sinking funds",
+    "saving money",
+    "budgeting"
+   ]
+  },
+  {
+   "id": "net-worth",
+   "title": "Calculate Your Net Worth",
+   "niches": [
+    "personal finance"
+   ],
+   "wiki": "Net worth",
+   "hook": "There's one number that tells you how you're really doing with money.",
+   "points": [
+    "Your net worth is everything you own minus everything you owe.",
+    "Add up cash, investments, retirement accounts and the value of your home or car.",
+    "Then subtract loans, credit card balances and any other debt.",
+    "Track it every few months. The trend matters more than the number."
+   ],
+   "extras": [
+    "A negative net worth is normal early on, especially with student loans. Just keep it moving up."
+   ],
+   "visuals": [
+    "calculator",
+    "balance scale",
+    "spreadsheet laptop",
+    "house"
+   ],
+   "tags": [
+    "net worth",
+    "personal finance",
+    "wealth"
+   ]
+  },
+  {
+   "id": "compound-interest",
+   "title": "The Power of Compound Interest",
+   "niches": [
+    "investing",
+    "personal finance"
+   ],
+   "wiki": "Compound interest",
+   "hook": "Albert Einstein supposedly called it the eighth wonder of the world. It's compound interest.",
+   "points": [
+    "Compound interest means you earn returns on your money and on your past returns.",
+    "At a ten percent yearly return, money roughly doubles every seven years.",
+    "That means time in the market matters more than almost anything else.",
+    "Starting at twenty five instead of thirty five can leave you with roughly twice as much."
+   ],
+   "extras": [
+    "Use the rule of seventy two: divide seventy two by your return to estimate the years to double."
+   ],
+   "visuals": [
+    "coins stack growth",
+    "plant growing coins",
+    "stock chart",
+    "hourglass time"
+   ],
+   "tags": [
+    "compound interest",
+    "investing",
+    "wealth building"
+   ]
+  },
+  {
+   "id": "index-funds",
+   "title": "Why Index Funds Win",
+   "niches": [
+    "investing"
+   ],
+   "wiki": "Index fund",
+   "hook": "Most professional fund managers fail to beat a simple, boring investment.",
+   "points": [
+    "An index fund buys every stock in an index, like the S&P 500.",
+    "Instead of picking winners, you own the whole market.",
+    "Fees are tiny, and over long periods most actively managed funds trail the index.",
+    "Warren Buffett has said most people are best off in a low cost index fund."
+   ],
+   "extras": [
+    "Look at the expense ratio. A fraction of a percent can mean tens of thousands saved over decades."
+   ],
+   "visuals": [
+    "new york stock exchange",
+    "wall street",
+    "stock chart",
+    "warren buffett"
+   ],
+   "tags": [
+    "index funds",
+    "S&P 500",
+    "passive investing"
+   ]
+  },
+  {
+   "id": "dollar-cost-averaging",
+   "title": "Dollar Cost Averaging",
+   "niches": [
+    "investing",
+    "crypto"
+   ],
+   "wiki": "Dollar cost averaging",
+   "hook": "Scared to invest because the market might crash tomorrow? Use this strategy.",
+   "points": [
+    "Dollar cost averaging means investing the same amount on a regular schedule.",
+    "When prices are high, your money buys fewer shares. When prices drop, it buys more.",
+    "You stop trying to time the market, which almost nobody does well.",
+    "It turns investing into a habit instead of a guessing game."
+   ],
+   "extras": [
+    "Most brokers let you automate recurring investments in a couple of minutes."
+   ],
+   "visuals": [
+    "calendar planning",
+    "stock chart",
+    "trading app smartphone",
+    "coins stack"
+   ],
+   "tags": [
+    "dollar cost averaging",
+    "investing",
+    "DCA"
+   ]
+  },
+  {
+   "id": "stocks-vs-bonds",
+   "title": "Stocks vs Bonds",
+   "niches": [
+    "investing"
+   ],
+   "wiki": "Bond (finance)",
+   "hook": "Stocks and bonds are the two building blocks of almost every portfolio. Here's the difference.",
+   "points": [
+    "When you buy a stock, you own a small piece of a company.",
+    "When you buy a bond, you're lending money in exchange for interest payments.",
+    "Stocks usually grow more over time, but they swing up and down a lot more.",
+    "Bonds are steadier, which is why many investors add more of them as they near retirement."
+   ],
+   "extras": [
+    "The mix of stocks and bonds you hold is called your asset allocation, and it drives most of your results."
+   ],
+   "visuals": [
+    "stock certificate",
+    "government bond",
+    "stock exchange trading floor",
+    "balance scale"
+   ],
+   "tags": [
+    "stocks",
+    "bonds",
+    "asset allocation"
+   ]
+  },
+  {
+   "id": "diversification",
+   "title": "Don't Put All Your Eggs in One Basket",
+   "niches": [
+    "investing",
+    "crypto"
+   ],
+   "wiki": "Diversification (finance)",
+   "hook": "The only free lunch in investing, according to a Nobel prize winner, is diversification.",
+   "points": [
+    "Diversification means spreading your money across many different investments.",
+    "If one company or sector crashes, the rest of your portfolio can cushion the blow.",
+    "You can diversify across companies, industries, countries and asset types.",
+    "A single broad index fund can give you hundreds of companies in one purchase."
+   ],
+   "extras": [
+    "Owning ten tech stocks isn't diversification. They tend to move together."
+   ],
+   "visuals": [
+    "eggs basket",
+    "world map globe",
+    "stock chart",
+    "puzzle pieces"
+   ],
+   "tags": [
+    "diversification",
+    "portfolio",
+    "risk"
+   ]
+  },
+  {
+   "id": "roth-vs-traditional",
+   "title": "Roth vs Traditional Retirement Accounts",
+   "niches": [
+    "investing",
+    "personal finance"
+   ],
+   "wiki": "Roth IRA",
+   "hook": "Roth or traditional? This one choice decides when you pay taxes on your retirement money.",
+   "points": [
+    "With a traditional account, you get a tax break now and pay taxes when you withdraw.",
+    "With a Roth account, you pay taxes now, and qualified withdrawals in retirement are tax free.",
+    "If you expect a higher tax rate later, Roth usually wins.",
+    "If you're in a high bracket today, traditional can make more sense."
+   ],
+   "extras": [
+    "Can't decide? Many people split contributions between both for tax flexibility."
+   ],
+   "visuals": [
+    "retirement couple",
+    "tax forms",
+    "piggy bank",
+    "calculator"
+   ],
+   "tags": [
+    "Roth IRA",
+    "401k",
+    "retirement"
+   ]
+  },
+  {
+   "id": "employer-match",
+   "title": "Never Skip the 401(k) Match",
+   "niches": [
+    "investing",
+    "personal finance"
+   ],
+   "wiki": "401(k)",
+   "hook": "There's free money sitting on the table at most jobs, and millions of people ignore it.",
+   "points": [
+    "Many employers match part of what you put into your 401k.",
+    "A common match is fifty cents for every dollar, up to six percent of your salary.",
+    "That's an instant fifty percent return before your money is even invested.",
+    "At minimum, contribute enough to get the full match."
+   ],
+   "extras": [
+    "Check your vesting schedule. Some matches only become fully yours after a few years."
+   ],
+   "visuals": [
+    "office workers",
+    "paycheck salary",
+    "handshake business",
+    "retirement couple"
+   ],
+   "tags": [
+    "401k",
+    "employer match",
+    "retirement"
+   ]
+  },
+  {
+   "id": "expense-ratios",
+   "title": "Hidden Fees Eating Your Returns",
+   "niches": [
+    "investing"
+   ],
+   "wiki": "Expense ratio",
+   "hook": "A one percent fee sounds tiny. Over a lifetime, it can cost you a fortune.",
+   "points": [
+    "Funds charge a yearly fee called an expense ratio.",
+    "That fee comes out every year, whether the fund makes money or not.",
+    "Over thirty or forty years, a one percent fee can eat a large share of your final balance.",
+    "Low cost index funds often charge a small fraction of that."
+   ],
+   "extras": [
+    "Always check the expense ratio before you buy any fund."
+   ],
+   "visuals": [
+    "receipt bill",
+    "coins stack",
+    "magnifying glass document",
+    "stock chart"
+   ],
+   "tags": [
+    "fees",
+    "expense ratio",
+    "investing"
+   ]
+  },
+  {
+   "id": "market-crashes",
+   "title": "What To Do When the Market Crashes",
+   "niches": [
+    "investing"
+   ],
+   "wiki": "Stock market crash",
+   "hook": "The stock market will crash again. What you do next decides how rich you get.",
+   "points": [
+    "Historically, the US stock market has recovered from every major crash.",
+    "The biggest mistake investors make is selling in a panic and locking in losses.",
+    "Some of the best days in the market come right after the worst ones.",
+    "If you're investing for the long term, a crash can mean stocks are on sale."
+   ],
+   "extras": [
+    "Keep an emergency fund so you never have to sell investments at the bottom."
+   ],
+   "visuals": [
+    "stock market crash",
+    "red stock chart",
+    "wall street",
+    "trader stressed"
+   ],
+   "tags": [
+    "stock market crash",
+    "investing",
+    "bear market"
+   ]
+  },
+  {
+   "id": "dividends",
+   "title": "How Dividends Work",
+   "niches": [
+    "investing"
+   ],
+   "wiki": "Dividend",
+   "hook": "Imagine getting paid just for owning a stock. That's what dividends are.",
+   "points": [
+    "A dividend is a share of company profits paid out to shareholders.",
+    "Many mature companies pay them every quarter.",
+    "You can take the cash, or reinvest it to buy more shares automatically.",
+    "Reinvesting dividends has been a huge part of the stock market's long term return."
+   ],
+   "extras": [
+    "A sky high dividend yield can be a warning sign, not a bargain. Always check why."
+   ],
+   "visuals": [
+    "coins stack",
+    "stock certificate",
+    "money cash",
+    "stock chart"
+   ],
+   "tags": [
+    "dividends",
+    "passive income",
+    "investing"
+   ]
+  },
+  {
+   "id": "etfs",
+   "title": "What Is an ETF?",
+   "niches": [
+    "investing"
+   ],
+   "wiki": "Exchange-traded fund",
+   "hook": "ETFs are one of the easiest ways to start investing. Here's how they work.",
+   "points": [
+    "ETF stands for exchange traded fund.",
+    "It's a basket of investments, like stocks or bonds, that trades on an exchange like a single stock.",
+    "One share can give you exposure to hundreds or thousands of companies.",
+    "Many ETFs have very low fees, which makes them popular for long term investors."
+   ],
+   "extras": [
+    "Unlike traditional mutual funds, you can buy or sell ETFs any time the market is open."
+   ],
+   "visuals": [
+    "stock exchange trading floor",
+    "trading app smartphone",
+    "stock chart",
+    "basket"
+   ],
+   "tags": [
+    "ETF",
+    "investing for beginners",
+    "index funds"
+   ]
+  },
+  {
+   "id": "what-is-bitcoin",
+   "title": "What Is Bitcoin, Really?",
+   "niches": [
+    "crypto"
+   ],
+   "wiki": "Bitcoin",
+   "hook": "Everyone talks about Bitcoin, but few people can explain it in thirty seconds. Let's fix that.",
+   "points": [
+    "Bitcoin is digital money that isn't controlled by any bank or government.",
+    "Transactions are recorded on a public ledger called the blockchain.",
+    "Only twenty one million bitcoin will ever exist, which is why some call it digital gold.",
+    "Its price is famously volatile, so never invest more than you can afford to lose."
+   ],
+   "extras": [
+    "Bitcoin was launched in two thousand nine by an anonymous creator called Satoshi Nakamoto."
+   ],
+   "visuals": [
+    "bitcoin",
+    "cryptocurrency coins",
+    "blockchain network",
+    "computer server"
+   ],
+   "tags": [
+    "bitcoin",
+    "crypto",
+    "blockchain"
+   ]
+  },
+  {
+   "id": "crypto-wallets",
+   "title": "Hot vs Cold Crypto Wallets",
+   "niches": [
+    "crypto"
+   ],
+   "wiki": "Cryptocurrency wallet",
+   "hook": "Not your keys, not your coins. Here's what that crypto saying really means.",
+   "points": [
+    "A crypto wallet stores the private keys that prove you own your coins.",
+    "A hot wallet is connected to the internet. Convenient, but more exposed to hackers.",
+    "A cold wallet keeps your keys offline, often on a small hardware device.",
+    "If you leave coins on an exchange, you're trusting that exchange to hold them for you."
+   ],
+   "extras": [
+    "Never share your seed phrase with anyone. Anyone who has it can take everything."
+   ],
+   "visuals": [
+    "hardware wallet",
+    "smartphone",
+    "padlock security",
+    "bitcoin"
+   ],
+   "tags": [
+    "crypto wallet",
+    "cold storage",
+    "crypto security"
+   ]
+  },
+  {
+   "id": "crypto-scams",
+   "title": "Crypto Scams to Avoid",
+   "niches": [
+    "crypto"
+   ],
+   "wiki": "Cryptocurrency and crime",
+   "hook": "Billions are lost to crypto scams. These are the red flags to watch for.",
+   "points": [
+    "Anyone promising guaranteed returns is lying. Real investments carry risk.",
+    "Be careful with giveaways that ask you to send crypto first. That money is gone.",
+    "Watch for fake support accounts that message you asking for your seed phrase.",
+    "Romance and investment scams often build trust for weeks before asking for money."
+   ],
+   "extras": [
+    "If it sounds too good to be true, it is. Especially in crypto."
+   ],
+   "visuals": [
+    "hacker computer",
+    "warning sign",
+    "padlock security",
+    "bitcoin"
+   ],
+   "tags": [
+    "crypto scams",
+    "fraud",
+    "crypto safety"
+   ]
+  },
+  {
+   "id": "stablecoins",
+   "title": "What Are Stablecoins?",
+   "niches": [
+    "crypto"
+   ],
+   "wiki": "Stablecoin",
+   "hook": "Most crypto swings wildly in price. Stablecoins are designed not to.",
+   "points": [
+    "A stablecoin is a cryptocurrency pegged to a stable asset, usually the US dollar.",
+    "Many are backed by reserves of cash and short term government bonds.",
+    "Traders use them to move money quickly without leaving the crypto world.",
+    "But stable doesn't mean risk free. Some have lost their peg in the past."
+   ],
+   "extras": [
+    "Always check who issues a stablecoin and what actually backs it."
+   ],
+   "visuals": [
+    "us dollar bills",
+    "cryptocurrency coins",
+    "smartphone payment",
+    "bank vault"
+   ],
+   "tags": [
+    "stablecoins",
+    "crypto",
+    "USDC"
+   ]
+  },
+  {
+   "id": "inflation",
+   "title": "Inflation Explained",
+   "niches": [
+    "economy",
+    "personal finance"
+   ],
+   "wiki": "Inflation",
+   "hook": "Why does everything cost more every year? Here's inflation in thirty seconds.",
+   "points": [
+    "Inflation is the rate at which prices rise over time.",
+    "When prices rise, each dollar you hold buys a little less.",
+    "Many central banks aim for about two percent inflation per year.",
+    "Cash sitting idle loses value, which is why investing matters."
+   ],
+   "extras": [
+    "At three percent inflation, prices roughly double in about twenty four years."
+   ],
+   "visuals": [
+    "grocery store prices",
+    "gas station prices",
+    "us dollar bills",
+    "shopping cart"
+   ],
+   "tags": [
+    "inflation",
+    "economy",
+    "cost of living"
+   ]
+  },
+  {
+   "id": "interest-rates-fed",
+   "title": "How Interest Rates Affect You",
+   "niches": [
+    "economy",
+    "personal finance"
+   ],
+   "wiki": "Federal funds rate",
+   "hook": "When the Federal Reserve changes interest rates, your wallet feels it. Here's how.",
+   "points": [
+    "The Fed sets a target for the rate banks charge each other overnight.",
+    "When it raises rates, mortgages, car loans and credit cards get more expensive.",
+    "But savings accounts usually start paying more interest.",
+    "When it cuts rates, borrowing gets cheaper and savings yields tend to fall."
+   ],
+   "extras": [
+    "The Fed raises rates to cool inflation, and cuts them to support a slowing economy."
+   ],
+   "visuals": [
+    "federal reserve building",
+    "mortgage house",
+    "credit card",
+    "bank building"
+   ],
+   "tags": [
+    "interest rates",
+    "Federal Reserve",
+    "economy"
+   ]
+  },
+  {
+   "id": "recession",
+   "title": "What Is a Recession?",
+   "niches": [
+    "economy"
+   ],
+   "wiki": "Recession",
+   "hook": "Everyone fears the R word. But what actually is a recession?",
+   "points": [
+    "A recession is a significant, widespread decline in economic activity.",
+    "A common shorthand is two straight quarters of shrinking GDP.",
+    "During recessions, unemployment usually rises and businesses cut back.",
+    "Recessions are a normal part of the economic cycle, and every one has ended."
+   ],
+   "extras": [
+    "The best preparation: an emergency fund, manageable debt, and staying invested for the long run."
+   ],
+   "visuals": [
+    "unemployment line",
+    "closed store",
+    "red stock chart",
+    "factory"
+   ],
+   "tags": [
+    "recession",
+    "economy",
+    "GDP"
+   ]
+  },
+  {
+   "id": "gdp",
+   "title": "GDP in Plain English",
+   "niches": [
+    "economy"
+   ],
+   "wiki": "Gross domestic product",
+   "hook": "GDP is the number that shows up in every economic headline. Here's what it means.",
+   "points": [
+    "GDP stands for gross domestic product.",
+    "It's the total value of all goods and services a country produces.",
+    "In the United States, consumer spending makes up the largest share of it.",
+    "When GDP grows, the economy is expanding. When it shrinks, it's contracting."
+   ],
+   "extras": [
+    "GDP per person is often a better way to compare living standards between countries."
+   ],
+   "visuals": [
+    "shipping containers port",
+    "factory",
+    "city skyline",
+    "shopping mall"
+   ],
+   "tags": [
+    "GDP",
+    "economy",
+    "economics"
+   ]
+  },
+  {
+   "id": "side-hustle-taxes",
+   "title": "Side Hustle Taxes",
+   "niches": [
+    "side hustles"
+   ],
+   "wiki": "Self-employment",
+   "hook": "Making money on the side? Don't let taxes catch you off guard.",
+   "points": [
+    "In the US, side hustle income is generally taxable, even if you don't get a tax form.",
+    "On top of income tax, self employed people usually owe self employment tax.",
+    "A simple habit: set aside about a quarter to a third of what you earn.",
+    "Track business expenses. Many of them can reduce what you owe."
+   ],
+   "extras": [
+    "If you owe enough, you may need to make estimated tax payments during the year."
+   ],
+   "visuals": [
+    "laptop freelancer",
+    "tax forms",
+    "calculator",
+    "coffee shop work"
+   ],
+   "tags": [
+    "side hustle",
+    "taxes",
+    "self employed"
+   ]
+  },
+  {
+   "id": "skills-side-hustle",
+   "title": "Turn a Skill Into Income",
+   "niches": [
+    "side hustles"
+   ],
+   "wiki": "Freelancer",
+   "hook": "You probably already have a skill someone would pay for. Here's how to find it.",
+   "points": [
+    "Write down what friends and coworkers already ask you for help with.",
+    "Writing, design, editing, tutoring and spreadsheets are all in steady demand.",
+    "Start with one small paid project to prove people will pay.",
+    "Then raise your price as your reviews and confidence grow."
+   ],
+   "extras": [
+    "Reinvest your first earnings into tools or training that let you charge more."
+   ],
+   "visuals": [
+    "laptop freelancer",
+    "graphic design",
+    "tutoring student",
+    "notebook ideas"
+   ],
+   "tags": [
+    "side hustle",
+    "freelancing",
+    "make money"
+   ]
+  },
+  {
+   "id": "multiple-income-streams",
+   "title": "Multiple Streams of Income",
+   "niches": [
+    "side hustles",
+    "investing"
+   ],
+   "wiki": "Passive income",
+   "hook": "Relying on one paycheck is risky. Here's how people build multiple income streams.",
+   "points": [
+    "Your job is your first stream. Protect it and grow it first.",
+    "Next, add active income, like freelancing or a side business.",
+    "Then build passive streams, like dividends, interest or digital products.",
+    "Each new stream makes losing any single one less scary."
+   ],
+   "extras": [
+    "Passive income usually takes a lot of upfront work or money. Be wary of anyone saying otherwise."
+   ],
+   "visuals": [
+    "river streams",
+    "laptop freelancer",
+    "coins stack",
+    "office workers"
+   ],
+   "tags": [
+    "passive income",
+    "income streams",
+    "side hustle"
+   ]
+  },
+  {
+   "id": "rent-vs-buy",
+   "title": "Rent vs Buy",
+   "niches": [
+    "real estate",
+    "personal finance"
+   ],
+   "wiki": "Renting",
+   "hook": "Is renting really throwing money away? It's not that simple.",
+   "points": [
+    "Buying builds equity, but comes with extra costs like taxes, insurance and repairs.",
+    "Mortgage interest, especially early on, is money you never get back either.",
+    "Renting offers flexibility and frees up cash that you can invest.",
+    "A common rule: buying makes more sense if you'll stay at least five years."
+   ],
+   "extras": [
+    "Budget roughly one to two percent of a home's value per year for maintenance."
+   ],
+   "visuals": [
+    "house keys",
+    "apartment building",
+    "house for sale sign",
+    "moving boxes"
+   ],
+   "tags": [
+    "rent vs buy",
+    "real estate",
+    "housing"
+   ]
+  },
+  {
+   "id": "mortgage-basics",
+   "title": "15 vs 30 Year Mortgage",
+   "niches": [
+    "real estate"
+   ],
+   "wiki": "Mortgage loan",
+   "hook": "Your mortgage term can change how much your home really costs by a huge amount.",
+   "points": [
+    "A thirty year mortgage has lower monthly payments, so it's easier on your budget.",
+    "A fifteen year mortgage has higher payments but usually a lower interest rate.",
+    "Over the life of the loan, the fifteen year can save you a huge amount of interest.",
+    "Pick the payment you can comfortably afford, even in a bad month."
+   ],
+   "extras": [
+    "Extra principal payments on a thirty year loan can shorten it without locking you in."
+   ],
+   "visuals": [
+    "house keys",
+    "mortgage document signing",
+    "suburban house",
+    "calculator"
+   ],
+   "tags": [
+    "mortgage",
+    "home buying",
+    "real estate"
+   ]
+  },
+  {
+   "id": "reits",
+   "title": "Invest in Real Estate Without Buying a House",
+   "niches": [
+    "real estate",
+    "investing"
+   ],
+   "wiki": "Real estate investment trust",
+   "hook": "You don't need to be a landlord to invest in real estate.",
+   "points": [
+    "A REIT is a company that owns income producing real estate.",
+    "Think apartments, warehouses, offices, cell towers and data centers.",
+    "US REITs generally must pay out most of their taxable income as dividends.",
+    "You can buy them like a stock, sometimes for the price of a single share."
+   ],
+   "extras": [
+    "REIT dividends are often taxed as ordinary income, so they can fit well inside retirement accounts."
+   ],
+   "visuals": [
+    "apartment building",
+    "warehouse",
+    "office building",
+    "data center"
+   ],
+   "tags": [
+    "REIT",
+    "real estate investing",
+    "dividends"
+   ]
+  }
+ ],
+ "generic_visuals": {
+  "personal finance": [
+   "money cash",
+   "wallet",
+   "piggy bank",
+   "calculator bills",
+   "coins"
+  ],
+  "investing": [
+   "stock chart",
+   "wall street",
+   "new york stock exchange",
+   "coins stack"
+  ],
+  "crypto": [
+   "bitcoin",
+   "cryptocurrency coins",
+   "blockchain",
+   "computer server"
+  ],
+  "economy": [
+   "city skyline",
+   "federal reserve building",
+   "shipping containers port",
+   "us dollar bills"
+  ],
+  "side hustles": [
+   "laptop freelancer",
+   "coffee shop work",
+   "notebook ideas",
+   "money cash"
+  ],
+  "real estate": [
+   "house keys",
+   "suburban house",
+   "apartment building",
+   "city skyline"
+  ]
+ }
+}
