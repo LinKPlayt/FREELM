@@ -1,11 +1,12 @@
 // UI glue for the phone app.
-import { appData, planReel, produceReel, releasePlan, estimateSeconds, lengthRange, draftFromPlan, planFromDraft, planFromIdea, decideVisual } from "./make.js";
+import { seriesTopics, appData, planReel, produceReel, releasePlan, estimateSeconds, lengthRange, draftFromPlan, planFromDraft, planFromIdea, decideVisual } from "./make.js";
 import { StatBg, IllusBg } from "./graphics.js";
 import { describeStat } from "./visuals.js";
 import { hookOptions, coach } from "./extras.js";
+import { KOKORO_VOICES, setVoice, loadVoice, phonemize, synthesize, voiceRate } from "./tts.js";
 const factModule = () => import("./ai/factcheck.js");
 import { listReels, saveReel, deleteReel, clearReels, listDrafts, saveDraft, deleteDraft } from "./store.js";
-import { platformCaptions } from "./script.js";
+import { platformCaptions, setPronunciations } from "./script.js";
 import { encoderInfo, renderReel, loadFonts, previewFrame } from "./render.js";
 import { SR } from "./music.js";
 
@@ -15,6 +16,10 @@ const MODES = ["auto", "evergreen", "news", "market", "custom"];
 const MODE_LABELS = { auto: "Auto", evergreen: "Explainer", news: "Today's news", market: "Market recap", custom: "Your topic" };
 const COLORS = ["#FFD60A", "#2ED573", "#00D2FF", "#FF6B81", "#FF9F1A", "#B388FF", "#FFFFFF"];
 const SPEEDS = { slow: 0.92, normal: 1.0, fast: 1.1 };
+const MUSIC_VOLUMES = { low: 0.55, medium: 1, high: 1.5 };
+// Narrators: the natural voices (Kokoro) and the classic fast voice (Piper).
+const VOICE_LABELS = { ...Object.fromEntries(Object.entries(KOKORO_VOICES).map(([id, v]) => [id, v.name])), classic: "Classic (fast)" };
+const voiceOpts = (id) => (id === "classic" ? { engine: "fast" } : { engine: "natural", voice: id });
 const CAPTION_STYLES = { bold: "Bold", boxed: "Boxed", clean: "Clean" };
 const CAPTION_POS = { low: "Low", middle: "Middle" };
 const MOODS = { lofi: "Lo-fi", upbeat: "Upbeat", cinematic: "Cinematic", calm: "Calm", none: "None" };
@@ -236,6 +241,7 @@ function options() {
     handle: cleanHandle($("handle").value),
     cta: cleanHandle($("handle").value) ? `Follow ${cleanHandle($("handle").value)} for a new money tip every day.` : CTA,
     music: state.mood, accent: state.accent, voiceSpeed: SPEEDS[state.speed] || 1, length: state.length,
+    voiceEngine: voiceOpts(state.voice).engine, voice: voiceOpts(state.voice).voice, musicVolume: MUSIC_VOLUMES[state.musicVol] ?? 1,
     captionStyle: state.capStyle, captionPos: state.capPos, pops: $("pops").checked, offline: $("offline").checked,
     sfx: $("sfx").checked, showSources: $("sources").checked,
     depth: Number(state.depth) || 2, factCheck: $("factcheck").checked, strict: $("factcheck").checked && $("strict").checked,
@@ -294,6 +300,7 @@ async function produce() {
     $("result").innerHTML = `<h2>Your reel is ready</h2><p>Made in ${Math.round((performance.now() - t0) / 1000)}s on this device (${esc(reel.how)}).${kept ? "" : " It couldn't be kept in the Library, so save it now."}</p>${soundNote}` + reelCard(reel, true);
     $("result").classList.remove("hidden");
     store.set("made", "1"); $("first-run").classList.add("hidden");
+    store.set("voiceReady-" + voiceOpts(state.voice).engine, "1");
     window.__lastReel = reel;
   } catch (e) {
     screen(state.plan ? "review" : "form");
@@ -303,6 +310,51 @@ async function produce() {
   wake?.release?.().catch(() => {}); closeAudio();
   state.busy = false;
 }
+// A 3-part series: this script is part 1; parts 2 and 3 cover related topics from the same research.
+// Each part ends by pointing to the next one, and all three go to the Library.
+async function produceSeries() {
+  if (state.busy || !state.plan) return;
+  unlockAudio();
+  state.busy = true;
+  screen("job"); $("job-title").textContent = "Planning your series…"; $("preview").classList.remove("hidden"); say("Finding related topics…", 0.02);
+  let wake = null; try { wake = await navigator.wakeLock?.request("screen"); } catch { /* not supported */ }
+  const t0 = performance.now(), made = [];
+  try {
+    if (state.ideasUI) await state.ideasUI.unloadAI();
+    const first = state.plan, base = first.script.title.replace(/\s*#Shorts$/, "").replace(/\s+·\s+Part \d.*$/, "");
+    const next = await seriesTopics(first.script, 2);
+    if (!next.length) throw new Error("Couldn't find related topics for a series. Try an explainer or your own topic.");
+    const parts = [first, ...next.map(() => null)];
+    const total = parts.length;
+    const opts = options();
+    for (let i = 0; i < total; i++) {
+      const tag = `Part ${i + 1} of ${total}`;
+      $("job-title").textContent = `Making ${tag}…`;
+      const partSay = (text, f) => say(`${tag}: ${text}`, f);
+      let plan = parts[i];
+      if (!plan) plan = await planReel({ ...opts, mode: "custom", customTopic: next[i - 1] }, { say: partSay });
+      const s = plan.script;
+      s.title = `${i === 0 ? base : s.title.replace(/\s*#Shorts$/, "")} · Part ${i + 1}`;
+      const outro = s.lines.find((l) => l.kind === "outro");
+      if (outro && i < total - 1) outro.text = `Follow for part ${i + 2}: ${next[i]}.`;
+      const reel = await produceReel(plan, opts, { say: partSay, canvas: $("preview"), audioCtx: state.audioCtx });
+      await saveReel(reel); made.push(reel);
+      if (i === 0) { state.plan = null; if (state.draftId) { deleteDraft(state.draftId); state.draftId = null; } }
+    }
+    screen("form");
+    store.set("voiceReady-" + voiceOpts(state.voice).engine, "1");
+    $("result").innerHTML = `<h2>Your ${made.length}-part series is ready</h2><p>Made in ${Math.round((performance.now() - t0) / 1000)}s on this device. All parts are in the Library.</p>` + made.map((r) => reelCard(r, true)).join("<hr>");
+    $("result").classList.remove("hidden");
+    window.__lastReel = made.at(-1); window.__series = made;
+  } catch (e) {
+    screen(state.plan ? "review" : "form");
+    if (state.plan) showReview();
+    showError(e, made.length ? `The series stopped after part ${made.length}` : "The series couldn't be made");
+  }
+  wake?.release?.().catch(() => {}); closeAudio();
+  state.busy = false;
+}
+
 function closeAudio() { state.audioCtx?.close?.().catch(() => {}); state.audioCtx = null; }
 
 // iOS only lets a page start audio inside a tap, so this runs synchronously at the start of every tap
@@ -318,6 +370,29 @@ function unlockAudio() {
     src.buffer = b; src.connect(ctx.destination); src.start(0);
   } catch { /* best effort */ }
   return ctx;
+}
+
+// Plays a sample line in the chosen narrator's voice (downloads the voice the first time).
+let previewing = false;
+async function previewVoice() {
+  if (previewing) return;
+  const ctx = unlockAudio(), btn = $("voice-preview");
+  previewing = true; btn.disabled = true;
+  try {
+    setVoice(voiceOpts(state.voice));
+    btn.textContent = "Loading…";
+    const used = await loadVoice((f) => { btn.textContent = `Downloading ${Math.round(f * 100)}%`; });
+    if (used !== voiceOpts(state.voice).engine) toast("The natural voice couldn't start on this phone; this is the classic voice.");
+    btn.textContent = "Speaking…";
+    const line = "Here's the thing about compound interest: your money earns money, and then that money earns money too.";
+    const [ph] = await phonemize([line]);
+    const samples = await synthesize(ph, SPEEDS[state.speed] || 1);
+    const buf = ctx.createBuffer(1, samples.length, voiceRate());
+    buf.copyToChannel(samples, 0);
+    const src = ctx.createBufferSource(); src.buffer = buf; src.connect(ctx.destination); src.start();
+    await new Promise((r) => { src.onended = r; });
+  } catch (e) { toast("Couldn't play the voice: " + (e.message || e)); }
+  previewing = false; btn.disabled = false; btn.textContent = "▶ Hear it";
 }
 
 /* ---------- review screen ---------- */
@@ -409,6 +484,15 @@ function showReview() {
   });
   updateEstimate();
   screen("review");
+  warmVoice();
+}
+// While you review, load the narrator's voice in the background (only if it was downloaded before),
+// so making the video starts right away.
+function warmVoice() {
+  const v = voiceOpts(state.voice);
+  if (store.get("voiceReady-" + v.engine) !== "1") return;
+  setVoice(v);
+  loadVoice().catch(() => {});
 }
 $("scenes").addEventListener("input", (e) => {
   const i = e.target.dataset.line; if (i == null) return;
@@ -497,6 +581,12 @@ $("produce").addEventListener("click", () => {
   for (let i = lines.length - 1; i >= 0; i--) if (!lines[i].text) lines.splice(i, 1);   // drop empty lines
   if (lines.filter((l) => l.kind !== "outro").length < 2) { toast("Keep at least two lines"); return showReview(); }
   produce();
+});
+$("series").addEventListener("click", () => {
+  const lines = state.plan.script.lines;
+  for (let i = lines.length - 1; i >= 0; i--) if (!lines[i].text) lines.splice(i, 1);
+  if (lines.filter((l) => l.kind !== "outro").length < 2) { toast("Keep at least two lines"); return showReview(); }
+  produceSeries();
 });
 $("save-draft").addEventListener("click", () => {
   if (!state.plan) return;
@@ -613,6 +703,17 @@ async function init() {
   prefChips("cap-pos", CAPTION_POS, "capPos", "low", drawStylePreview);
   prefChips("moods", MOODS, "mood", store.get("musicOff") === "1" ? "none" : "lofi");
   prefChips("lengths", LENGTH_LABELS, "length", "standard", updateEstimate);
+  const voiceNote = () => {
+    const v = KOKORO_VOICES[state.voice];
+    $("voice-note").textContent = v ? `${v.desc}. Natural voice: sounds like a real narrator. One-time 160 MB download.`
+      : "Classic voice: quicker to make and a 63 MB download, but more robotic.";
+  };
+  prefChips("voices", VOICE_LABELS, "voice", "af_heart", voiceNote); voiceNote();
+  prefChips("music-vol", { low: "Low", medium: "Medium", high: "High" }, "musicVol", "medium");
+  $("say-as").value = store.get("sayAs") || "";
+  setPronunciations($("say-as").value);
+  $("say-as").addEventListener("input", () => { store.set("sayAs", $("say-as").value); setPronunciations($("say-as").value); });
+  $("voice-preview").addEventListener("click", previewVoice);
   const depthNote = () => { $("depth-note").textContent = DEPTH_NOTES[state.depth] || ""; };
   prefChips("depths", DEPTH_LABELS, "depth", "2", depthNote); depthNote();
   $("handle").value = store.get("handle") || "";
@@ -646,5 +747,15 @@ async function init() {
   window.__ready = true;
 }
 
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").then(() => {
+    // On the first visit the service worker (which turns on multi-core AI) only takes over after a reload.
+    // Do that once, right away, before anything is in progress.
+    if (self.crossOriginIsolated) return;
+    let asked = false; try { asked = sessionStorage.getItem("isolate-reload") === "1"; } catch { /* private mode */ }
+    const reload = () => { if (asked || state.busy || state.plan) return; try { sessionStorage.setItem("isolate-reload", "1"); } catch { return; } location.reload(); };
+    if (navigator.serviceWorker.controller) reload();
+    else navigator.serviceWorker.addEventListener("controllerchange", reload, { once: true });
+  }).catch(() => {});
+}
 init().catch((e) => { console.error(e); toast("Couldn't start the app: " + e.message); });

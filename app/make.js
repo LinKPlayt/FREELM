@@ -2,7 +2,7 @@
 import * as research from "./research.js";
 import { buildEvergreen, buildNews, buildMarket, buildCustom, buildMetadata, speakable, statFor, visualMatch } from "./script.js";
 import { MediaFinder } from "./media.js";
-import { loadVoice, phonemize, synthesize, VOICE_RATE } from "./tts.js";
+import { loadVoice, phonemize, synthesize, voiceRate, setVoice, releaseVoice, voiceDownloadMB } from "./tts.js";
 import { generateMusic, mix, resample, SR } from "./music.js";
 import { loadFonts, renderReel } from "./render.js";
 import { analyzeLine, iconFor } from "./visuals.js";
@@ -64,7 +64,7 @@ async function writeScript(opts, data, say) {
 
 // Pause after a line: the normal gap, plus extra hold time for chapter and recap cards so they can be read.
 const gapAfter = (line) => GAP + (line?.hold || 0);
-const seconds = (clips, lines = []) => clips.reduce((n, c) => n + c.length, 0) / VOICE_RATE
+const seconds = (clips, lines = []) => clips.reduce((n, c) => n + c.length, 0) / voiceRate()
   + clips.slice(0, -1).reduce((n, _, i) => n + gapAfter(lines[i]), 0) + TAIL;
 
 async function voiceScript(script, say, base = 1.0) {
@@ -105,7 +105,7 @@ async function voiceScript(script, say, base = 1.0) {
 function timings(script, clips) {
   const words = [], spans = []; let t = 0;
   script.lines.forEach((line, i) => {
-    const dur = clips[i].length / VOICE_RATE;
+    const dur = clips[i].length / voiceRate();
     spans.push([t, t + dur]);
     const tokens = line.text.split(/\s+/).filter(Boolean);
     const weights = tokens.map((tok) => speakable(tok).length + 2.5 + (/[.,!?;:]$/.test(tok) ? 4 : 0));
@@ -117,14 +117,71 @@ function timings(script, clips) {
   return { words, spans };
 }
 
-function assembleAudio(clips, mood, lines) {
-  const total = Math.max(seconds(clips, lines), MIN_S), voice = new Float32Array(Math.ceil(total * SR));
+// The voice track, finished like a broadcast voiceover. The browser's audio engine does the work
+// (offline, faster than real time): high-quality resampling to 48 kHz, a high-pass to remove rumble,
+// a small cut in the "boxy" low mids, a presence lift for clarity on phone speakers, gentle
+// compression so quiet and loud words sit together, then a limiter. Falls back to plain mixing.
+async function masterVoice(clips, lines, total) {
+  const rate = voiceRate(), length = Math.ceil(total * SR);
+  const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  if (OAC) {
+    try {
+      const ctx = new OAC(1, length, SR);
+      const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 85; hp.Q.value = 0.7;
+      const mud = ctx.createBiquadFilter(); mud.type = "peaking"; mud.frequency.value = 280; mud.Q.value = 1.1; mud.gain.value = -2.5;
+      const presence = ctx.createBiquadFilter(); presence.type = "peaking"; presence.frequency.value = 3200; presence.Q.value = 0.9; presence.gain.value = 2.5;
+      const air = ctx.createBiquadFilter(); air.type = "highshelf"; air.frequency.value = 9000; air.gain.value = 1.5;
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -22; comp.knee.value = 8; comp.ratio.value = 3; comp.attack.value = 0.006; comp.release.value = 0.16;
+      const makeup = ctx.createGain(); makeup.gain.value = 1.6;
+      hp.connect(mud).connect(presence).connect(air).connect(comp).connect(makeup).connect(ctx.destination);
+      let t = 0;
+      clips.forEach((c, i) => {
+        if (c.length) {
+          const buf = ctx.createBuffer(1, c.length, rate); buf.copyToChannel(c, 0);
+          const src = ctx.createBufferSource(); src.buffer = buf; src.connect(hp); src.start(t);
+        }
+        t += c.length / rate + gapAfter(lines[i]);
+      });
+      const rendered = await ctx.startRendering();
+      return limitAndLevel(rendered.getChannelData(0).slice(0));
+    } catch (e) { console.warn("voice finishing unavailable", e); }
+  }
+  const voice = new Float32Array(length);
   let off = 0;
-  clips.forEach((c, i) => { const r = resample(c, VOICE_RATE); voice.set(r.subarray(0, Math.max(0, voice.length - off)), off); off += r.length + Math.round(gapAfter(lines[i]) * SR); });
-  // Gentle compression so the voice is loud and even on phone speakers.
-  const drive = 2.0, norm = Math.tanh(drive);
-  for (let i = 0; i < voice.length; i++) voice[i] = Math.tanh(voice[i] * drive) / norm;
-  return { audio: mix(voice, mood && mood !== "none" ? generateMusic(total, mood) : null, mood === "cinematic" ? 0.17 : 0.14), total };
+  clips.forEach((c, i) => { const r = resample(c, rate); voice.set(r.subarray(0, Math.max(0, voice.length - off)), off); off += r.length + Math.round(gapAfter(lines[i]) * SR); });
+  return limitAndLevel(voice);
+}
+
+// Levels speech to a steady loudness (about -16 dB RMS while talking, a typical voiceover level),
+// then a smooth peak limiter at -1 dB so nothing clips. No hard saturation: that made the old voice sound harsh.
+function limitAndLevel(v) {
+  const block = Math.floor(0.05 * SR);
+  let sum = 0, count = 0;
+  for (let i = 0; i < v.length; i += block) {                       // loudness of the blocks that contain speech
+    let e = 0; const end = Math.min(v.length, i + block);
+    for (let j = i; j < end; j++) e += v[j] * v[j];
+    e /= end - i;
+    if (e > 1e-5) { sum += e; count++; }
+  }
+  const rms = count ? Math.sqrt(sum / count) : 0.1;
+  const gain = Math.min(8, 0.158 / Math.max(rms, 1e-4));            // 0.158 ≈ -16 dBFS
+  const ceiling = 0.89;                                               // -1 dBFS
+  let env = 1;
+  const attack = Math.exp(-1 / (0.001 * SR)), release = Math.exp(-1 / (0.08 * SR));
+  for (let i = 0; i < v.length; i++) {
+    const x = v[i] * gain, a = Math.abs(x);
+    const want = a > ceiling ? ceiling / a : 1;
+    env = want < env ? attack * env + (1 - attack) * want : release * env + (1 - release) * want;
+    v[i] = Math.max(-ceiling, Math.min(ceiling, x * Math.min(env, want <= env ? env : 1)));
+  }
+  return v;
+}
+
+async function assembleAudio(clips, mood, lines, musicVolume = 1) {
+  const total = Math.max(seconds(clips, lines), MIN_S);
+  const voice = await masterVoice(clips, lines, total);
+  return { audio: mix(voice, mood && mood !== "none" ? generateMusic(total, mood) : null, (mood === "cinematic" ? 0.17 : 0.14) * musicVolume), total };
 }
 
 // Rough spoken length of a script, for the review screen.
@@ -171,6 +228,33 @@ async function attachPhotos(script, generic, opts, say) {
 }
 
 // An idea from the Idea Lab -> a plan for the review screen.
+// A series: the topics for parts 2 and 3, from the research on this one (related articles about the
+// same subject, never a different meaning of the word, never the same article again).
+export async function seriesTopics(script, n = 2) {
+  const { deepResearch, offTopic } = await import("./ai/research.js");
+  const topic = (script.topicTitle || script.title).replace(/\s*#Shorts$/, "").replace(/\s+\(.*\)$/, "");
+  const brief = await deepResearch(topic, { niche: script.niche, depth: 2 });
+  if (!brief) return [];
+  const seen = new Set([brief.main.title.toLowerCase(), topic.toLowerCase()]);
+  const mainText = [...brief.main.sentences, ...(brief.sections || []).flatMap((x) => x.sentences)].join(" ").toLowerCase();
+  const out = [];
+  for (const d of brief.related) {
+    const t = d.title.replace(/\s+\(.*\)$/, "");
+    // People (the senator a plan is named after) make a different kind of video: topics only.
+    const person = /^[A-Z][a-z]+(?: [A-Z]\.)?(?: [A-Z][a-z'-]+){1,2}$/.test(t) && /\b(?:is|was) an? (?:[A-Z][a-z]+ )*(?:[a-z-]+ )*(?:politician|senator|businessman|businesswoman|economist|investor|banker|lawyer|author|executive|entrepreneur|philanthropist|official|journalist|founder|activist)\b|\(born\b|\b\d{4}\s*[–-]\s*\d{4}\b/.test(d.sentences[0] || "");
+    // Companies and organisations aren't topics either ("Index Fund Advisors is an investment firm…").
+    const org = /^[^.]{0,120}\b(?:is|was) (?:an?|the|one of the) (?:[\w-]+ ){0,5}(?:company|companies|firm|corporation|banks?|organi[sz]ation|agency|institution|platform|website|startup|business|fund manager|advis[eo]r|non-profit|nonprofit|foundation|group|association|exchange|founder|co-founder|ceo)\b/i.test(d.sentences[0] || "");
+    // Related means: shares a word with the topic ("Roth 401(k)"), or the topic's own article names it ("Tether").
+    const words = (x) => new Set(x.toLowerCase().match(/[a-z0-9]{3,}/g) || []);
+    const shares = [...words(t)].some((w) => words(topic).has(w));
+    const named = mainText.includes(t.toLowerCase());
+    if (person || org || !(shares || named) || offTopic(d.title) || seen.has(t.toLowerCase()) || /^(List|Lists|History) of\b|\d{4}/.test(t) || t.length > 40) continue;
+    seen.add(t.toLowerCase()); out.push(t);
+    if (out.length >= n) break;
+  }
+  return out;
+}
+
 export async function planFromIdea(idea, opts, ui) {
   const { scriptFromIdea } = await import("./ai/ideas.js");
   const data = await appData();
@@ -236,12 +320,16 @@ export async function produceReel(plan, opts, ui) {
   const stage = (lo, hi) => (text, f = 0) => ui.say(text, lo + (hi - lo) * Math.min(1, Math.max(0, f)));
 
   const say = stage(0, 0.25);
-  say("Getting the voice ready (one-time download, about 90 MB)…");
-  await Promise.all([loadVoice((f) => say("Getting the voice ready (one-time download, about 90 MB)…", f)), loadFonts()]);
+  setVoice({ engine: opts.voiceEngine || "natural", voice: opts.voice });
+  const msg = () => `Getting the voice ready (one-time download, about ${voiceDownloadMB()} MB; then it's on your phone)…`;
+  say(msg());
+  const used = (await Promise.all([loadVoice((f) => say(msg(), f)), loadFonts()]))[0];
+  if (used !== (opts.voiceEngine || "natural")) ui.toast?.("The natural voice couldn't start on this phone, so the fast voice is used.");
 
   const clips = await voiceScript(script, stage(0.25, 0.55), opts.voiceSpeed || 1.0);
+  await releaseVoice();      // free the voice model's memory before the video is encoded
   const { words, spans } = timings(script, clips);
-  const { audio, total } = assembleAudio(clips, opts.music, script.lines);
+  const { audio, total } = await assembleAudio(clips, opts.music, script.lines, opts.musicVolume ?? 1);
 
   ui.say("Preparing scenes…", 0.56);
   const scenes = [], credits = [];

@@ -113,6 +113,7 @@
   .fact.s-unverified summary, .fact.s-conflict summary { color: var(--bad); }
   .fact ul { margin: 6px 0 0; padding-left: 18px; } .fact li { margin-bottom: 6px; color: var(--text); } .fact small { color: var(--muted); }
   .fact p { margin: 6px 0 0; }
+  #say-as { width: 100%; background: var(--surface-2); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font: inherit; font-size: 16px; resize: vertical; }
   .copy-sheet { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: flex-end; justify-content: center; z-index: 60; padding: 16px; }
   .copy-box { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 16px; width: 100%; max-width: 520px; margin-bottom: env(safe-area-inset-bottom); }
   .copy-box h3 { margin: 0 0 6px; } .copy-box textarea { width: 100%; font: inherit; font-size: 16px; line-height: 1.4; background: var(--surface-2); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 10px; -webkit-user-select: text; user-select: text; }
@@ -144,6 +145,7 @@
       </div>
       <div class="sticky-actions">
         <button class="primary" id="produce">Make the video</button>
+        <button class="btn" id="series" style="width:100%;margin-top:8px">Make a 3-part series</button>
         <button class="btn" id="cancel-review" style="width:100%;margin-top:8px">Start over</button>
       </div>
     </div>
@@ -183,8 +185,16 @@
         <div class="chips" id="cap-pos"></div>
         <label class="field">Music</label>
         <div class="chips" id="moods"></div>
+        <label class="field">Narrator</label>
+        <div class="chips" id="voices"></div>
+        <div class="row" style="padding-top:8px"><div><small id="voice-note"></small></div>
+          <button class="btn" id="voice-preview" style="flex:none">▶ Hear it</button></div>
         <label class="field">Voice speed</label>
         <div class="chips" id="speeds"></div>
+        <label class="field">Music volume</label>
+        <div class="chips" id="music-vol"></div>
+        <label class="field">Pronunciations <span style="text-transform:none;font-weight:500">(optional, one per line)</span></label>
+        <textarea id="say-as" rows="2" placeholder="Roth = rawth&#10;ETF = E T F" autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
         <label class="field">Length</label>
         <div class="chips" id="lengths"></div>
         <label class="field">Research depth</label>
@@ -206,7 +216,7 @@
           <label class="switch"><input id="offline" type="checkbox"><span></span></label></div>
       </div>
       <button class="primary" id="go">Make my reel</button>
-      <p class="meta" style="text-align:center;margin-top:10px" id="first-run">The first reel downloads the voice once (about 90 MB). Wi-Fi recommended.</p>
+      <p class="meta" style="text-align:center;margin-top:10px" id="first-run">The first reel downloads the narrator's voice once (about 160 MB for the natural voices, 63 MB for Classic). Wi-Fi recommended.</p>
     </div>
   </section>
 

@@ -19,7 +19,9 @@ env.allowLocalModels = true;
 env.localModelPath = new URL("models/", BASE).pathname;
 env.useBrowserCache = false;                         // our service worker already caches these files
 env.backends.onnx.wasm.wasmPaths = { mjs: BASE + "vendor/ort-wasm-simd-threaded.mjs", wasm: BASE + "vendor/ort-wasm-simd-threaded.wasm" };
-env.backends.onnx.wasm.numThreads = 1;               // GitHub Pages can't enable multi-threading
+// Several CPU cores when the page is cross-origin isolated (the service worker adds the headers that
+// GitHub Pages can't), otherwise one.
+env.backends.onnx.wasm.numThreads = self.crossOriginIsolated ? Math.min(4, navigator.hardwareConcurrency || 1) : 1;
 env.backends.onnx.wasm.proxy = false;
 
 let generator = null, loading = null;

@@ -11,8 +11,16 @@ const ACRONYMS = {
 };
 const SCALE = { k: "thousand", m: "million", mn: "million", b: "billion", bn: "billion", t: "trillion", tn: "trillion" };
 
+// Your own pronunciations ("Roth = rawth"), applied before everything else. Whole words, any case.
+let SAY_AS = [];
+export function setPronunciations(text) {
+  SAY_AS = String(text || "").split("\n").map((l) => l.split("=").map((x) => x.trim())).filter(([a, b]) => a && b)
+    .map(([a, b]) => [new RegExp(`(?<![\\w$])${a.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w])`, "gi"), b]);
+}
+
 // Rewrite text so the voice pronounces finance jargon correctly.
 export function speakable(text) {
+  for (const [re, said] of SAY_AS) text = text.replace(re, said);
   text = text.replace(/@([\w.]+)/g, (_, h) => "at " + h.replace(/[._]+/g, " "));   // "@money.minute" -> "at money minute"
   let t = text.replace(/\b(?:US|U\.S\.|USD)\s?\$/g, "$").replace(/\$(\d[\d,]*(?:\.\d+)?)(?:\s?(trillion|billion|million|thousand)|(tn|bn|mn|[kmbt]))?\b/gi, (_, num, w1, w2) => {
     const scale = (w1 || w2 || "").toLowerCase();

@@ -13,7 +13,7 @@ server. You save it to Photos or post it yourself from the share sheet.
 
 ```
 on your phone:  research ──► script ──► voice ──► photos ──► music ──► video ──► Save / Share
-                RSS, Wiki     templates   Piper      Openverse   synth     canvas +
+                RSS, Wiki     templates   Kokoro     Openverse   synth     canvas +
                                           (WASM)     Wikimedia             H.264 encoder
 ```
 
@@ -28,7 +28,8 @@ on your phone:  research ──► script ──► voice ──► photos ─�
 5. Tap **Save / Share**. Choose **Save Video** to put it in Photos, or pick YouTube, TikTok or Instagram to post it.
 6. Tap **YouTube**, **TikTok** or **Instagram** to copy a caption formatted for that platform, and paste it into your post. It includes the photo credits that the licenses require.
 
-The **first reel** downloads the voice and video tools once (about 90 MB, so use Wi-Fi). After
+The **first reel** downloads the narrator's voice and the video tools once (about 160 MB for the
+natural voices, or 63 MB for the Classic voice, so use Wi-Fi). After
 that they stay on the phone.
 
 The app is served by GitHub Pages straight from the `main` branch
@@ -103,6 +104,30 @@ Each scene's picture is chosen from the line being spoken, not from a fixed list
   *the risks and the catch*, and *what you can do*. A chapter only appears when the research really
   has material for it; there are no filler chapters.
 
+### A narrator that sounds human
+
+- **Natural voices.** The narrator is Kokoro-82M, an open StyleTTS 2 voice model (Apache-2.0)
+  whose speech is close to a real voiceover: natural rhythm, intonation and breathing between
+  phrases. It runs on the phone with no speech service. There are nine voices, American and
+  British. The first reel downloads the model once (about 160 MB), and the phone keeps it after that.
+- **Faster on the phone.** The app's service worker turns on multi-core processing (GitHub Pages
+  can't), which makes the voice about 3× faster. On the first visit the app reloads once to
+  switch it on. The voice also starts loading in the background while you review the script.
+- **Studio finishing.** The voice is resampled with the browser's high-quality resampler (the old
+  voice was stretched with simple interpolation, which sounded gritty). It then passes through a
+  rumble filter, a cut in the boxy low mids, a presence lift for clarity on phone speakers, a
+  gentle compressor and a peak limiter, and the whole video is levelled to about -14 LUFS, the
+  usual loudness for Reels, Shorts and TikTok. The old voice's harsh saturation is gone.
+- **Classic (fast)** is the previous voice: a smaller download, quicker, more robotic. If the
+  natural voice can't start on a phone, the app falls back to it and tells you.
+- **Pronunciations.** If the narrator says a word wrong, add it under Style (`Roth = rawth`).
+
+### Series
+
+**Make a 3-part series** on the review screen makes this video and two more on related topics
+from the same research (for example Roth IRA → Roth 401(k) → Traditional IRA). Each part ends by
+pointing to the next ("Follow for part 2: Roth 401(k)"), and all three go to the Library.
+
 ### Research depth and fact checking
 
 - **Research depth** (under Length): *Quick*, *Standard*, *Deep* or *Maximum*. Each step searches
@@ -142,8 +167,11 @@ The Style card shows a **live preview** that updates as you change settings.
 | Captions | **Bold** (big outlined words), **Boxed** (words on a dark card, the spoken word on a coloured chip), **Clean** (sentence case on a soft backing) |
 | Caption position | Low or Middle |
 | Music | **Lo-fi**, **Upbeat**, **Cinematic**, **Calm** or **None**. Each is composed fresh for every reel |
+| Narrator | Nine **natural voices** (Heart, Michael, Bella, Fenrir, Nicole, Puck, Emma, George, Fable; US and UK), or **Classic (fast)**. Tap **▶ Hear it** for a sample |
 | Voice speed | Slow, normal or fast |
-| Length | **Short** 20–30 s, **Standard** 30–45 s, **Long** 40–60 s |
+| Music volume | Low, medium or high (the music always dips under the voice) |
+| Pronunciations | Teach the narrator a word, one per line: `Roth = rawth`, `ETF = E T F` |
+| Length | **Short** 20–30 s, **Standard** 30–45 s, **Long** 40–60 s, **Deep dive** 60–90 s, **Full story** 2–3 min |
 | Number pops | Key figures in a line ("20%", "$1,000", "3–6 months", including ones written as words) pop up big on screen |
 | Your @handle | Shown at the bottom of every scene and on the end card, and spoken in the call to action ("Follow @yourchannel…") |
 
@@ -217,7 +245,7 @@ want to keep to Photos.
 | Headlines | Phone fetches directly | CNBC and MarketWatch RSS feeds |
 | Background facts and custom topics | Phone fetches directly | Wikipedia |
 | Photos | Phone fetches directly | [Openverse](https://openverse.org) and [Wikimedia Commons](https://commons.wikimedia.org); only CC0, Public Domain, CC BY and CC BY-SA |
-| Voice | On the phone | [Piper](https://github.com/OHF-Voice/piper1-gpl) neural voice running in WebAssembly; the `joe` voice is **CC0** |
+| Voice | On the phone | Natural voices: [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (Apache-2.0), a StyleTTS 2 model, run with Transformers.js. Classic voice: [Piper](https://github.com/OHF-Voice/piper1-gpl), the `joe` voice (**CC0**). Both use eSpeak NG for pronunciation |
 | Music | On the phone | Synthesized from scratch for every reel |
 | Video | On the phone | Drawn on a canvas and encoded with the phone's H.264 encoder. The soundtrack is written into the file directly as uncompressed audio, in a QuickTime `.mov` (Apple's native format) |
 | Market numbers | Small data file | See below |
@@ -275,13 +303,15 @@ app/
   research.js   headlines, Wikipedia, market snapshot
   script.js     script templates and finance-friendly pronunciation
   media.js      Openverse + Wikimedia Commons photo search with license filtering
-  tts.js        Piper voice on onnxruntime-web
+  tts.js        the narrator: natural voice (kokoro.js) or classic voice (Piper), plus fallback
+  kokoro.js     Kokoro-82M on Transformers.js: text → phonemes → speech
+  voices.js     the list of narrators
   music.js      background-music synthesizer and voice/music mixing
   render.js     canvas scenes, captions, charts, H.264/AAC encoding
   store.js      on-device Library (IndexedDB)
   data/         topic library exported from reelbot/topics.py
   vendor/       bundled open-source libraries (see app/vendor/README.md)
-assets/         fonts (OFL) and the voice model (CC0)
+assets/         fonts (OFL) and the classic voice model (CC0); the natural voice is in app/ai/models/kokoro-82m
 reelbot/        the Python version (desktop) and shared research code
 scripts/
   export_app_data.py   regenerates app/data/topics.json after editing topics

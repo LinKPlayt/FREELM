@@ -1,14 +1,53 @@
-// Offline neural voice in the browser: Piper (VITS) running on onnxruntime-web (WebAssembly).
-// The model and all code are served from this site; no speech service is contacted.
+// The narrator. Two voices, both running on the phone, served from this app (no speech service):
+//   "natural" (default): Kokoro-82M, a StyleTTS 2 model that sounds close to a real narrator (kokoro.js)
+//   "fast": Piper (VITS), smaller and quicker but more robotic; also the fallback if the natural voice can't load
 import * as ort from "./vendor/ort/ort.wasm.min.mjs";
+import { KOKORO_RATE, KOKORO_VOICES } from "./voices.js";
+export { KOKORO_VOICES };
+const kokoro = () => import("./kokoro.js");      // loaded only when a natural voice is used
+
+let engine = "natural", voiceId = "af_heart";
+export function setVoice({ engine: e, voice } = {}) {
+  if (e && e !== engine) { engine = e; }
+  if (voice && KOKORO_VOICES[voice]) voiceId = voice;
+}
+export const voiceEngine = () => engine;
+export const voiceRate = () => (engine === "natural" ? KOKORO_RATE : PIPER_RATE);
+export const voiceDownloadMB = () => (engine === "natural" ? 163 : 63);
+
+// Loads the chosen voice. If the natural voice can't load (old phone, low memory), falls back to the fast one.
+export async function loadVoice(onProgress) {
+  if (engine === "natural") {
+    try { await (await kokoro()).loadKokoro(onProgress); return "natural"; }
+    catch (e) { console.warn("natural voice unavailable, using the fast voice", e); engine = "fast"; }
+  }
+  await loadPiper(onProgress);
+  return "fast";
+}
+export async function releaseVoice() { if (engine === "natural") await (await kokoro()).unloadKokoro(); }
+
+export async function phonemize(texts) {
+  if (engine === "natural") {
+    const lang = KOKORO_VOICES[voiceId]?.lang || "a";
+    const out = [];
+    const { kokoroPhonemes } = await kokoro();
+    for (const t of texts) out.push(await kokoroPhonemes(t, lang));
+    return out;
+  }
+  return piperPhonemize(texts);
+}
+export async function synthesize(phonemes, speed = 1.0) {
+  if (engine === "natural") return trimAndNormalize(await (await kokoro()).kokoroSpeak(phonemes, { voice: voiceId, speed }), KOKORO_RATE);
+  return piperSynthesize(phonemes, speed);
+}
 
 const VENDOR = new URL("./vendor/", import.meta.url).href;
 const VOICE = new URL("../assets/voices/en_US-joe-medium.onnx", import.meta.url).href;
 ort.env.wasm.wasmPaths = VENDOR + "ort/";
-ort.env.wasm.numThreads = 1;   // GitHub Pages can't enable cross-origin isolation, so no threads
+ort.env.wasm.numThreads = 1;   // this smaller runtime build is single-threaded
 
 let session = null, config = null;
-export const VOICE_RATE = 22050;
+const PIPER_RATE = 22050;
 
 async function fetchWithProgress(url, onProgress) {
   const res = await fetch(url);
@@ -28,7 +67,12 @@ async function fetchWithProgress(url, onProgress) {
   return out;
 }
 
-export async function loadVoice(onProgress) {
+let piperLoading = null;
+function loadPiper(onProgress) {
+  piperLoading ??= loadPiperOnce(onProgress).catch((e) => { piperLoading = null; throw e; });
+  return piperLoading;
+}
+async function loadPiperOnce(onProgress) {
   if (session) return;
   config = await (await fetch(VOICE + ".json")).json();
   const model = await fetchWithProgress(VOICE, onProgress);
@@ -45,7 +89,7 @@ function loadPhonemizer() {
 }
 
 // text[] -> phoneme[][] (one list per input text), using espeak-ng compiled to WebAssembly
-export async function phonemize(texts) {
+async function piperPhonemize(texts) {
   await loadPhonemizer();
   const results = [];
   const mod = await window.createPiperPhonemize({
@@ -72,7 +116,7 @@ function toIds(phonemes) {
 }
 
 // phonemes -> Float32Array of 22.05 kHz mono samples
-export async function synthesize(phonemes, speed = 1.0) {
+async function piperSynthesize(phonemes, speed = 1.0) {
   const ids = toIds(phonemes);
   const inf = config.inference || {};
   const feeds = {
@@ -82,14 +126,14 @@ export async function synthesize(phonemes, speed = 1.0) {
   };
   const out = await session.run(feeds);
   const audio = out[Object.keys(out)[0]].data;
-  return trimAndNormalize(Float32Array.from(audio));
+  return trimAndNormalize(Float32Array.from(audio), PIPER_RATE);
 }
 
-function trimAndNormalize(a) {
+function trimAndNormalize(a, rate) {
   let s = 0, e = a.length - 1, peak = 0;
   while (s < e && Math.abs(a[s]) < 0.01) s++;
   while (e > s && Math.abs(a[e]) < 0.01) e--;
-  const pad = Math.floor(0.03 * VOICE_RATE);
+  const pad = Math.floor(0.03 * rate);
   const out = a.slice(Math.max(0, s - pad), Math.min(a.length, e + pad));
   for (let i = 0; i < out.length; i++) peak = Math.max(peak, Math.abs(out[i]));
   if (peak > 0) for (let i = 0; i < out.length; i++) out[i] *= 0.89 / peak;
