@@ -693,6 +693,49 @@ async function soundTest() {
   btn.disabled = false; btn.textContent = "Run sound test";
 }
 
+// Step-by-step check of the natural voice and the Ideas AI, with a report to copy and send.
+async function aiCheck() {
+  const btn = $("ai-check"), out = $("ai-check-out"), lines = [];
+  btn.disabled = true;
+  const show = () => { out.innerHTML = `<pre style="white-space:pre-wrap;font-size:13px;color:var(--muted)">${esc(lines.join("\n"))}</pre>`; };
+  const step = async (name, fn) => {
+    const t0 = performance.now(); lines.push(`… ${name}`); show();
+    try { const r = await fn(); lines[lines.length - 1] = `✓ ${name} (${Math.round(performance.now() - t0)} ms)${r ? ": " + r : ""}`; show(); return true; }
+    catch (e) { lines[lines.length - 1] = `✗ ${name} (${Math.round(performance.now() - t0)} ms): ${e?.message || e}`; show(); return false; }
+  };
+  lines.push(`Device: ${navigator.userAgent}`);
+  lines.push(`App: ${(await caches.keys().catch(() => [])).filter((k) => /^reelbot-v/.test(k)).join(", ") || "unknown"} · Ideas tab opened: ${state.ideasUI ? "yes" : "no"} · cores: ${navigator.hardwareConcurrency || "?"}`);
+  lines.push(`Saved state: voiceLevel=${store.get("voiceLevel") || "-"} voiceBusy=${store.get("voiceBusy") || "-"} aiOn=${store.get("aiOn") || "-"} aiLoading=${store.get("aiLoading") || "-"}`);
+  lines.push(`Last voice problem: ${lastVoiceError() || "none"}`);
+  show();
+  if (state.ideasUI) await step("Free the Ideas AI's memory", () => state.ideasUI.unloadAI());
+  btn.textContent = "Checking the natural voice…";
+  resetVoiceLevel(); setVoice({ engine: "natural", voice: KOKORO_VOICES[state.voice] ? state.voice : "af_heart" });
+  let samples = null;
+  const ok = await step("Natural voice: start and load (92 MB, from the phone after the first time)", async () => {
+    const used = await loadVoice();
+    if (used !== "natural") throw new Error(`switched to the classic voice: ${lastVoiceError() || "no reason given"}`);
+  });
+  if (ok) {
+    let ph;
+    await step("Natural voice: pronunciation", async () => { [ph] = await phonemize(["This is a quick voice check."]); return ph; });
+    if (ph) await step("Natural voice: speak one line", async () => { samples = await synthesize(ph, 1); return `${(samples.length / voiceRate()).toFixed(1)} s of audio`; });
+  }
+  await releaseVoice(); resetVoiceLevel();
+  btn.textContent = "Checking the Ideas AI…";
+  await step("Ideas AI: start and load (137 MB, from the phone after the first time)", async () => {
+    const m = await import("./ai/llm.js"); await m.loadLLM();
+  });
+  await step("Ideas AI: write a few words", async () => {
+    const m = await import("./ai/llm.js"); if (!m.llmReady()) throw new Error("not loaded");
+    return JSON.stringify(await m.complete("You write short video titles.", "Write a title about saving money.", "", { maxTokens: 10 }));
+  });
+  await import("./ai/llm.js").then((m) => m.unloadLLM()).catch(() => {});
+  out.insertAdjacentHTML("beforeend", `<div class="btns"><button class="btn main wide" id="ai-check-copy">Copy these results</button></div>`);
+  $("ai-check-copy").onclick = () => copy(lines.join("\n"), { label: "AI & voice check" });
+  btn.disabled = false; btn.textContent = "Run AI & voice check";
+}
+
 /* ---------- Idea Lab (loaded the first time the tab opens) ---------- */
 async function openIdeas() {
   if (state.ideasUI || state.ideasLoading) return;
@@ -774,6 +817,7 @@ async function init() {
   renderTopics();
   $("go").addEventListener("click", start);
   $("sound-test").addEventListener("click", soundTest);
+  $("ai-check").addEventListener("click", aiCheck);
   $("wipe").addEventListener("click", async () => { if (confirm("Delete every reel stored on this phone?")) { await clearReels(); renderLibrary(); toast("Deleted"); } });
   const info = await encoderInfo();
   $("encoder").textContent = info.webcodecs ? `Video encoder: on-device H.264, ${info.video.width}×${info.video.height}, with uncompressed sound.`
