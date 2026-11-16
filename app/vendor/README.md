@@ -15,3 +15,11 @@ by hexgrad, Apache-2.0, from the [ONNX export](https://huggingface.co/onnx-commu
 It uses the 8-bit weights and runs on the bundled `ort/` runtime (the same one as the classic voice).
 `app/kokoro-text.js` is adapted from
 [kokoro-js](https://github.com/hexgrad/kokoro/tree/main/kokoro.js) (Apache-2.0).
+
+**Memory cap (local change).** Both ONNX Runtime glue files (`ort/ort-wasm-simd-threaded.mjs` and
+`../ai/vendor/ort-wasm-simd-threaded.mjs`) are edited in one place: the shared WebAssembly memory is
+created with `maximum:12288` (768 MB) instead of `maximum:65536` (4 GB). Safari reserves a shared
+memory's whole maximum up front, so two 4 GB runtimes (for example the Ideas search model plus the
+natural voice) made iPhones fail with "RangeError: Out of memory" even with plenty of free RAM. Every
+model here needs under 400 MB (measured). Reapply this edit when updating either runtime:
+`sed -i 's/maximum:65536,shared:!0/maximum:12288,shared:!0/' <file>`.

@@ -1,6 +1,6 @@
 // Service worker: keeps the app and its big files (voice models, WebAssembly, fonts, research library)
 // on the phone so they download once. Live data (news, photos) always uses the network.
-const VERSION = "reelbot-v22";
+const VERSION = "reelbot-v23";
 // Big binary files (model weights, WebAssembly, fonts) live in a cache that survives app updates, so
 // an update doesn't download the voice again. Only binaries: small settings and code files (config.json,
 // .js) can change in place, so they're refreshed with every app update (a stale AI config.json, kept
@@ -33,7 +33,9 @@ async function cacheFirst(req, name) {
   const cache = await caches.open(name);
   const hit = await cache.match(req);
   if (hit) return hit;
-  const res = await fetch(req);
+  // Small files are re-checked with the server (not the browser's 10-minute HTTP cache) so an update
+  // arrives at once; big model files are immutable, so any copy will do.
+  const res = await fetch(name === MODELS ? req : new Request(req, { cache: "no-cache" }));
   if (res.ok && res.status === 200) cache.put(req, res.clone());
   return res;
 }
