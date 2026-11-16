@@ -1,5 +1,6 @@
 # Auto-deploys the web app to your Hugging Face Space whenever you push.
 # Requires a repository secret HF_TOKEN (a Hugging Face token with "write" access).
+# Optional repository secret APP_PASSWORD: the password you'll type to open the app.
 # Optional repository variable HF_SPACE (defaults to "reelbot").
 name: Deploy web app
 
@@ -20,7 +21,20 @@ jobs:
       - name: Deploy to Hugging Face Spaces
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
         run: |
-          if [ -z "$HF_TOKEN" ]; then echo "No HF_TOKEN secret set; skipping deploy."; exit 0; fi
+          if [ -z "$HF_TOKEN" ]; then
+            echo "::warning::No HF_TOKEN secret set; skipping deploy. Add it under Settings > Secrets and variables > Actions."
+            exit 0
+          fi
           pip install -q huggingface_hub
-          python scripts/deploy_hf.py --space "${{ vars.HF_SPACE || 'reelbot' }}"
+          ARGS=(--space "${{ vars.HF_SPACE || 'reelbot' }}")
+          if [ -n "$APP_PASSWORD" ]; then ARGS+=(--password "$APP_PASSWORD"); fi
+          python scripts/deploy_hf.py "${ARGS[@]}" | tee deploy.txt
+          {
+            echo "## ReelBot deployed"
+            echo ""
+            sed 's/^/- /' deploy.txt
+            echo ""
+            echo "Open the **App** link in Safari on your iPhone → Share → **Add to Home Screen**."
+          } >> "$GITHUB_STEP_SUMMARY"
