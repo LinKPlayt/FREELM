@@ -293,23 +293,57 @@ export async function encoderInfo() {
   return { webcodecs: Boolean(v && a), video: v, recorder: typeof MediaRecorder !== "undefined" };
 }
 
+// Strip an ADTS header if the encoder added one (an MP4 file needs raw AAC frames).
+function rawAac(bytes) {
+  if (bytes.length > 7 && bytes[0] === 0xff && (bytes[1] & 0xf6) === 0xf0) {
+    const protectionAbsent = bytes[1] & 0x01;
+    return bytes.subarray(protectionAbsent ? 7 : 9);
+  }
+  return bytes;
+}
+
+function audioDataFor(audio, off, n) {
+  const ts = Math.round(off / SR * 1e6), mono = audio.subarray(off, off + n);
+  try {
+    const planar = new Float32Array(n * 2); planar.set(mono, 0); planar.set(mono, n);
+    return new AudioData({ format: "f32-planar", sampleRate: SR, numberOfFrames: n, numberOfChannels: 2, timestamp: ts, data: planar });
+  } catch {
+    const inter = new Float32Array(n * 2);                       // some browsers only take interleaved samples
+    for (let i = 0; i < n; i++) { inter[2 * i] = mono[i]; inter[2 * i + 1] = mono[i]; }
+    return new AudioData({ format: "f32", sampleRate: SR, numberOfFrames: n, numberOfChannels: 2, timestamp: ts, data: inter });
+  }
+}
+
 async function encodeWebCodecs(job, target, vcfg, acfg, onProgress) {
   target.width = vcfg.width; target.height = vcfg.height;
   const painter = new Painter(job, target);
+  const isAac = acfg.codec !== "opus";
   const muxer = new Muxer({ target: new ArrayBufferTarget(), fastStart: "in-memory",
+    // Encoders may start audio at a non-zero time (priming); shift each track so it starts at zero.
+    firstTimestampBehavior: "offset",
     video: { codec: vcfg.codec.startsWith("avc") ? "avc" : "vp9", width: vcfg.width, height: vcfg.height, frameRate: FPS },
-    audio: { codec: acfg.codec === "opus" ? "opus" : "aac", numberOfChannels: 2, sampleRate: SR } });
-  let failure = null;
+    audio: { codec: isAac ? "aac" : "opus", numberOfChannels: 2, sampleRate: SR } });
+  let failure = null, audioChunks = 0, audioBytes = 0;
   const venc = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: (e) => { failure = e; } });
   venc.configure(vcfg);
-  const aenc = new AudioEncoder({ output: (chunk, meta) => muxer.addAudioChunk(chunk, meta), error: (e) => { failure = e; } });
-  aenc.configure(acfg);
+  const aenc = new AudioEncoder({
+    output: (chunk, meta) => {
+      try {
+        const buf = new Uint8Array(chunk.byteLength); chunk.copyTo(buf);
+        const data = isAac ? rawAac(buf) : buf;
+        if (!data.length) return;
+        const m = meta?.decoderConfig?.description ? meta : undefined;   // otherwise the muxer writes a standard AAC-LC config
+        muxer.addAudioChunkRaw(data, "key", Math.max(0, chunk.timestamp), chunk.duration ?? 0, m);
+        audioChunks++; audioBytes += data.length;
+      } catch (e) { failure = e; }
+    },
+    error: (e) => { failure = e; },
+  });
+  aenc.configure(isAac ? { ...acfg, aac: { format: "aac" } } : acfg);
 
   const audio = job.audio, step = 4800;
   for (let off = 0; off < audio.length; off += step) {
-    const n = Math.min(step, audio.length - off), planar = new Float32Array(n * 2);
-    planar.set(audio.subarray(off, off + n), 0); planar.set(audio.subarray(off, off + n), n);
-    const data = new AudioData({ format: "f32-planar", sampleRate: SR, numberOfFrames: n, numberOfChannels: 2, timestamp: Math.round(off / SR * 1e6), data: planar });
+    const data = audioDataFor(audio, off, Math.min(step, audio.length - off));
     aenc.encode(data); data.close();
   }
   const frames = Math.ceil(painter.total * FPS);
@@ -323,11 +357,24 @@ async function encodeWebCodecs(job, target, vcfg, acfg, onProgress) {
   }
   await venc.flush(); await aenc.flush();
   if (failure) throw failure;
+  // ~128 kbps for the whole reel; far less means the encoder produced (almost) nothing.
+  if (audioChunks < 10 || audioBytes < painter.total * 2000) throw new Error(`audio encoder produced no usable audio (${audioChunks} chunks)`);
   muxer.finalize(); venc.close(); aenc.close(); painter.dispose();
   return { blob: new Blob([muxer.target.buffer], { type: "video/mp4" }), ext: "mp4", how: `encoded on-device, ${vcfg.width}×${vcfg.height}` };
 }
 
+// Make sure audio is actually running (iOS keeps it suspended until a tap unlocks it).
+async function ensureRunning(audioCtx) {
+  for (let i = 0; i < 30 && audioCtx.state !== "running"; i++) {
+    try { await audioCtx.resume(); } catch { /* retry */ }
+    if (audioCtx.state !== "running") await sleep(100);
+  }
+  if (audioCtx.state !== "running") throw new Error("Sound is blocked by the browser. Tap “Make the video” again, and make sure no call or other app is using audio.");
+}
+
 async function encodeRecorder(job, target, audioCtx, onProgress) {
+  if (!audioCtx) throw new Error("This browser can't record sound.");
+  await ensureRunning(audioCtx);
   target.width = W; target.height = H;
   const painter = new Painter(job, target);
   painter.paint(0);
@@ -335,37 +382,84 @@ async function encodeRecorder(job, target, audioCtx, onProgress) {
   const buf = audioCtx.createBuffer(1, job.audio.length, SR); buf.copyToChannel(job.audio, 0);
   const src = audioCtx.createBufferSource(); src.buffer = buf;
   const dest = audioCtx.createMediaStreamDestination(); src.connect(dest);
-  stream.addTrack(dest.stream.getAudioTracks()[0]);
+  // WebKit only processes an audio graph that reaches the speaker output; route it there inaudibly.
+  const keepAlive = audioCtx.createGain(); keepAlive.gain.value = 0.0001;
+  src.connect(keepAlive); keepAlive.connect(audioCtx.destination);
+  const track = dest.stream.getAudioTracks()[0];
+  if (!track) throw new Error("This browser can't record sound.");
+  stream.addTrack(track);
   const mime = ['video/mp4;codecs="avc1.640028,mp4a.40.2"', 'video/mp4;codecs="avc1.42E01E,mp4a.40.2"', "video/mp4;codecs=avc1", "video/mp4",
                 "video/webm;codecs=vp9,opus", "video/webm"].find((m) => MediaRecorder.isTypeSupported(m));
   const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 5e6, audioBitsPerSecond: 128000 });
   const parts = []; rec.ondataavailable = (e) => { if (e.data.size) parts.push(e.data); };
   const done = new Promise((res, rej) => { rec.onstop = res; rec.onerror = (e) => rej(e.error || new Error("recording failed")); });
-  await audioCtx.resume();
   rec.start(1000); src.start();
   const t0 = audioCtx.currentTime;
-  await new Promise((res) => {
-    const tick = () => {
-      const t = audioCtx.currentTime - t0;
-      if (t >= painter.total) return res();
-      painter.paint(t); onProgress?.(t / painter.total);
-      requestAnimationFrame(tick);
-    };
-    tick();
-  });
-  rec.stop(); await done; stream.getTracks().forEach((tr) => tr.stop()); painter.dispose();
-  const type = mime.split(";")[0];
+  let lastT = -1, stalledSince = performance.now();
+  try {
+    await new Promise((res, rej) => {
+      const tick = () => {
+        const t = audioCtx.currentTime - t0;
+        if (t >= painter.total) return res();
+        if (t > lastT) { lastT = t; stalledSince = performance.now(); }
+        else if (performance.now() - stalledSince > 4000) return rej(new Error("Sound stopped while recording (the app may have gone to the background). Keep the screen open and try again."));
+        painter.paint(Math.max(0, t)); onProgress?.(t / painter.total);
+        requestAnimationFrame(tick);
+      };
+      tick();
+    });
+  } finally {
+    if (rec.state !== "inactive") rec.stop();
+    await done.catch(() => {});
+    try { src.stop(); } catch { /* already stopped */ }
+    src.disconnect(); keepAlive.disconnect(); stream.getTracks().forEach((tr) => tr.stop()); painter.dispose();
+  }
+  const type = (mime || "video/mp4").split(";")[0];
   return { blob: new Blob(parts, { type }), ext: type.includes("mp4") ? "mp4" : "webm", how: "recorded in real time" };
 }
 
+// Decode the finished file and check it really contains sound: true, false, or null (can't tell).
+export async function hasSound(blob) {
+  const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  if (!OAC) return null;
+  try {
+    const bytes = await blob.arrayBuffer();
+    const ctx = new OAC(1, 1, 44100);
+    const audio = await new Promise((res, rej) => { const p = ctx.decodeAudioData(bytes, res, rej); if (p?.then) p.then(res, rej); });
+    if (!audio || audio.duration < 1) return false;
+    let peak = 0;
+    for (let c = 0; c < audio.numberOfChannels; c++) {
+      const d = audio.getChannelData(c);
+      for (let i = 0; i < d.length; i += 64) peak = Math.max(peak, Math.abs(d[i]));
+    }
+    return peak > 0.02;
+  } catch (e) {
+    console.warn("couldn't decode the result to check its sound", e);
+    return null;
+  }
+}
+
 // job: { title, brand, accent, scenes:[{start,end,kind,bitmap?,chart?}], words:[{text,start,end}], audio: Float32Array @ SR }
+// Returns { blob, ext, how, sound: true | false | null }.
 export async function renderReel(job, target, audioCtx, onProgress, force) {
   const test = force === "vp9" ? "vp9" : undefined;
   const [vcfg, acfg] = await Promise.all([pickVideoConfig(test), pickAudioConfig(test)]);
+  let silent = null;
   if (vcfg && acfg && force !== "recorder") {
-    try { return await encodeWebCodecs(job, target, vcfg, acfg, onProgress); }
-    catch (e) { console.warn("WebCodecs failed; falling back to real-time recording", e); }
+    try {
+      const r = await encodeWebCodecs(job, target, vcfg, acfg, onProgress);
+      r.sound = await hasSound(r.blob);
+      if (r.sound !== false) return r;
+      silent = r;
+      console.warn("The encoded video has no sound; trying real-time recording instead");
+    } catch (e) { console.warn("WebCodecs failed; falling back to real-time recording", e); }
   }
-  if (typeof MediaRecorder === "undefined") throw new Error("This browser can't encode video. Update iOS, or try Safari.");
-  return encodeRecorder(job, target, audioCtx, onProgress);
+  if (typeof MediaRecorder === "undefined" || !audioCtx) {
+    if (silent) return silent;
+    throw new Error("This browser can't encode video. Update iOS, or try Safari.");
+  }
+  onProgress?.(0);
+  const r = await encodeRecorder(job, target, audioCtx, onProgress);
+  r.sound = await hasSound(r.blob);
+  return r;
 }

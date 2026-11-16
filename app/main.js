@@ -1,7 +1,8 @@
 // UI glue for the phone app.
 import { appData, planReel, produceReel, releasePlan, estimateSeconds } from "./make.js";
 import { listReels, saveReel, deleteReel, clearReels } from "./store.js";
-import { encoderInfo } from "./render.js";
+import { encoderInfo, renderReel, loadFonts } from "./render.js";
+import { SR } from "./music.js";
 
 const $ = (id) => document.getElementById(id);
 const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } } };
@@ -120,9 +121,7 @@ async function start() {
   state.busy = true;
   store.set("brand", $("brand").value);
   if (state.mode === "custom") store.set("custom", $("custom").value.trim());
-  // Audio has to be unlocked by this tap; it's only used if the phone falls back to real-time recording.
-  const AC = window.AudioContext || window.webkitAudioContext;
-  state.audioCtx = AC ? new AC() : null; state.audioCtx?.resume?.().catch(() => {});
+  unlockAudio();   // must happen during this tap
   screen("job"); $("job-title").textContent = "Writing your script…"; $("preview").classList.add("hidden"); say("Researching…", 0.02);
   try {
     state.plan = await planReel(options(), { say });
@@ -132,18 +131,20 @@ async function start() {
 }
 
 async function produce() {
+  unlockAudio();   // first thing, while we're still inside the tap
   state.busy = true;
   screen("job"); $("job-title").textContent = "Making your reel…"; $("preview").classList.remove("hidden"); say("Starting…", 0);
   let wake = null; try { wake = await navigator.wakeLock?.request("screen"); } catch { /* not supported */ }
-  if (!state.audioCtx) { const AC = window.AudioContext || window.webkitAudioContext; state.audioCtx = AC ? new AC() : null; }
-  state.audioCtx?.resume?.().catch(() => {});
   const t0 = performance.now();
   try {
     const reel = await produceReel(state.plan, options(), { say, canvas: $("preview"), audioCtx: state.audioCtx });
     state.plan = null;
     const kept = await saveReel(reel);
     screen("form");
-    $("result").innerHTML = `<h2>Your reel is ready</h2><p>Made in ${Math.round((performance.now() - t0) / 1000)}s on this device (${esc(reel.how)}).${kept ? "" : " It couldn't be kept in the Library, so save it now."}</p>` + reelCard(reel, true);
+    const soundNote = reel.sound === false
+      ? `<p style="color:var(--bad)"><b>This video has no sound.</b> Your phone's browser didn't record the audio. Please run <b>Sound test</b> in the About tab and tell us what it says.</p>`
+      : reel.sound ? `<p style="color:var(--good)">Sound checked ✓</p>` : "";
+    $("result").innerHTML = `<h2>Your reel is ready</h2><p>Made in ${Math.round((performance.now() - t0) / 1000)}s on this device (${esc(reel.how)}).${kept ? "" : " It couldn't be kept in the Library, so save it now."}</p>${soundNote}` + reelCard(reel, true);
     $("result").classList.remove("hidden");
     store.set("made", "1"); $("first-run").classList.add("hidden");
     window.__lastReel = reel;
@@ -157,9 +158,25 @@ async function produce() {
 }
 function closeAudio() { state.audioCtx?.close?.().catch(() => {}); state.audioCtx = null; }
 
+// iOS only lets a page start audio inside a tap, so this runs synchronously at the start of every tap
+// that may record. Playing a tiny silent sound fully unlocks it on older iOS versions.
+function unlockAudio() {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return null;
+  if (!state.audioCtx || state.audioCtx.state === "closed") state.audioCtx = new AC();
+  const ctx = state.audioCtx;
+  try {
+    ctx.resume?.();
+    const b = ctx.createBuffer(1, 1, ctx.sampleRate), src = ctx.createBufferSource();
+    src.buffer = b; src.connect(ctx.destination); src.start(0);
+  } catch { /* best effort */ }
+  return ctx;
+}
+
 /* ---------- review screen ---------- */
 function drawThumb(cv, asset) {
-  const c = cv.getContext("2d"), bmp = asset.bitmap;
+  const c = cv.getContext("2d"), bmp = asset?.bitmap;
+  if (!bmp || !bmp.width) return;   // missing, still loading, or already released
   const s = Math.max(cv.width / bmp.width, cv.height / bmp.height), sw = cv.width / s, sh = cv.height / s;
   c.drawImage(bmp, (bmp.width - sw) / 2, (bmp.height - sh) * 0.4, sw, sh, 0, 0, cv.width, cv.height);
 }
@@ -179,13 +196,13 @@ function showReview() {
   $("scenes").innerHTML = script.lines.map((l, i) => {
     const tag = i === 0 ? "Hook" : l.kind === "outro" ? "Ending" : l.kind === "chart" ? "Chart" : `Scene ${i}`;
     const thumb = l.kind === "outro" ? `<div class="thumb">END<br>CARD</div>` : l.kind === "chart" ? `<div class="thumb">LIVE<br>CHART</div>`
-      : `<div class="thumb">${l.asset ? `<canvas width="152" height="270" data-thumb="${i}"></canvas>` : "NO<br>PHOTO"}</div>`;
+      : `<div class="thumb">${l.asset?.bitmap ? `<canvas width="152" height="270" data-thumb="${i}"></canvas>` : "NO<br>PHOTO"}</div>`;
     const tools = l.kind !== "media" ? (l.kind === "chart" && content > 2 ? `<div class="mini"><button class="del" data-del="${i}">Remove</button></div>` : "")
       : `<div class="mini"><button data-swap="${i}">New photo</button><button data-search="${i}">Search…</button><button data-mine="${i}">My photo</button>${content > 2 ? `<button class="del" data-del="${i}">Remove</button>` : ""}</div>`;
     return `<div class="scene"><div>${thumb}</div><div><div class="scene-tag"><span>${tag}</span></div>
       <textarea data-line="${i}" rows="3">${esc(l.text)}</textarea>${tools}</div></div>`;
   }).join("");
-  script.lines.forEach((l, i) => { const cv = document.querySelector(`[data-thumb="${i}"]`); if (cv && l.asset) drawThumb(cv, l.asset); });
+  script.lines.forEach((l, i) => { const cv = document.querySelector(`[data-thumb="${i}"]`); if (cv && l.asset?.bitmap) drawThumb(cv, l.asset); });
   updateEstimate();
   screen("review");
 }
@@ -227,8 +244,9 @@ $("add-line").addEventListener("click", () => {
   // Offer the next researched line first; after that, a blank one to write yourself.
   const extra = plan.script.extras.shift();
   const q = extra?.query || plan.generic[lines.length % plan.generic.length];
-  const line = extra ? { ...extra, query: q } : { text: "", visual: q, query: q, kind: "media", asset: null };
-  if (extra) Promise.resolve(extra.asset).then((a) => { line.asset = a; if (a) showReview(); }).catch(() => {});
+  // The researched line's photo may still be loading: show the scene now, and the photo once it arrives.
+  const line = extra ? { ...extra, query: q, asset: null } : { text: "", visual: q, query: q, kind: "media", asset: null };
+  if (extra) Promise.resolve(extra.asset).then((a) => { if (a && !line.asset) { line.asset = a; if (state.plan) showReview(); } }).catch(() => {});
   lines.splice(lines.length - 1, 0, line);
   plan.edited = true; showReview();
   const ta = document.querySelector(`[data-line="${lines.length - 2}"]`); ta?.focus(); ta?.scrollIntoView({ block: "center" });
@@ -242,6 +260,41 @@ $("produce").addEventListener("click", () => {
 });
 $("reroll").addEventListener("click", () => { if (state.plan) releasePlan(state.plan); state.plan = null; start(); });
 $("cancel-review").addEventListener("click", () => { if (state.plan) releasePlan(state.plan); state.plan = null; closeAudio(); screen("form"); });
+
+/* ---------- sound test (diagnostics) ---------- */
+async function soundTest() {
+  const ctx = unlockAudio();   // inside the tap
+  const btn = $("sound-test"), out = $("sound-out");
+  btn.disabled = true; btn.textContent = "Testing…"; out.innerHTML = "";
+  const lines = [];
+  try {
+    await loadFonts();
+    const secs = 3, audio = new Float32Array(secs * SR);
+    [523.25, 659.25, 783.99].forEach((f, k) => {           // three gentle notes
+      const s0 = Math.floor((0.25 + k * 0.9) * SR), len = Math.floor(0.7 * SR);
+      for (let i = 0; i < len; i++) audio[s0 + i] += 0.5 * Math.sin(2 * Math.PI * f * i / SR) * Math.min(1, i / 800) * Math.exp(-i / SR * 2.5);
+    });
+    const job = { title: "Sound test", brand: "Sound test", accent: state.accent, audio,
+      scenes: [{ start: 0, end: secs, kind: "outro" }],
+      words: ["You", "should", "hear", "three", "notes."].map((t, i) => ({ text: t, start: 0.2 + i * 0.55, end: 0.7 + i * 0.55 })) };
+    const cv = document.createElement("canvas");
+    const t0 = performance.now();
+    const r = await renderReel(job, cv, ctx, null, params.get("encoder") || undefined);
+    const url = URL.createObjectURL(r.blob);
+    lines.push(`Sound in the file: <b style="color:${r.sound === false ? "var(--bad)" : r.sound ? "var(--good)" : "var(--muted)"}">${r.sound === false ? "none ✗" : r.sound ? "yes ✓" : "couldn't check"}</b>`);
+    lines.push(`Method: ${esc(r.how)} · ${esc(r.blob.type || "?")} · ${(r.blob.size / 1024).toFixed(0)} KB · ${Math.round(performance.now() - t0)} ms`);
+    out.innerHTML = `<video src="${url}" controls playsinline style="max-height:40vh;margin-top:10px"></video>`;
+  } catch (e) {
+    lines.push(`<span style="color:var(--bad)">Failed: ${esc(e.message || e)}</span>`);
+  }
+  const info = await encoderInfo();
+  lines.push(`Fast encoder: ${info.webcodecs ? "yes" : "no"} · Recorder: ${info.recorder ? "yes" : "no"} · Audio: ${esc(ctx?.state || "unavailable")} at ${ctx?.sampleRate || "?"} Hz`);
+  lines.push(`<span style="word-break:break-all">${esc(navigator.userAgent)}</span>`);
+  out.insertAdjacentHTML("beforeend", `<p class="meta" style="margin-top:10px">${lines.join("<br>")}</p>
+    <div class="btns"><button class="btn wide" id="copy-diag">Copy these results</button></div>`);
+  $("copy-diag").onclick = () => copy(out.querySelector("p").innerText);
+  btn.disabled = false; btn.textContent = "Run sound test";
+}
 
 async function init() {
   state.data = await appData();
@@ -262,6 +315,7 @@ async function init() {
   if (store.get("made")) $("first-run").classList.add("hidden");
   renderTopics();
   $("go").addEventListener("click", start);
+  $("sound-test").addEventListener("click", soundTest);
   $("wipe").addEventListener("click", async () => { if (confirm("Delete every reel stored on this phone?")) { await clearReels(); renderLibrary(); toast("Deleted"); } });
   const info = await encoderInfo();
   $("encoder").textContent = info.webcodecs ? `Video encoder: on-device H.264, ${info.video.width}×${info.video.height}.`

@@ -102,6 +102,8 @@ the app still makes Explainer and news reels.
 
 - **iPhone requirements:** a recent iPhone on a current iOS version. The app uses the phone's fast video encoder when Safari offers it; otherwise it records the reel in real time, which takes about as long as the reel runs. The About tab shows which one your phone uses.
 - **Keep the app open** while a reel is being made. iOS pauses web apps in the background.
+- **Sound check:** every reel is checked for sound after it's made. If the fast encoder produces a silent file, the app automatically records it again in real time. If a reel still comes out silent, open **About → Sound test**: it makes a 3-second clip, reports whether sound reached the file, and lists your browser's capabilities so the problem can be pinned down. Tap **Copy these results** to share them.
+- **Listening on the phone:** if a saved video seems silent, check the volume and the side Ring/Silent switch, then play it from the Photos app.
 - **Memory:** the voice model is large for a phone browser. If a reel fails, close other apps and try again.
 - **Review before you post.** Photos are matched by keyword and aren't always a perfect fit, and headlines come from public feeds. Videos carry a "not financial advice" note.
 

@@ -192,7 +192,7 @@ export async function produceReel(plan, opts, ui) {
   const meta = buildMetadata(script, credits);
   return {
     id: `${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, "")}-${script.topicId}`,
-    ...meta, kind: script.kind, duration: total, created: Date.now(), blob: result.blob, ext: result.ext, how: result.how,
+    ...meta, kind: script.kind, duration: total, created: Date.now(), blob: result.blob, ext: result.ext, how: result.how, sound: result.sound,
     script: script.lines.map((l) => l.text).join("\n"),
   };
 }
