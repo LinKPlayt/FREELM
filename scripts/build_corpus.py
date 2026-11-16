@@ -84,8 +84,10 @@ def intro_of(text: str) -> str:
         p = para.strip()
         if not p:
             continue
-        if len(p) < 60 and not p.endswith((".", "!", "?", ":")):   # a section heading
-            break
+        if len(p) < 60 and not p.endswith((".", "!", "?", ":")):
+            if not out:      # sidebar captions before the text ("Part of a series on …"): skip
+                continue
+            break            # a section heading: the opening section has ended
         out.append(p)
         if sum(len(x) for x in out) > 2500:
             break
