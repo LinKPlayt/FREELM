@@ -62,10 +62,61 @@ const params = new URLSearchParams(location.search);
 
 function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 3200); }
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-async function copy(text) {
-  try { await navigator.clipboard.writeText(text); }
-  catch { const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); }
-  toast("Copied");
+// Copies text, reliably on iPhone. Returns true when it worked. Order:
+// 1. the Clipboard API (needs the tap that started this; Safari sometimes refuses it in home-screen apps),
+// 2. a hidden text box selected the way iOS needs (setSelectionRange; select() does nothing on iOS),
+// 3. if both fail, the text is shown in a sheet, already selected, to copy by hand. Never claims success it didn't have.
+function copyWithTextBox(text) {
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.setAttribute("aria-hidden", "true");
+  // 16px stops iOS zooming in; fixed + transparent keeps the page from jumping.
+  Object.assign(ta.style, { position: "fixed", top: "0", left: "0", width: "1px", height: "1px", opacity: "0", fontSize: "16px", border: "0", padding: "0" });
+  document.body.appendChild(ta);
+  const active = document.activeElement;
+  let ok = false;
+  try {
+    ta.focus({ preventScroll: true });
+    ta.setSelectionRange(0, text.length);
+    ok = document.execCommand("copy");
+  } catch { ok = false; }
+  ta.remove();
+  window.getSelection?.().removeAllRanges();
+  active?.focus?.({ preventScroll: true });
+  return ok;
+}
+function showCopySheet(text, label) {
+  document.getElementById("copy-sheet")?.remove();
+  const sheet = document.createElement("div");
+  sheet.id = "copy-sheet"; sheet.className = "copy-sheet";
+  sheet.innerHTML = `<div class="copy-box"><h3>${esc(label || "Copy this")}</h3>
+    <p class="meta">Your phone blocked automatic copying. The text is selected: tap <b>Copy</b> in the menu (or tap and hold, then Copy).</p>
+    <textarea readonly rows="10"></textarea>
+    <div class="btns"><button class="btn main" data-sheet="retry">Copy again</button><button class="btn" data-sheet="close">Done</button></div></div>`;
+  const ta = sheet.querySelector("textarea"); ta.value = text;
+  sheet.addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-sheet]");
+    if (e.target === sheet || b?.dataset.sheet === "close") return sheet.remove();
+    if (b?.dataset.sheet === "retry") {
+      if (await tryCopy(text)) { toast("Copied"); sheet.remove(); }
+      else { ta.focus(); ta.setSelectionRange(0, text.length); }
+    }
+  });
+  document.body.appendChild(sheet);
+  ta.focus(); ta.setSelectionRange(0, text.length);
+}
+async function tryCopy(text) {
+  if (navigator.clipboard?.writeText && window.isSecureContext) {
+    try { await navigator.clipboard.writeText(text); return true; } catch { /* fall through */ }
+  }
+  return copyWithTextBox(text);
+}
+async function copy(text, { label, done = "Copied" } = {}) {
+  text = String(text ?? "").trim();
+  if (!text) { toast("Nothing to copy"); return false; }
+  const ok = await tryCopy(text);
+  if (ok) toast(done); else showCopySheet(text, label);
+  return ok;
 }
 function repo() {   // https://owner.github.io/repo/ -> owner/repo
   const m = location.hostname.match(/^([^.]+)\.github\.io$/), seg = location.pathname.split("/").filter(Boolean)[0];
@@ -108,11 +159,11 @@ $("swatches").addEventListener("click", (e) => {
 function urlFor(reel) { if (!state.urls.has(reel.id)) state.urls.set(reel.id, URL.createObjectURL(reel.blob)); return state.urls.get(reel.id); }
 function reelCard(r, inline = false) {
   state.reels.set(r.id, r);
-  const mb = (r.blob.size / 1e6).toFixed(1);
+  const mb = ((r.blob?.size || 0) / 1e6).toFixed(1);
   return `<div class="${inline ? "" : "card"}" data-reel="${esc(r.id)}">
     <video src="${urlFor(r)}#t=0.5" controls playsinline preload="metadata"></video>
-    <div class="reel-title">${esc(r.title.replace(" #Shorts", ""))}</div>
-    <div class="meta">${Math.round(r.duration)}s · ${esc(r.kind)} · ${mb} MB</div>
+    <div class="reel-title">${esc((r.title || "Untitled reel").replace(" #Shorts", ""))}</div>
+    <div class="meta">${Math.round(r.duration || 0)}s · ${esc(r.kind || "reel")} · ${mb} MB</div>
     <div class="btns">
       <button class="btn main wide" data-act="share">Save / Share</button>
       <a class="btn wide" href="${urlFor(r)}" download="${esc(r.id)}.${esc(r.ext)}">Download</a>
@@ -146,15 +197,17 @@ $("drafts").addEventListener("click", async (e) => {
 async function renderLibrary() {
   renderDrafts();
   const list = await listReels();
-  $("reels").innerHTML = list.length ? list.map((r) => reelCard(r)).join("") : `<div class="empty">No reels yet.<br>Make your first one in Create.</div>`;
+  $("reels").innerHTML = list.length ? list.map((r) => { try { return reelCard(r); } catch (e) { console.warn("reel card", e); return ""; } }).join("") : `<div class="empty">No reels yet.<br>Make your first one in Create.</div>`;
 }
 document.addEventListener("click", async (ev) => {
   const btn = ev.target.closest("[data-act]"); if (!btn) return;
-  const card = btn.closest("[data-reel]"), r = state.reels.get(card.dataset.reel); if (!r) return;
+  const card = btn.closest("[data-reel]"), r = card && state.reels.get(card.dataset.reel); if (!r) return;
   if (btn.dataset.act.startsWith("cap-")) {
-    const which = btn.dataset.act.slice(4);
-    copy(platformCaptions(r)[which]);
-    toast(`${{ youtube: "YouTube", tiktok: "TikTok", instagram: "Instagram" }[which]} caption copied`);
+    const which = btn.dataset.act.slice(4), name = { youtube: "YouTube", tiktok: "TikTok", instagram: "Instagram" }[which];
+    let text = "";
+    try { text = platformCaptions(r)[which]; } catch (e) { console.warn("caption", e); }
+    await copy(text, { label: `${name} caption`, done: `${name} caption copied` });
+    return;
   }
   if (btn.dataset.act === "delete" && confirm("Delete this reel from your phone?")) { await deleteReel(r.id); card.remove(); }
   if (btn.dataset.act === "cover" || btn.dataset.act === "srt") {

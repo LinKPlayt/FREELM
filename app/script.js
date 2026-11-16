@@ -318,6 +318,8 @@ function creditsOf(reel) {
 const shortCredit = (c) => c.replace(/\s+https?:\/\/\S+$/, "").replace(/^"([^"]{0,40})[^"]*"/, '"$1"');
 
 export function platformCaptions(reel) {
+  // Older or partly saved reels may lack some fields: fall back rather than fail (or paste "undefined").
+  reel = { ...reel, title: reel.title || "Money tip", description: reel.description || "" };
   const title = reel.title.replace(/\s*#Shorts$/, "");
   const lines = (reel.script || "").split("\n").filter(Boolean);
   const body = lines.slice(0, -1);                    // drop the call to action
@@ -328,7 +330,7 @@ export function platformCaptions(reel) {
   const sources = reel.sources || [];
   const disclaimer = "Not financial advice. For education only.";
 
-  const youtube = `${reel.title}\n\n${reel.description}`;
+  const youtube = reel.description ? `${reel.title}\n\n${reel.description}` : [reel.title, "", ...lines, "", tags.join(" "), "", disclaimer].join("\n");
 
   const tiktok = [
     body[0] || title, "",

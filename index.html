@@ -113,6 +113,9 @@
   .fact.s-unverified summary, .fact.s-conflict summary { color: var(--bad); }
   .fact ul { margin: 6px 0 0; padding-left: 18px; } .fact li { margin-bottom: 6px; color: var(--text); } .fact small { color: var(--muted); }
   .fact p { margin: 6px 0 0; }
+  .copy-sheet { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: flex-end; justify-content: center; z-index: 60; padding: 16px; }
+  .copy-box { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 16px; width: 100%; max-width: 520px; margin-bottom: env(safe-area-inset-bottom); }
+  .copy-box h3 { margin: 0 0 6px; } .copy-box textarea { width: 100%; font: inherit; font-size: 16px; line-height: 1.4; background: var(--surface-2); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 10px; -webkit-user-select: text; user-select: text; }
   .hidden { display: none !important; }
 </style>
 </head>
