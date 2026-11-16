@@ -122,6 +122,18 @@ export async function wikipediaDefinition(title, maxWords = 30) {
   } catch { return ""; }
 }
 
+export function trimDefinition(s) {
+  let t = s.replace(/^([A-Z][\w '-]{2,40}?),? (?:or|also known as|also called) [\w' -]{2,30}?,/, "$1,");
+  // Drop comma asides before the main verb: "X, in some places known as Y, is …" -> "X is …"
+  t = t.replace(/^([^,]{3,60}),[^,]{3,90}, (is|are|refers to)\b/, "$1 $2");
+  // Cut after the first clause that follows the verb.
+  const m = t.match(/^(.{5,}?\b(?:is|are|refers to)\b.{10,}?)(?:,| or by | which | that is | while )/);
+  if (t.split(/\s+/).length > 34 && m) t = m[1].trim() + ".";
+  if (!/\bor\b/.test(t)) t = t.replace(/\beither (?=by|to|for|in|as)\b/, "");   // "either" with its "or" cut off
+  const n = t.split(/\s+/).length;
+  return n >= 6 && n <= 34 && /\b(is|are|refers to)\b/.test(t) ? t : "";
+}
+
 // Research any topic the user types: find the best Wikipedia article and return its key sentences.
 export async function wikipediaTopic(query) {
   const api = "https://en.wikipedia.org/w/api.php?format=json&origin=*&";
@@ -129,7 +141,11 @@ export async function wikipediaTopic(query) {
   if (search.status === 429 || search.status >= 500) throw new Error("Wikipedia is busy right now. Try again in a minute.");
   if (!search.ok) return null;
   const hits = (await search.json()).query?.search || [];
-  for (const hit of hits.slice(0, 3)) {
+  // The article named exactly what you typed comes first ("Mortgage" -> its redirect "Mortgage loan"),
+  // then the search results, so a broad topic doesn't turn into a narrow one.
+  const typed = query.trim().replace(/^./, (c) => c.toUpperCase());
+  const titles = [typed, ...hits.slice(0, 3).map((h) => h.title).filter((t) => t.toLowerCase() !== typed.toLowerCase())];
+  for (const hit of titles.map((title) => ({ title }))) {
     const res = await fetchT(api + new URLSearchParams({ action: "query", prop: "extracts", exsentences: "14", explaintext: "1", exsectionformat: "plain", redirects: "1", titles: hit.title }), 10000);
     if (!res.ok) continue;
     const page = Object.values((await res.json()).query?.pages || {})[0];
@@ -145,6 +161,9 @@ export async function wikipediaTopic(query) {
       prevKept = n >= 6 && n <= max && !dangling && !/[;{}=]|\b(?:see also|citation)\b/i.test(x);
       if (prevKept) sentences.push(x);
     });
+    // A defining first sentence that's too long ("A mortgage loan or simply mortgage, in civil law jurisdictions
+    // known also as …, is a loan used …") is trimmed to its core instead of being dropped.
+    if (all[0] && sentences[0] !== all[0]) { const d = trimDefinition(all[0]); if (d) sentences.unshift(d); }
     if (sentences.length >= 2) {
       // "Compound interest or anatocism is …" -> "Compound interest is …"
       sentences[0] = sentences[0].replace(/^([A-Z][\w '-]{2,40}?),? (?:or|also known as|also called) [\w' -]{2,30}?,? (is|are|refers to)\b/, "$1 $2");

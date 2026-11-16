@@ -6,6 +6,29 @@ import { SR } from "./music.js";
 /* ---------------------------------------------------------------- deep dive */
 
 const SECTION_NAMES = [["First: what it is.", "WHAT IT IS"], ["Next: why it matters.", "WHY IT MATTERS"], ["Finally: what you can do.", "WHAT TO DO"]];
+// Practical, safe steps for the "what you can do" chapter when the research has none.
+// {t} is the topic. Kept general on purpose: no specific products, numbers or promises.
+const ADVICE = {
+  "personal finance": ["Set up one automatic transfer to savings, even a small one, so saving happens without thinking.", "Before you decide anything about {t}, compare at least two options side by side."],
+  investing: ["Before you buy anything tied to {t}, check the fees; they quietly eat your returns.", "Think in years, not days: decide how long you'd hold before you invest a dollar."],
+  crypto: ["Never put in more than you could afford to lose completely.", "Use well-known platforms, turn on two-factor login, and never share your recovery phrase."],
+  economy: ["Watch how {t} shows up in your own prices, rates and paycheck, not just the headlines.", "Keep an emergency fund so changes in the economy don't force you into debt."],
+  "side hustles": ["Start {t} small this week and track every dollar in and out.", "Set aside part of what you earn for taxes before you spend any of it."],
+  "real estate": ["Compare offers from at least three lenders; small rate differences add up over the years.", "Budget for taxes, insurance and repairs too, not just the monthly payment."],
+};
+// Tips for common subjects, matched against the topic name first (more specific than the niche).
+const TOPIC_ADVICE = [
+  [/credit (score|report|rating)|fico/i, ["Pay every bill on time; payment history counts the most in most credit scores.", "Keep card balances low compared with your limits, and check your credit reports for mistakes."]],
+  [/mortgage|home loan|refinanc/i, ["Compare offers from at least three lenders; small rate differences add up over the years.", "Budget for taxes, insurance and repairs too, not just the monthly payment."]],
+  [/credit card|debt|loan|interest rate|apr\b/i, ["Pay more than the minimum when you can; interest builds on whatever you leave unpaid.", "Before you borrow, compare the total cost, not just the monthly payment."]],
+  [/401|ira\b|roth|retire|pension/i, ["If your employer offers a match, contribute at least enough to get all of it.", "Check the fund fees in your plan; low-cost index funds keep more of your returns."]],
+  [/stock|share|fund|etf|index|bond|dividend|portfolio|invest/i, ["Before you buy, check the fees; they quietly eat your returns over time.", "Spread your money across many holdings so one bad pick can't sink you."]],
+  [/tax/i, ["Keep records of income and expenses all year, not just at tax time.", "Check which deductions and credits you qualify for before you file."]],
+  [/insur/i, ["Compare quotes every year; loyalty rarely gets you the best price.", "Read what's excluded, not just what's covered, before you buy."]],
+  [/budget|saving|emergency fund|frugal|spend/i, ["Set up one automatic transfer to savings, even a small one.", "Track your spending for one month; most people find money they didn't know they were losing."]],
+  [/bitcoin|crypto|coin|token|blockchain|nft|defi/i, ["Never put in more than you could afford to lose completely.", "Use well-known platforms, turn on two-factor login, and never share your recovery phrase."]],
+];
+const ADVICE_ANY = ["Before you decide anything about {t}, compare at least two options side by side.", "Read the fine print and the fees on any {t} offer before you sign."];
 const short = (t) => t.replace(/\s*\(.*\)$/, "");
 // A real sentence (has a verb and enough words), not a list fragment like "Payment of taxes and insurance."
 const CORE_VERB = /\b(is|are|was|were|be|been|has|have|had|can|could|may|might|will|would|should|must|does|do|did)\b/i;
@@ -57,7 +80,7 @@ export async function deepen(script, { offline } = {}) {
   } catch (e) { console.warn("deep research unavailable", e); }
 
   // Sort into chapters: definitions, numbers/evidence, then advice.
-  const isAdvice = (t) => /^(start|keep|set|pay|use|try|automate|avoid|don't|never|always|check|compare|aim|pick|look|save|invest|build)\b/i.test(t) || /\byou (should|can|could|need)\b/i.test(t);
+  const isAdvice = (t) => /^(start|keep|set|pay|use|try|automate|avoid|don't|never|always|check|compare|aim|pick|look|save|invest|build|before|think|watch|budget|read|decide|ask)\b/i.test(t) || /\byou (should|can|could|need)\b/i.test(t);
   const isDefinition = (t) => /\b(is|are|means|refers to|was)\b/i.test(t.split(/\s+/).slice(0, 8).join(" "));
   const what = [], why = [], todo = [];
   for (const l of pool) {
@@ -70,6 +93,17 @@ export async function deepen(script, { offline } = {}) {
   const chapters = [what, why, todo].map((c) => c.slice(0, 3));
   const spare = pool.filter((l) => !chapters.flat().includes(l));
   for (const c of chapters) while (c.length < 1 && spare.length) c.push(spare.shift());
+  // Every deep dive gets a real "what you can do" chapter: if the research had no advice, add practical steps.
+  const todoCh = chapters[2], tipCount = todoCh.filter((l) => isAdvice(l.text)).length;
+  if (tipCount < 2) {
+    const full = short(script.topicTitle || script.title), name = /^[A-Z]{2}/.test(full) ? full : full.replace(/^./, (c) => c.toLowerCase());
+    const byTopic = TOPIC_ADVICE.find(([re]) => re.test(full))?.[1] || [];
+    const tips = [...byTopic, ...(ADVICE[script.niche] || []), ...ADVICE_ANY].map((x) => x.replaceAll("{t}", name))
+      .filter((x) => !similar(x)).slice(0, 2 - tipCount);
+    // Facts that aren't advice move up to "why it matters" (if there's room) or back to the spares.
+    for (const l of todoCh.filter((x) => !isAdvice(x.text))) (chapters[1].length < 3 ? chapters[1] : spare).push(l);
+    todoCh.splice(0, todoCh.length, ...todoCh.filter((x) => isAdvice(x.text)), ...tips.map((text) => ({ text, visual: "", kind: "media", chart: null })));
+  }
   // A hook promising "thirty seconds" is wrong for a 60–90 second video.
   hook.text = hook.text.replace(/\b(in )?(thirty|30) seconds\b/i, (m, inn) => (inn ? "in " : "") + "under 90 seconds");
   const out = [hook];

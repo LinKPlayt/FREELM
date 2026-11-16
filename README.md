@@ -72,8 +72,9 @@ Each scene's picture is chosen from the line being spoken, not from a fixed list
 - **Illustrations for concepts.** 17 drawn icons (piggy bank, house, credit card, bank, shield,
   coins, rising and falling charts, shopping cart, hourglass, graduation cap, briefcase, scales,
   target, calendar, bitcoin, receipt), picked from the line's meaning and animated.
-- **Photos only when they fit.** The photo search uses the line's own subject, and a photo is used
-  only when it matches what was searched for. Otherwise the scene gets an illustration instead of
+- **Photos only when they fit.** The photo search uses the line's own subject and ranks photos by
+  how well their title and tags match it. A photo is used (including on the first scene and the
+  cover) only when it matches what was searched for. Otherwise the scene gets an illustration instead of
   an unrelated stock photo.
 - **Your call on every scene.** The review screen shows each scene's visual and lets you switch it
   between **Auto**, **Photo**, **Chart** (when the line has a number) and **Picture**.
@@ -83,7 +84,8 @@ Each scene's picture is chosen from the line being spoken, not from a fixed list
 - **Deep dive (60–90 s).** Pick *Deep dive* under Length for explainers, your own topics and
   Idea Lab ideas. The app pulls more on-topic facts from the research library on the phone, cuts
   repeats and list fragments, and orders the video in three chapters (*what it is*, *why it
-  matters*, *what you can do*). Each chapter opens with a title card ("PART 1"), and the video
+  matters*, *what you can do*). If the research has no practical advice, the last chapter uses
+  safe, general tips matched to the topic (for example, paying on time for a credit score). Each chapter opens with a title card ("PART 1"), and the video
   ends on a **Quick recap** card that ticks off one point from each chapter.
 - **On-screen sources.** Scenes built from researched facts show a small "Source: Wikipedia ·
   …" tag. You can turn it off under Style.

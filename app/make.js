@@ -188,8 +188,12 @@ async function customScript(opts, generic, say) {
     const { deepResearch } = await import("./ai/research.js");
     const brief = await deepResearch(topic, { niche: opts.niche });
     const tl = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
-    // Use the local library when it clearly has this topic; otherwise ask Wikipedia (online).
-    if (brief && (tl(brief.main.title).includes(tl(topic)) || tl(topic).includes(tl(brief.main.title.replace(/\s*\(.*\)$/, ""))))) {
+    // Use the local library when it has an article on exactly this topic ("Mortgage" shouldn't become
+    // "Mortgage servicer"); otherwise ask Wikipedia online. Offline, a close match is better than nothing.
+    const base = (t) => tl(t.replace(/\s*\(.*\)$/, "")).replace(/(es|s)$/, "");
+    const exact = brief && base(brief.main.title) === base(topic);
+    const close = brief && (tl(brief.main.title).includes(tl(topic)) || tl(topic).includes(tl(brief.main.title.replace(/\s*\(.*\)$/, ""))));
+    if (exact || (close && opts.offline)) {
       const own = brief.facts.filter((f) => f.source === brief.main.title).map((f) => f.text);
       const sentences = [...new Set([...brief.summary, ...own, ...brief.facts.map((f) => f.text)])];
       if (sentences.length >= 3) found = { title: brief.main.title, sentences, url: "https://en.wikipedia.org/wiki/" + encodeURIComponent(brief.main.title.replaceAll(" ", "_")) };
@@ -232,7 +236,7 @@ export async function produceReel(plan, opts, ui) {
       line.asset = await line.asset;
       const v = decideVisual(line, i, script.title);
       if (v.type === "photo") {
-        sc.kind = "image"; sc.bitmap = line.asset.bitmap;
+        sc.kind = "image"; sc.bitmap = line.asset.bitmap; sc.relevant = line.asset.relevant !== false;
         if (line.asset.credit && !credits.includes(line.asset.credit)) credits.push(line.asset.credit);
       } else if (v.type === "stat") { sc.kind = "stat"; sc.spec = v.spec; }
       else { sc.kind = "illus"; sc.icon = v.icon; sc.label = v.label; }
@@ -263,7 +267,8 @@ export async function produceReel(plan, opts, ui) {
 
 // The cover's picture: the reel's first photo, else its first chart or illustration.
 function coverBackground(ctx, scenes, accent) {
-  const photo = scenes.find((s) => s.kind === "image" && s.bitmap);
+  // Only a photo that fits the topic makes the cover; otherwise the reel's chart or illustration does.
+  const photo = scenes.find((s) => s.kind === "image" && s.bitmap && s.relevant);
   if (photo) {
     const b = photo.bitmap, sc = Math.max(1080 / b.width, 1920 / b.height), w = 1080 / sc, h = 1920 / sc;
     ctx.drawImage(b, (b.width - w) / 2, (b.height - h) * 0.4, w, h, 0, 0, 1080, 1920);
@@ -286,13 +291,13 @@ export function decideVisual(line, i, topicTitle = "") {
   // A photo "matches" when its own title shares a word with what we searched for (or you chose it).
   const qWords = (line.query || "").toLowerCase().match(/[a-z]{4,}/g) || [];
   const tWords = (line.asset?.title || "").toLowerCase();
-  const matches = Boolean(photo) && (!line.asset.credit || qWords.some((w) => tWords.includes(w.replace(/s$/, ""))));
+  const matches = Boolean(photo) && (!line.asset.credit || (line.asset.relevant ?? qWords.some((w) => tWords.includes(w.replace(/s$/, "")))));
   const mode = line.vmode || "auto";
   if (mode === "chart" && an.stat) return { type: "stat", spec: an.stat };
   if (mode === "illus") return { type: "illus", icon, label };
   if (mode === "photo") return photo ? { type: "photo" } : { type: "illus", icon, label };
   if (an.stat && i > 0) return { type: "stat", spec: an.stat };
-  if (photo && ((line.concrete && matches) || i === 0)) return { type: "photo" };
+  if (photo && matches && (line.concrete || i === 0)) return { type: "photo" };
   if (an.icon) return { type: "illus", icon, label };
   if (photo && matches) return { type: "photo" };
   if (an.stat) return { type: "stat", spec: an.stat };

@@ -13,6 +13,12 @@ function relevant(title, query) {
   if (!words.length) return true;
   return words.filter((w) => t.includes(w) || t.includes(w.replace(/s$/, ""))).length >= Math.min(2, words.length);
 }
+// How well a photo's title and tags fit the search: the share of search words they contain (0..1).
+function fit(text, query) {
+  const words = keywords(query), t = (text || "").toLowerCase();
+  if (!words.length) return 0;
+  return words.filter((w) => t.includes(w) || t.includes(w.replace(/s$/, ""))).length / words.length;
+}
 const strip = (s) => (s || "").replace(/<[^>]+>/g, "").trim();
 
 async function searchOpenverse(query) {
@@ -26,6 +32,7 @@ async function searchOpenverse(query) {
       // Openverse's own image proxy serves the file with the headers a web page needs.
       url: `https://api.openverse.org/v1/images/${r.id}/thumb/?full_size=true`,
       width: r.width || 0, height: r.height || 0, title: r.title || query,
+      about: `${r.title || ""} ${(r.tags || []).map((t) => t.name).join(" ")}`,
       credit: `"${r.title || "Untitled"}" by ${r.creator || "unknown"} (${lic}) ${r.foreign_landing_url || ""}`,
     };
   });
@@ -70,10 +77,12 @@ async function loadBitmap(url) {
 export class MediaFinder {
   constructor(generic) { this.generic = generic; this.used = new Set(); }
 
+  // Tries the line's own subject first, then the topic's general visuals. The result says whether the
+  // photo actually fits what the line is about (relevant), so the app can use an illustration instead.
   async find(query) {
-    for (const q of [query, ...this.generic.filter((g) => g !== query)].slice(0, 3)) {
+    for (const [k, q] of [query, ...this.generic.filter((g) => g !== query)].slice(0, 3).entries()) {
       const asset = await this.findImage(q).catch(() => null);
-      if (asset) return asset;
+      if (asset) return { ...asset, query: q, relevant: k === 0 && asset.fit >= 0.5 };
     }
     return null;
   }
@@ -81,14 +90,15 @@ export class MediaFinder {
   async findImage(query) {
     const lists = await Promise.allSettled([searchOpenverse(query), searchCommons(query)]);
     const candidates = lists.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
-    // Portrait and large images crop best into a 9:16 frame.
-    candidates.sort((a, b) => (Number(b.height >= b.width) - Number(a.height >= a.width)) || (Math.min(b.width, 2400) - Math.min(a.width, 2400)));
+    // Photos whose title/tags name the subject first; then portrait and large images, which crop best into 9:16.
+    for (const c of candidates) c.fit = fit(c.about || c.title, query);
+    candidates.sort((a, b) => (b.fit - a.fit) || (Number(b.height >= b.width) - Number(a.height >= a.width)) || (Math.min(b.width, 2400) - Math.min(a.width, 2400)));
     let attempts = 0;
     for (const c of candidates) {
       if (this.used.has(c.url) || (c.width && c.width < 640)) continue;
       if (++attempts > 4) break;
       this.used.add(c.url);
-      try { return { bitmap: await loadBitmap(c.url), credit: c.credit, title: c.title }; } catch { /* try the next one */ }
+      try { return { bitmap: await loadBitmap(c.url), credit: c.credit, title: c.title, fit: c.fit }; } catch { /* try the next one */ }
     }
     return null;
   }

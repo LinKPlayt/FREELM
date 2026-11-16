@@ -339,7 +339,7 @@ async function setAsset(i, assetPromise, label) {
   const line = state.plan.script.lines[i];
   const btn = document.querySelector(`[data-swap="${i}"]`); if (btn) btn.textContent = label;
   const asset = await assetPromise.catch(() => null);
-  if (asset) { line.asset?.bitmap?.close?.(); line.asset = asset; line.vmode = "photo"; } else toast("No other photo found. Try Search…");
+  if (asset) { line.asset?.bitmap?.close?.(); line.asset = { ...asset, relevant: true }; line.vmode = "photo"; }   // you chose it else toast("No other photo found. Try Search…");
   showReview();
 }
 $("scenes").addEventListener("change", (e) => { if (e.target.dataset.line != null) showReview(); });   // update visuals after editing
@@ -387,7 +387,7 @@ $("add-line").addEventListener("click", () => {
   lines.splice(lines.length - 1, 0, line);
   plan.edited = true; showReview();
   const ta = document.querySelector(`[data-line="${lines.length - 2}"]`); ta?.focus(); ta?.scrollIntoView({ block: "center" });
-  if (!extra) plan.finder.findImage(q).then((a) => { if (a && !line.asset) { line.asset = a; showReview(); } }).catch(() => {});
+  if (!extra) plan.finder.findImage(q).then((a) => { if (a && !line.asset) { line.asset = { ...a, relevant: true }; showReview(); } }).catch(() => {});
 });
 $("produce").addEventListener("click", () => {
   const lines = state.plan.script.lines;
