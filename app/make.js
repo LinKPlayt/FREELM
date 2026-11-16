@@ -1,6 +1,6 @@
 // The whole pipeline, on the phone: research -> script -> voice -> photos -> music -> render.
 import * as research from "./research.js";
-import { buildEvergreen, buildNews, buildMarket, buildCustom, buildMetadata, speakable, statFor } from "./script.js";
+import { buildEvergreen, buildNews, buildMarket, buildCustom, buildMetadata, speakable, statFor, visualMatch } from "./script.js";
 import { MediaFinder } from "./media.js";
 import { loadVoice, phonemize, synthesize, VOICE_RATE } from "./tts.js";
 import { generateMusic, mix, resample, SR } from "./music.js";
@@ -36,7 +36,7 @@ async function writeScript(opts, data, say) {
   const hist = history(), done = new Set(hist.map((h) => h.id));
   const generic = data.generic_visuals[opts.niche] || data.generic_visuals["personal finance"];
   const o = { niche: opts.niche, cta: opts.cta, generic };
-  let order = [opts.topicId ? "evergreen" : opts.mode];
+  let order = [opts.topicId || opts.offline ? "evergreen" : opts.mode];   // news and markets need the internet
   if (order[0] === "auto") {
     const w = ["investing", "crypto", "economy"].includes(opts.niche) ? { evergreen: 0.4, news: 0.3, market: 0.3 } : { evergreen: 0.5, news: 0.3, market: 0.2 };
     const last = hist[hist.length - 1]?.kind; if (w[last]) w[last] *= 0.4;
@@ -55,7 +55,7 @@ async function writeScript(opts, data, say) {
   }
   const topic = pickTopic(data, opts.niche, opts.topicId, hist);
   say("Researching: " + topic.title);
-  return buildEvergreen(topic, o, topic.wiki ? await research.wikipediaDefinition(topic.wiki) : "");
+  return buildEvergreen(topic, o, topic.wiki && !opts.offline ? await research.wikipediaDefinition(topic.wiki) : "");
 }
 
 const seconds = (clips) => clips.reduce((n, c) => n + c.length, 0) / VOICE_RATE + GAP * (clips.length - 1) + TAIL;
@@ -135,7 +135,13 @@ export async function planReel(opts, ui) {
     ? await customScript(opts, generic, say)
     : await writeScript(opts, data, (t) => say(t, 0.1));
 
-  const finder = new MediaFinder(generic), usedQueries = new Set();
+  return attachPhotos(script, generic, opts, say);
+}
+
+// Finds a photo for every scene (skipped in offline mode: scenes then use animated backgrounds).
+async function attachPhotos(script, generic, opts, say) {
+  const finder = new MediaFinder(opts.offline ? [] : generic), usedQueries = new Set();
+  if (opts.offline) finder.find = finder.findImage = async () => null;
   const media = [...script.lines, ...script.extras].filter((l) => l.kind === "media");
   for (const line of media) {
     let q = line.visual || generic[0];
@@ -151,11 +157,34 @@ export async function planReel(opts, ui) {
   return { script, finder, generic, edited: false };
 }
 
+// An idea from the Idea Lab -> a plan for the review screen.
+export async function planFromIdea(idea, opts, ui) {
+  const { scriptFromIdea } = await import("./ai/ideas.js");
+  const data = await appData();
+  const generic = data.generic_visuals[opts.niche] || data.generic_visuals["personal finance"];
+  const script = scriptFromIdea(idea, { niche: opts.niche, cta: opts.cta, generic, visualFor: visualMatch });
+  const say = (text, f = 0) => ui.say(text, Math.min(1, Math.max(0, f)));
+  return attachPhotos(script, generic, opts, say);
+}
+
 async function customScript(opts, generic, say) {
   const topic = (opts.customTopic || "").trim();
   if (topic.length < 2) throw new Error("Type a topic first, for example \"Roth IRA\" or \"inflation\".");
-  say(`Researching "${topic}" on Wikipedia…`, 0.05);
-  const found = await research.wikipediaTopic(topic);
+  say(`Researching "${topic}" in the on-phone library…`, 0.05);
+  let found = null;
+  try {
+    const { deepResearch } = await import("./ai/research.js");
+    const brief = await deepResearch(topic, { niche: opts.niche });
+    const tl = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+    // Use the local library when it clearly has this topic; otherwise ask Wikipedia (online).
+    if (brief && (tl(brief.main.title).includes(tl(topic)) || tl(topic).includes(tl(brief.main.title.replace(/\s*\(.*\)$/, ""))))) {
+      const own = brief.facts.filter((f) => f.source === brief.main.title).map((f) => f.text);
+      const sentences = [...new Set([...brief.summary, ...own, ...brief.facts.map((f) => f.text)])];
+      if (sentences.length >= 3) found = { title: brief.main.title, sentences, url: "https://en.wikipedia.org/wiki/" + encodeURIComponent(brief.main.title.replaceAll(" ", "_")) };
+    }
+  } catch (e) { console.warn("local research failed", e); }
+  if (!found && opts.offline) throw new Error(`"${topic}" isn't in the on-phone library. Try a broader topic, or turn off Offline mode.`);
+  if (!found) { say(`Researching "${topic}" on Wikipedia…`, 0.1); found = await research.wikipediaTopic(topic); }
   if (!found) throw new Error(`Couldn't find "${topic}" on Wikipedia. Try different words.`);
   return buildCustom(found, { niche: opts.niche, cta: opts.cta, generic });
 }
@@ -180,7 +209,8 @@ export async function produceReel(plan, opts, ui) {
   const scenes = [], credits = [];
   for (let i = 0; i < script.lines.length; i++) {
     const line = script.lines[i];
-    const sc = { start: i === 0 ? 0 : spans[i][0] - GAP / 2, end: i === script.lines.length - 1 ? total : spans[i + 1][0] - GAP / 2, kind: "fallback" };
+    const sc = { start: i === 0 ? 0 : spans[i][0] - GAP / 2, end: i === script.lines.length - 1 ? total : spans[i + 1][0] - GAP / 2, kind: "fallback",
+      label: (i === 0 ? script.title : line.query || script.title).replace(/\s*#Shorts$/, ""), seed: i };
     if (line.kind === "outro") sc.kind = "outro";
     else if (line.kind === "chart" && line.chart) { sc.kind = "chart"; sc.chart = line.chart; }
     else {

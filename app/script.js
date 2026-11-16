@@ -60,10 +60,15 @@ const HEADLINE_VISUALS = [
 
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
-export function visualFor(text, generic) {
+// A concrete photo subject for this text, or null when nothing specific matches.
+export function visualMatch(text) {
   const low = text.toLowerCase();
   for (const [re, visual] of HEADLINE_VISUALS) if (re.test(low)) return visual;
-  return pick(generic);
+  return null;
+}
+
+export function visualFor(text, generic) {
+  return visualMatch(text) || pick(generic);
 }
 
 export function shortenHeadline(title, maxWords = 18) {

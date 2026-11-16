@@ -111,6 +111,46 @@ class ChartBg {
   dispose() { this.bg.width = this.bg.height = 0; }
 }
 
+// Offline background when a scene has no photo: drifting oversized type on a soft gradient.
+class TypeBg {
+  constructor(label, accent, seed = 0) {
+    this.accent = accent; this.seed = seed;
+    const hues = [[16, 22, 48], [30, 16, 46], [10, 32, 44], [36, 24, 20]][seed % 4];
+    const bg = canvas(W, H), c = bg.getContext("2d");
+    const g = c.createLinearGradient(0, 0, W, H);
+    g.addColorStop(0, `rgb(${hues.join(",")})`); g.addColorStop(1, "rgb(6,8,18)");
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    this.bg = bg;
+    this.words = (label || "money").toUpperCase().split(/\s+/).filter(Boolean).slice(0, 4);
+  }
+  draw(ctx, p) {
+    ctx.drawImage(this.bg, 0, 0);
+    const t = p, a = this.accent;
+    // Soft glowing blobs.
+    for (let i = 0; i < 3; i++) {
+      const x = W * (0.2 + 0.6 * ((i * 0.37 + this.seed * 0.13 + t * 0.15) % 1)), y = H * (0.25 + 0.5 * ((i * 0.53 + t * 0.1) % 1));
+      const r = 380 + 120 * Math.sin(t * 3 + i);
+      const gr = ctx.createRadialGradient(x, y, 0, x, y, r);
+      gr.addColorStop(0, rgba(a, 0.22 - i * 0.05)); gr.addColorStop(1, rgba(a, 0));
+      ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H);
+    }
+    // Giant outlined words, drifting sideways.
+    ctx.save();
+    ctx.textBaseline = "middle"; ctx.lineJoin = "round";
+    this.words.forEach((w, i) => {
+      const size = 260 - i * 30;
+      ctx.font = `${size}px Anton`;
+      const width = ctx.measureText(w).width, dir = i % 2 ? -1 : 1;
+      const x = W / 2 - width / 2 + dir * (t - 0.5) * 260;
+      const y = 520 + i * (size * 0.95);
+      ctx.lineWidth = 4; ctx.strokeStyle = rgba(a, 0.35 - i * 0.05); ctx.strokeText(w, x, y);
+      ctx.fillStyle = "rgba(255,255,255,0.05)"; ctx.fillText(w, x, y);
+    });
+    ctx.restore();
+  }
+  dispose() { this.bg.width = this.bg.height = 0; }
+}
+
 class OutroBg {
   constructor(brand, accent, handle = "") {
     this.accent = accent;
@@ -303,7 +343,7 @@ class Painter {
       if (sc.kind === "outro") return new OutroBg(this.job.brand, this.accent, this.job.handle);
       if (sc.kind === "chart") return new ChartBg(sc.chart);
     } catch (e) { console.warn("scene fallback", e); }
-    return new ChartBg(null);
+    return sc.label ? new TypeBg(sc.label, this.accent, sc.seed || 0) : new ChartBg(null);
   }
   paint(t) {
     const { scenes } = this.job, ctx = this.ctx;

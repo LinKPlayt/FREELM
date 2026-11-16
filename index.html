@@ -94,6 +94,16 @@
   .draft:first-of-type { border-top: 0; }
   .copy-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
   .copy-row .btn { padding: 10px 6px; font-size: 14px; }
+  .idea { position: relative; }
+  .idea h3 { margin: 6px 0 6px; font-size: 18px; line-height: 1.3; }
+  .tag { display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase; padding: 3px 8px; border-radius: 99px; background: var(--surface-2); color: var(--muted); margin-right: 6px; }
+  .tag.ai { background: var(--accent); color: var(--accent-ink); }
+  .idea .hook { color: var(--text); font-size: 15px; margin: 0 0 8px; }
+  .idea ul { margin: 6px 0 4px; padding-left: 18px; color: var(--muted); font-size: 14px; } .idea li { margin: 4px 0; }
+  .src { font-size: 12px; color: var(--muted); }
+  .chiplink { display: inline-block; margin: 4px 6px 0 0; padding: 6px 10px; border-radius: 99px; background: var(--surface-2); border: 1px solid var(--line); color: var(--text); font-size: 13px; font-weight: 600; cursor: pointer; }
+  .writing { animation: pulse 1.2s ease-in-out infinite; } @keyframes pulse { 50% { opacity: .45; } }
+  @media (prefers-reduced-motion: reduce) { .writing { animation: none; } }
   .hidden { display: none !important; }
 </style>
 </head>
@@ -168,10 +178,32 @@
           <label class="switch"><input id="pops" type="checkbox" checked><span></span></label></div>
         <div class="row"><div>Review before making<small>Edit the script and photos first</small></div>
           <label class="switch"><input id="review-on" type="checkbox" checked><span></span></label></div>
+        <div class="row"><div>Offline mode<small>Zero downloads: uses your photos or animated backgrounds. News and market recaps need the internet.</small></div>
+          <label class="switch"><input id="offline" type="checkbox"><span></span></label></div>
       </div>
       <button class="primary" id="go">Make my reel</button>
       <p class="meta" style="text-align:center;margin-top:10px" id="first-run">The first reel downloads the voice once (about 90 MB). Wi-Fi recommended.</p>
     </div>
+  </section>
+
+  <!-- IDEAS -->
+  <section id="tab-ideas" class="tab">
+    <div class="card">
+      <h2>Idea Lab</h2>
+      <p>Researches thousands of finance, business and economics topics and invents video ideas, <b>entirely on your phone</b>. No internet, no accounts, no API.</p>
+      <input id="idea-q" type="text" maxlength="80" placeholder="Research a topic, e.g. index funds, inflation" enterkeyhint="search">
+      <div class="btns"><button class="btn main" id="idea-research">Research</button><button class="btn" id="idea-surprise">Endless ideas</button></div>
+      <p class="meta" id="lib-info" style="margin:10px 0 0"></p>
+    </div>
+    <div class="card" id="ai-card">
+      <div class="row" style="padding:0"><div><b>On-device AI</b><small id="ai-sub">Optional: rewrites titles to be catchier (checked against the research). One-time 270 MB download from this app, then it works offline.</small></div>
+        <button class="btn" id="ai-load" style="flex:none">Download</button></div>
+      <div class="progress hidden" id="ai-progress"><div></div></div>
+    </div>
+    <div class="card hidden" id="brief"></div>
+    <div id="idea-feed"></div>
+    <div id="idea-more" class="meta hidden" style="text-align:center;padding:14px"></div>
+    <div id="saved-ideas"></div>
   </section>
 
   <!-- LIBRARY -->
@@ -209,7 +241,8 @@
       <h2>Privacy</h2>
       <ul class="steps">
         <li>Videos are <b>made and stored on this phone only</b>. Nothing is rendered or kept on a server.</li>
-        <li>The app looks up public information while it works: news feeds, Wikipedia, and free photo libraries (Openverse, Wikimedia Commons).</li>
+        <li>The <b>Idea Lab</b> (research, ideas and the on-device AI) runs entirely on this phone from files that ship with the app. It never connects to anything.</li>
+        <li>Making reels looks up public information unless <b>Offline mode</b> is on: news feeds, Wikipedia, and free photo libraries (Openverse, Wikimedia Commons).</li>
         <li>No account, sign-in or tracking.</li>
       </ul>
       <p id="encoder" class="meta"></p>
@@ -221,6 +254,8 @@
 <nav>
   <button data-tab="create" class="active">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Create</button>
+  <button data-tab="ideas">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/></svg>Ideas</button>
   <button data-tab="library">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="9" rx="1.5"/><rect x="3" y="15" width="7" height="6" rx="1.5"/><rect x="14" y="15" width="7" height="6" rx="1.5"/></svg>Library</button>
   <button data-tab="about">

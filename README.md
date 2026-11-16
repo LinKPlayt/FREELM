@@ -78,6 +78,40 @@ The Style card shows a **live preview** that updates as you change settings.
 
 Your choices are remembered on the phone.
 
+### Idea Lab (the Ideas tab): research and AI that run entirely on your phone
+
+The Idea Lab researches thousands of finance, business and economics topics and turns them into
+an endless feed of video ideas, **with no internet connection, no API and no account**. Everything
+it uses ships with the app and stays on your phone.
+
+- **Research any topic.** Type a question or topic, even in plain words like "how do I stop
+  living paycheck to paycheck". On-device semantic search understands the meaning, then the
+  research engine follows leads across related articles. You get a research brief: a summary,
+  key facts with their sources, and related topics you can tap to research next. It takes
+  milliseconds.
+- **Endless ideas.** Each topic becomes ideas from different angles: explainer, surprising fact,
+  the story behind it, myth vs reality, mistakes to avoid, this vs that, "who is…", and quick
+  facts. Scroll and it keeps researching new topics in your niche.
+- **Make this reel.** Any idea becomes a script (hook plus researched facts) on the review screen,
+  ready to edit and render.
+- **Save** ideas for later, or tap **Research deeper**.
+- **On-device AI (optional).** Tap **Download** for a small language model (270 MB, once) that
+  rewrites titles to be catchier. It's checked against the research: a rewrite is used only if it
+  adds no new claims or numbers. Tap **Remove** to free the space.
+
+The library holds the opening sections of several thousand Wikipedia articles (CC BY-SA). Details,
+models and licenses: [app/ai/README.md](app/ai/README.md). To refresh it, run
+`python scripts/build_corpus.py` and then `python scripts/embed_library.py`.
+
+### Offline mode
+
+Turn on **Style → Offline mode** to make reels with zero downloads. Photos are skipped, so each
+scene uses your own photos (via **My photo**) or an animated background built from the scene's
+subject. The voice, music and video are always made on the phone anyway. News and market
+recaps need the internet, so in Offline mode they switch to explainers. Combined with the Idea
+Lab, the whole flow (research, ideas, script, voice, video) works with the phone in airplane mode,
+once the app's files have been downloaded.
+
 ### Drafts
 
 On the review screen, tap **Save draft** to keep the script and finish it later. Drafts appear

@@ -1,5 +1,5 @@
 // UI glue for the phone app.
-import { appData, planReel, produceReel, releasePlan, estimateSeconds, lengthRange, draftFromPlan, planFromDraft } from "./make.js";
+import { appData, planReel, produceReel, releasePlan, estimateSeconds, lengthRange, draftFromPlan, planFromDraft, planFromIdea } from "./make.js";
 import { listReels, saveReel, deleteReel, clearReels, listDrafts, saveDraft, deleteDraft } from "./store.js";
 import { platformCaptions } from "./script.js";
 import { encoderInfo, renderReel, loadFonts, previewFrame } from "./render.js";
@@ -68,6 +68,7 @@ function show(tab) {
   document.querySelectorAll("section.tab").forEach((s) => s.classList.toggle("active", s.id === "tab-" + tab));
   document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
   if (tab === "library") renderLibrary();
+  if (tab === "ideas") openIdeas();
   window.scrollTo(0, 0);
 }
 document.querySelectorAll("nav button").forEach((b) => b.addEventListener("click", () => show(b.dataset.tab)));
@@ -164,7 +165,8 @@ function options() {
     handle: cleanHandle($("handle").value),
     cta: cleanHandle($("handle").value) ? `Follow ${cleanHandle($("handle").value)} for a new money tip every day.` : CTA,
     music: state.mood, accent: state.accent, voiceSpeed: SPEEDS[state.speed] || 1, length: state.length,
-    captionStyle: state.capStyle, captionPos: state.capPos, pops: $("pops").checked, forceEncoder: params.get("encoder") || undefined,
+    captionStyle: state.capStyle, captionPos: state.capPos, pops: $("pops").checked, offline: $("offline").checked,
+    forceEncoder: params.get("encoder") || undefined,
   };
 }
 function screen(name) {   // form | job | review
@@ -206,6 +208,7 @@ async function produce() {
   let wake = null; try { wake = await navigator.wakeLock?.request("screen"); } catch { /* not supported */ }
   const t0 = performance.now();
   try {
+    if (state.ideasUI) { say("Freeing memory…", 0); await state.ideasUI.unloadAI(); }   // rendering needs the memory
     const reel = await produceReel(state.plan, options(), { say, canvas: $("preview"), audioCtx: state.audioCtx });
     state.plan = null;
     if (state.draftId) { deleteDraft(state.draftId); state.draftId = null; }
@@ -403,6 +406,31 @@ async function soundTest() {
   btn.disabled = false; btn.textContent = "Run sound test";
 }
 
+/* ---------- Idea Lab (loaded the first time the tab opens) ---------- */
+async function openIdeas() {
+  if (state.ideasUI || state.ideasLoading) return;
+  state.ideasLoading = true;
+  try {
+    const ui = await import("./ideas-ui.js");
+    await ui.init({ store, toast, esc, niche: () => state.niche, makeFromIdea });
+    state.ideasUI = ui;
+  } catch (e) { console.warn(e); toast("The Idea Lab couldn't start: " + (e.message || e)); }
+  state.ideasLoading = false;
+}
+
+async function makeFromIdea(idea) {
+  if (state.busy) return;
+  unlockAudio();   // inside the tap
+  state.busy = true; state.draftId = null;
+  show("create");
+  screen("job"); $("job-title").textContent = "Writing your script…"; $("preview").classList.add("hidden"); say("Building the script from your idea…", 0.05);
+  try {
+    state.plan = await planFromIdea(idea, options(), { say });
+    if ($("review-on").checked) { state.busy = false; return showReview(); }
+    await produce();
+  } catch (e) { screen("form"); showError(e, "That didn't work"); state.busy = false; }
+}
+
 async function init() {
   state.data = await appData();
   state.niche = store.get("niche") || "personal finance"; state.mode = store.get("mode") || "auto";
@@ -422,6 +450,11 @@ async function init() {
   prefChips("lengths", LENGTH_LABELS, "length", "standard", updateEstimate);
   $("handle").value = store.get("handle") || "";
   $("handle").addEventListener("change", () => { $("handle").value = cleanHandle($("handle").value); store.set("handle", $("handle").value); });
+  $("offline").checked = store.get("offline") === "1";
+  $("offline").addEventListener("change", () => {
+    store.set("offline", $("offline").checked ? "1" : "0");
+    if ($("offline").checked) toast("Offline mode: no downloads. News and market recaps switch to explainers.");
+  });
   $("pops").checked = store.get("pops") !== "0";
   $("pops").addEventListener("change", () => { store.set("pops", $("pops").checked ? "1" : "0"); drawStylePreview(); });
   $("handle").addEventListener("input", drawStylePreview);
