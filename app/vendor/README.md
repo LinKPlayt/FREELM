@@ -12,5 +12,6 @@ espeak-ng is free software under the GNU GPL v3 or later; its source is availabl
 
 The natural voice model (`app/ai/models/kokoro-82m`) is [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M)
 by hexgrad, Apache-2.0, from the [ONNX export](https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX).
-It uses the 8-bit weights. `app/kokoro.js` and `app/kokoro-text.js` are adapted from
+It uses the 8-bit weights and runs on the bundled `ort/` runtime (the same one as the classic voice).
+`app/kokoro-text.js` is adapted from
 [kokoro-js](https://github.com/hexgrad/kokoro/tree/main/kokoro.js) (Apache-2.0).

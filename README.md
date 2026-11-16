@@ -108,7 +108,8 @@ Each scene's picture is chosen from the line being spoken, not from a fixed list
 
 - **Natural voices.** The narrator is Kokoro-82M, an open StyleTTS 2 voice model (Apache-2.0)
   whose speech is close to a real voiceover: natural rhythm, intonation and breathing between
-  phrases. It runs on the phone with no speech service. There are nine voices, American and
+  phrases. It runs on the phone with no speech service, on the same compact AI runtime as the
+  classic voice. There are nine voices, American and
   British. The first reel downloads the model once (about 92 MB), and the phone keeps it after that.
 - **Gentle on memory.** The voice runs in its own background worker, which ends as soon as the
   voiceover is done and gives all of its memory back before the video is made. If the phone ever
@@ -246,7 +247,7 @@ want to keep to Photos.
 | Headlines | Phone fetches directly | CNBC and MarketWatch RSS feeds |
 | Background facts and custom topics | Phone fetches directly | Wikipedia |
 | Photos | Phone fetches directly | [Openverse](https://openverse.org) and [Wikimedia Commons](https://commons.wikimedia.org); only CC0, Public Domain, CC BY and CC BY-SA |
-| Voice | On the phone | Natural voices: [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (Apache-2.0), a StyleTTS 2 model, run with Transformers.js. Classic voice: [Piper](https://github.com/OHF-Voice/piper1-gpl), the `joe` voice (**CC0**). Both use eSpeak NG for pronunciation |
+| Voice | On the phone | Natural voices: [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (Apache-2.0), a StyleTTS 2 model, run with ONNX Runtime Web. Classic voice: [Piper](https://github.com/OHF-Voice/piper1-gpl), the `joe` voice (**CC0**). Both use eSpeak NG for pronunciation |
 | Music | On the phone | Synthesized from scratch for every reel |
 | Video | On the phone | Drawn on a canvas and encoded with the phone's H.264 encoder. The soundtrack is written into the file directly as uncompressed audio, in a QuickTime `.mov` (Apple's native format) |
 | Market numbers | Small data file | See below |
@@ -304,8 +305,9 @@ app/
   research.js   headlines, Wikipedia, market snapshot
   script.js     script templates and finance-friendly pronunciation
   media.js      Openverse + Wikimedia Commons photo search with license filtering
-  tts.js        the narrator: natural voice (kokoro.js) or classic voice (Piper), plus fallback
-  kokoro.js     Kokoro-82M on Transformers.js: text → phonemes → speech
+  tts.js        the narrator: natural voice or classic voice (Piper), with fallback and watchdog
+  voice-worker.js  Kokoro-82M on ONNX Runtime, in a worker: phonemes → speech
+  kokoro-text.js   text → phonemes for Kokoro (numbers, money, punctuation)
   voices.js     the list of narrators
   music.js      background-music synthesizer and voice/music mixing
   render.js     canvas scenes, captions, charts, H.264/AAC encoding

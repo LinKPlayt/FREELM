@@ -393,6 +393,7 @@ async function previewVoice() {
   previewAudio ??= Object.assign(new Audio(), { playsInline: true });
   previewAudio.src = SILENCE; previewAudio.play().catch(() => {});
   previewing = true; btn.disabled = true;
+  if (state.ideasUI) await state.ideasUI.unloadAI();      // the Idea Lab AI's memory, for the voice
   const line = "Here's the thing about compound interest: your money earns money, and then that money earns money too.";
   const speak = async () => {
     btn.textContent = "Loading…";

@@ -1,5 +1,5 @@
 // The narrator. Two voices, both running on the phone, served from this app (no speech service):
-//   "natural" (default): Kokoro-82M, a StyleTTS 2 model that sounds close to a real narrator (kokoro.js)
+//   "natural" (default): Kokoro-82M, a StyleTTS 2 model that sounds close to a real narrator (voice-worker.js)
 //   "fast": Piper (VITS), smaller and quicker but more robotic; also the fallback if the natural voice can't load
 import * as ort from "./vendor/ort/ort.wasm.min.mjs";
 import { KOKORO_RATE, KOKORO_VOICES } from "./voices.js";
