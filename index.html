@@ -105,6 +105,8 @@
   .chiplink { display: inline-block; margin: 4px 6px 0 0; padding: 6px 10px; border-radius: 99px; background: var(--surface-2); border: 1px solid var(--line); color: var(--text); font-size: 13px; font-weight: 600; cursor: pointer; }
   .writing { animation: pulse 1.2s ease-in-out infinite; } @keyframes pulse { 50% { opacity: .45; } }
   @media (prefers-reduced-motion: reduce) { .writing { animation: none; } }
+  .coach { background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 0 0 8px; }
+  .coach-score { display: flex; align-items: baseline; gap: 6px; } .coach-score b { font-size: 30px; } .coach-score span { color: var(--muted); font-size: 14px; }
   .hidden { display: none !important; }
 </style>
 </head>
@@ -127,6 +129,7 @@
       <div class="card">
         <h2 id="review-title">Review your reel</h2>
         <p>Edit any line, change photos, or remove scenes. Length: <span class="estimate" id="estimate"></span></p>
+        <div id="coach" class="coach"></div>
         <div id="scenes"></div>
         <div class="mini" style="margin-top:12px"><button id="add-line">+ Add a line</button><button id="reroll">New script</button><button id="save-draft">Save draft</button></div>
       </div>
@@ -177,6 +180,10 @@
         <div class="chips" id="lengths"></div>
         <div class="row" style="margin-top:14px"><div>Number pops<small>Show key figures big on screen, like “20%”</small></div>
           <label class="switch"><input id="pops" type="checkbox" checked><span></span></label></div>
+        <div class="row"><div>Sound effects<small>A whoosh between scenes, a pop when a number lands</small></div>
+          <label class="switch"><input id="sfx" type="checkbox" checked><span></span></label></div>
+        <div class="row"><div>Show sources<small>“Source: …” on scenes with researched facts</small></div>
+          <label class="switch"><input id="sources" type="checkbox" checked><span></span></label></div>
         <div class="row"><div>Review before making<small>Edit the script and photos first</small></div>
           <label class="switch"><input id="review-on" type="checkbox" checked><span></span></label></div>
         <div class="row"><div>Offline mode<small>Zero downloads: uses your photos or animated backgrounds. News and market recaps need the internet.</small></div>

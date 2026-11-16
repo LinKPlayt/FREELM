@@ -106,10 +106,10 @@ export function buildEvergreen(topic, opts, definition) {
   const extras = (topic.extras || []).map((e, i) => line(e, vis[(i + 2) % vis.length]));
   const sources = [];
   if (definition) {
-    extras.push(line(definition, vis[vis.length - 1]));
+    extras.push({ ...line(definition, vis[vis.length - 1]), source: "Wikipedia · " + topic.wiki });
     sources.push("https://en.wikipedia.org/wiki/" + topic.wiki.replaceAll(" ", "_"));
   }
-  return { kind: "evergreen", topicId: topic.id, title: topic.title, niche: opts.niche, lines, extras, tags: [...(topic.tags || [])], sources };
+  return { kind: "evergreen", topicId: topic.id, title: topic.title, topicTitle: topic.wiki || topic.title, niche: opts.niche, lines, extras, tags: [...(topic.tags || [])], sources };
 }
 
 function whyItMatters(text) {
@@ -139,7 +139,7 @@ export function buildNews(headlines, markets, opts) {
     `Your ${label} news, fast. Here's what happened today.`,
   ]);
   const lines = [line(hook, visualFor(picks.map((p) => p.title).join(" "), g))];
-  picks.forEach((item, i) => lines.push(line(`${ORDINALS[i]}: ${shortenHeadline(item.title)}`, visualFor(item.title, g))));
+  picks.forEach((item, i) => lines.push({ ...line(`${ORDINALS[i]}: ${shortenHeadline(item.title)}`, visualFor(item.title, g)), source: item.source || null }));
   const why = whyItMatters(picks.map((p) => `${p.title} ${p.summary || ""}`).join(" ").toLowerCase());
   lines.push(line(why, visualFor(why, g)));
   lines.push(line(opts.cta, "", "outro"));
@@ -215,11 +215,12 @@ export function buildCustom(found, opts) {
   const visual = (text, i) => match(text) || (i % 2 ? titleVisual : g[i % g.length]);
   const [first, ...rest] = found.sentences;
   const points = [first, ...rest.slice(0, 3)];
-  const lines = [line(hook, titleVisual), ...points.map((p, i) => line(p, visual(p, i + 1)))];
+  const src = "Wikipedia · " + found.title;
+  const lines = [line(hook, titleVisual), ...points.map((p, i) => ({ ...line(p, visual(p, i + 1)), source: src }))];
   lines.push(line(opts.cta, "", "outro"));
-  const extras = rest.slice(3, 6).map((p, i) => line(p, visual(p, i + 5)));
+  const extras = rest.slice(3, 6).map((p, i) => ({ ...line(p, visual(p, i + 5)), source: src }));
   return {
-    kind: "custom", topicId: "custom-" + slug(title).slice(0, 40), title, niche: opts.niche, lines, extras,
+    kind: "custom", topicTitle: title, topicId: "custom-" + slug(title).slice(0, 40), title, niche: opts.niche, lines, extras,
     tags: [title, opts.niche, "explained"], sources: [found.url],
   };
 }

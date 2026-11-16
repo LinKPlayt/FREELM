@@ -126,7 +126,7 @@ export function ideasFromBrief(brief, { max = 3, usedAngles = new Set() } = {}) 
     return {
       id: `idea-${Date.now().toString(36)}-${(counter++).toString(36)}`,
       topic: t, angle: angle.id, angleLabel: angle.label, title: pick(angle.titles(t, brief)), ai: false,
-      hook: angle.hook(brief, t), points: points.map((p) => p.text),
+      hook: angle.hook(brief, t), points: points.map((p) => p.text), pointSources: points.map((p) => p.source),
       sources: [...new Set([brief.main.title, ...points.map((p) => p.source)])],
       niches: brief.main.niches, keyFact: (topicNumberFacts(brief)[0] || brief.facts[0])?.text || "",
     };
@@ -178,10 +178,12 @@ export function scriptFromIdea(idea, opts) {
   const g = opts.generic;
   const visual = (text, i) => opts.visualFor(text, g) || (i % 2 ? idea.topic : g[i % g.length]);
   const pts = idea.points.map((p) => p.replace(/\s+/g, " ").trim());
-  const lines = [line(idea.hook, opts.visualFor(idea.topic + " " + idea.hook, g) || idea.topic), ...pts.map((p, i) => line(p, visual(p, i + 1))), line(opts.cta, "", "outro")];
+  const src = (i) => idea.pointSources?.[i] ? "Wikipedia · " + idea.pointSources[i] : null;
+  const lines = [line(idea.hook, opts.visualFor(idea.topic + " " + idea.hook, g) || idea.topic),
+    ...pts.map((p, i) => ({ ...line(p, visual(p, i + 1)), source: src(i) })), line(opts.cta, "", "outro")];
   const extras = (idea.brief?.facts || []).map((f) => f.text).filter((t) => !pts.includes(t)).slice(0, 3).map((t, i) => line(t, visual(t, i + 5)));
   return {
-    kind: "idea", topicId: "idea-" + idea.topic.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40), title: idea.title,
+    kind: "idea", topicTitle: idea.topic, topicId: "idea-" + idea.topic.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40), title: idea.title,
     niche: opts.niche, lines, extras, tags: [idea.topic, opts.niche, idea.angleLabel.toLowerCase()],
     sources: idea.sources.map(wikiUrl),
   };

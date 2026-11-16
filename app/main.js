@@ -2,6 +2,7 @@
 import { appData, planReel, produceReel, releasePlan, estimateSeconds, lengthRange, draftFromPlan, planFromDraft, planFromIdea, decideVisual } from "./make.js";
 import { StatBg, IllusBg } from "./graphics.js";
 import { describeStat } from "./visuals.js";
+import { hookOptions, coach } from "./extras.js";
 import { listReels, saveReel, deleteReel, clearReels, listDrafts, saveDraft, deleteDraft } from "./store.js";
 import { platformCaptions } from "./script.js";
 import { encoderInfo, renderReel, loadFonts, previewFrame } from "./render.js";
@@ -16,7 +17,7 @@ const SPEEDS = { slow: 0.92, normal: 1.0, fast: 1.1 };
 const CAPTION_STYLES = { bold: "Bold", boxed: "Boxed", clean: "Clean" };
 const CAPTION_POS = { low: "Low", middle: "Middle" };
 const MOODS = { lofi: "Lo-fi", upbeat: "Upbeat", cinematic: "Cinematic", calm: "Calm", none: "None" };
-const LENGTH_LABELS = { short: "Short 20–30s", standard: "Standard 30–45s", long: "Long 40–60s" };
+const LENGTH_LABELS = { short: "Short 20–30s", standard: "Standard 30–45s", long: "Long 40–60s", deep: "Deep dive 60–90s" };
 // A small chip group whose choice is remembered on the phone.
 function prefChips(id, labels, key, fallback, after) {
   const saved = store.get(key), value = labels[saved] ? saved : fallback;
@@ -115,6 +116,7 @@ function reelCard(r, inline = false) {
     <div class="copy-row">
       <button class="btn" data-act="cap-youtube">YouTube</button><button class="btn" data-act="cap-tiktok">TikTok</button><button class="btn" data-act="cap-instagram">Instagram</button>
     </div>
+    ${r.srt || r.cover ? `<div class="btns">${r.cover ? `<button class="btn" data-act="cover">Cover image</button>` : ""}${r.srt ? `<button class="btn" data-act="srt">Captions (.srt)</button>` : ""}</div>` : ""}
     <div class="btns" style="margin-top:0">
       ${inline ? "" : `<button class="btn danger wide" data-act="delete">Delete</button>`}
     </div></div>`;
@@ -150,6 +152,15 @@ document.addEventListener("click", async (ev) => {
     toast(`${{ youtube: "YouTube", tiktok: "TikTok", instagram: "Instagram" }[which]} caption copied`);
   }
   if (btn.dataset.act === "delete" && confirm("Delete this reel from your phone?")) { await deleteReel(r.id); card.remove(); }
+  if (btn.dataset.act === "cover" || btn.dataset.act === "srt") {
+    const file = btn.dataset.act === "cover" ? new File([r.cover], `${r.id}-cover.jpg`, { type: "image/jpeg" })
+      : new File([r.srt], `${r.id}.srt`, { type: "text/plain" });
+    try {
+      if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file] });
+      else { const a = document.createElement("a"); a.href = URL.createObjectURL(file); a.download = file.name; a.click(); }
+    } catch (e) { if (e.name !== "AbortError") toast("Couldn't share: " + e.message); }
+    return;
+  }
   if (btn.dataset.act === "share") {
     const file = new File([r.blob], `${r.id}.${r.ext}`, { type: r.blob.type });
     try {
@@ -168,6 +179,7 @@ function options() {
     cta: cleanHandle($("handle").value) ? `Follow ${cleanHandle($("handle").value)} for a new money tip every day.` : CTA,
     music: state.mood, accent: state.accent, voiceSpeed: SPEEDS[state.speed] || 1, length: state.length,
     captionStyle: state.capStyle, captionPos: state.capPos, pops: $("pops").checked, offline: $("offline").checked,
+    sfx: $("sfx").checked, showSources: $("sources").checked,
     forceEncoder: params.get("encoder") || undefined,
   };
 }
@@ -265,6 +277,12 @@ function updateEstimate() {
   el.textContent = `about ${secs} seconds` + (secs > hi ? ` (long: it will be sped up or trimmed to ${hi}s)`
     : secs < lo ? (spare ? ` (researched lines will be added to reach ${lo}s)` : " (short: tap + Add a line, or the end card stays on longer)") : "");
   el.classList.toggle("warn", secs > hi || secs < lo);
+  // Reel coach: a score and the top things to improve.
+  const visuals = plan.script.lines.map((l, i) => decideVisual(l, i, plan.script.title));
+  const c = coach(plan.script.lines, { estimate: secs, range: [lo, hi], visuals });
+  const color = c.score >= 80 ? "var(--good)" : c.score >= 60 ? "var(--accent)" : "var(--bad)";
+  $("coach").innerHTML = `<div class="coach-score"><b style="color:${color}">${c.score}</b><span>/100 reel score</span></div>` +
+    (c.tips.length ? `<ul class="steps" style="margin:6px 0 0">${c.tips.slice(0, 3).map((t) => `<li>${esc(t)}</li>`).join("")}</ul>` : `<p class="meta" style="margin:4px 0 0">Looks great. Ready to make.</p>`);
 }
 // Thumbnail of a generated chart or illustration (drawn with the real renderer at full size, then scaled).
 let thumbStage = null;
@@ -285,18 +303,21 @@ function showReview() {
   const visuals = script.lines.map((l, i) => decideVisual(l, i, script.title));
   $("scenes").innerHTML = script.lines.map((l, i) => {
     const v = visuals[i];
-    let tag = i === 0 ? "Hook" : l.kind === "outro" ? "Ending" : l.kind === "chart" ? "Chart" : `Scene ${i}`;
+    let tag = i === 0 ? "Hook" : l.kind === "outro" ? "Ending" : l.kind === "chart" ? "Chart" : l.kind === "section" ? `Chapter ${l.num}` : l.kind === "recap" ? "Recap" : `Scene ${i}`;
+    if (l.source) tag += ` · ${l.source}`;
     if (l.kind === "media") tag += ` · ${VISUAL_NAMES[v.type]}${v.type === "stat" ? ": " + describeStat(v.spec) : v.type === "illus" ? ": " + (v.label || v.icon).toLowerCase() : ""}`;
     const thumb = l.kind === "outro" ? `<div class="thumb">END<br>CARD</div>` : l.kind === "chart" ? `<div class="thumb">LIVE<br>CHART</div>`
+      : l.kind === "section" ? `<div class="thumb">PART ${l.num}<br>${esc(l.label || "")}</div>` : l.kind === "recap" ? `<div class="thumb">QUICK<br>RECAP</div>`
       : `<div class="thumb"><canvas width="152" height="270" data-thumb="${i}"></canvas></div>`;
     const mode = l.vmode || "auto", hasStat = Boolean(l.analysis?.stat);
     const chips = l.kind !== "media" ? "" : `<div class="mini vis">${[["auto", "Auto"], ["photo", "Photo"], ["chart", "Chart"], ["illus", "Picture"]]
       .filter(([m]) => m !== "chart" || hasStat)
       .map(([m, txt]) => `<button data-vmode="${i}:${m}" class="${mode === m ? "on" : ""}">${txt}</button>`).join("")}</div>`;
-    const tools = l.kind !== "media" ? (l.kind === "chart" && content > 2 ? `<div class="mini"><button class="del" data-del="${i}">Remove</button></div>` : "")
+    const tools = l.kind !== "media" ? (["chart", "section", "recap"].includes(l.kind) && content > 2 ? `<div class="mini"><button class="del" data-del="${i}">Remove</button></div>` : "")
       : `<div class="mini"><button data-swap="${i}">New photo</button><button data-search="${i}">Search…</button><button data-mine="${i}">My photo</button>${content > 2 ? `<button class="del" data-del="${i}">Remove</button>` : ""}</div>`;
+    const hookBtn = i === 0 ? `<div class="mini"><button data-hook="1">Another hook</button></div>` : "";
     return `<div class="scene"><div>${thumb}</div><div><div class="scene-tag"><span>${esc(tag)}</span></div>
-      <textarea data-line="${i}" rows="3">${esc(l.text)}</textarea>${chips}${tools}</div></div>`;
+      <textarea data-line="${i}" rows="3">${esc(l.text)}</textarea>${hookBtn}${chips}${tools}</div></div>`;
   }).join("");
   script.lines.forEach((l, i) => {
     const cv = document.querySelector(`[data-thumb="${i}"]`), v = visuals[i];
@@ -325,6 +346,13 @@ $("scenes").addEventListener("change", (e) => { if (e.target.dataset.line != nul
 $("scenes").addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b) return;
   const plan = state.plan;
+  if (b.dataset.hook != null) {
+    const options = hookOptions(plan.script), first = plan.script.lines[0];
+    plan.hookChoices ??= [first.text, ...options.filter((o) => o !== first.text)];
+    plan.hookIndex = ((plan.hookIndex || 0) + 1) % plan.hookChoices.length;
+    first.text = plan.hookChoices[plan.hookIndex]; first.analysis = null; plan.edited = true;
+    return showReview();
+  }
   if (b.dataset.vmode != null) {
     const [i, m] = b.dataset.vmode.split(":");
     plan.script.lines[+i].vmode = m === "auto" ? undefined : m;
@@ -484,6 +512,10 @@ async function init() {
   prefChips("lengths", LENGTH_LABELS, "length", "standard", updateEstimate);
   $("handle").value = store.get("handle") || "";
   $("handle").addEventListener("change", () => { $("handle").value = cleanHandle($("handle").value); store.set("handle", $("handle").value); });
+  for (const [id, key] of [["sfx", "sfx"], ["sources", "sources"]]) {
+    $(id).checked = store.get(key) !== "0";
+    $(id).addEventListener("change", () => store.set(key, $(id).checked ? "1" : "0"));
+  }
   $("offline").checked = store.get("offline") === "1";
   $("offline").addEventListener("change", () => {
     store.set("offline", $("offline").checked ? "1" : "0");

@@ -78,6 +78,25 @@ Each scene's picture is chosen from the line being spoken, not from a fixed list
 - **Your call on every scene.** The review screen shows each scene's visual and lets you switch it
   between **Auto**, **Photo**, **Chart** (when the line has a number) and **Picture**.
 
+### Deep dives and better results
+
+- **Deep dive (60–90 s).** Pick *Deep dive* under Length for explainers, your own topics and
+  Idea Lab ideas. The app pulls more on-topic facts from the research library on the phone, cuts
+  repeats and list fragments, and orders the video in three chapters (*what it is*, *why it
+  matters*, *what you can do*). Each chapter opens with a title card ("PART 1"), and the video
+  ends on a **Quick recap** card that ticks off one point from each chapter.
+- **On-screen sources.** Scenes built from researched facts show a small "Source: Wikipedia ·
+  …" tag. You can turn it off under Style.
+- **Sound effects.** A soft whoosh between scenes, a pop when a number lands and a chime on the
+  recap. They're made by the app, so there's nothing to license. You can turn them off under Style.
+- **Hook picker.** *Another hook* on the first scene cycles through different openings for the
+  same topic.
+- **Reel score.** The review screen scores the script out of 100 (hook, length, numbers, visuals,
+  sentence length, call to action) and lists the top things to improve.
+- **Posting kit.** Each reel in the Library also has a **Cover image** (a 1080×1920 thumbnail
+  with the title, for the cover frame on TikTok, Reels or Shorts) and a **Captions (.srt)** file
+  with exact timings, for platforms that accept uploaded subtitles.
+
 ### Style
 
 The Style card shows a **live preview** that updates as you change settings.

@@ -334,3 +334,71 @@ export class IllusBg {
   }
   dispose() { this.bg.width = this.bg.height = 0; }
 }
+
+/* ---------------------------------------------------------------- chapters and recap (deep dives) */
+
+export class SectionBg {
+  constructor(num, text, accent, seed = 0) { this.num = num; this.text = text; this.a = accent; this.bg = backdrop(accent, seed + 2); }
+  draw(ctx, p) {
+    ctx.drawImage(this.bg, 0, 0);
+    const k = back(p / 0.3), slide = (1 - ease(p / 0.3)) * -260;
+    ctx.save(); ctx.translate(slide, 0);
+    ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
+    ctx.font = "520px Anton"; ctx.lineWidth = 10; ctx.strokeStyle = rgba(this.a, 0.55);
+    ctx.strokeText(String(this.num).padStart(2, "0"), W / 2, 760);
+    ctx.font = "800 44px Montserrat"; ctx.fillStyle = rgba(this.a); ctx.fillText(`PART ${this.num}`, W / 2, 1040);
+    ctx.restore();
+    ctx.save(); ctx.globalAlpha = Math.min(1, k);
+    bigText(ctx, this.text, W / 2, 1150, 130, "#fff");
+    ctx.fillStyle = rgba(this.a); ctx.fillRect(W / 2 - 180 * ease(p / 0.4), 1245, 360 * ease(p / 0.4), 10);
+    ctx.restore();
+  }
+  dispose() { this.bg.width = this.bg.height = 0; }
+}
+
+export class RecapBg {
+  constructor(items, accent, seed = 0) { this.items = items.slice(0, 4); this.a = accent; this.bg = backdrop(accent, seed + 3); }
+  draw(ctx, p) {
+    ctx.drawImage(this.bg, 0, 0);
+    bigText(ctx, "QUICK RECAP", W / 2, 470, 140, rgba(this.a));
+    const n = this.items.length;
+    this.items.forEach((item, i) => {
+      const appear = ease((p - 0.12 - i * 0.16) / 0.12);
+      if (appear <= 0) return;
+      const y = 680 + i * 190;
+      ctx.save(); ctx.globalAlpha = appear; ctx.translate((1 - appear) * 80, 0);
+      ctx.fillStyle = "rgba(255,255,255,0.08)"; ctx.beginPath(); ctx.roundRect(90, y - 70, W - 180, 140, 28); ctx.fill();
+      circle(ctx, 170, y, 40, rgba(this.a));
+      ctx.beginPath(); ctx.moveTo(152, y); ctx.lineTo(166, y + 15); ctx.lineTo(190, y - 14); ctx.lineWidth = 9; ctx.lineCap = ctx.lineJoin = "round"; ctx.strokeStyle = INK; ctx.stroke();
+      ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.fillStyle = "#fff";
+      // Wrap onto two lines rather than shrinking long items to unreadable sizes.
+      const maxW = W - 360; let size = 46, lines;
+      for (;; size -= 2) {
+        ctx.font = `800 ${size}px Montserrat`; lines = [""];
+        for (const w of item.split(/\s+/)) {
+          const t = lines[lines.length - 1] ? lines[lines.length - 1] + " " + w : w;
+          if (ctx.measureText(t).width <= maxW || !lines[lines.length - 1]) lines[lines.length - 1] = t; else lines.push(w);
+        }
+        if ((lines.length <= 2 && lines.every((l) => ctx.measureText(l).width <= maxW)) || size <= 32) break;
+      }
+      lines = lines.slice(0, 2);
+      lines.forEach((l, k) => ctx.fillText(l, 240, y + (k - (lines.length - 1) / 2) * size * 1.15));
+      ctx.restore();
+    });
+    if (n === 0) label(ctx, "", W / 2, 900, this.a);
+  }
+  dispose() { this.bg.width = this.bg.height = 0; }
+}
+
+// Small "Source: …" tag for scenes whose facts come from research.
+export function drawSource(ctx, text, alpha = 1) {
+  if (!text || alpha <= 0) return;
+  ctx.save(); ctx.globalAlpha = alpha;
+  ctx.font = "800 26px Montserrat"; ctx.textBaseline = "middle"; ctx.textAlign = "left";
+  const t = "SOURCE: " + text.toUpperCase(), w = Math.min(W - 120, ctx.measureText(t).width + 48);
+  ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.beginPath(); ctx.roundRect(60, 1700, w, 52, 26); ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,0.9)";
+  let s = t; while (ctx.measureText(s).width > w - 48 && s.length > 8) s = s.slice(0, -2);
+  ctx.fillText(s === t ? t : s + "…", 84, 1727);
+  ctx.restore();
+}

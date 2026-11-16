@@ -6,10 +6,12 @@ import { loadVoice, phonemize, synthesize, VOICE_RATE } from "./tts.js";
 import { generateMusic, mix, resample, SR } from "./music.js";
 import { loadFonts, renderReel } from "./render.js";
 import { analyzeLine, iconFor } from "./visuals.js";
+import { deepen, addSoundEffects, makeSrt, makeCover } from "./extras.js";
+import { StatBg, IllusBg } from "./graphics.js";
 
 const GAP = 0.28, TAIL = 0.8;
 // Reel length presets: [shortest, longest] in seconds.
-export const LENGTHS = { short: [20, 30], standard: [30, 45], long: [40, 60] };
+export const LENGTHS = { short: [20, 30], standard: [30, 45], long: [40, 60], deep: [60, 90] };
 let MIN_S = 30, MAX_S = 45;
 function setLength(name) { [MIN_S, MAX_S] = LENGTHS[name] || LENGTHS.standard; }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -59,7 +61,10 @@ async function writeScript(opts, data, say) {
   return buildEvergreen(topic, o, topic.wiki && !opts.offline ? await research.wikipediaDefinition(topic.wiki) : "");
 }
 
-const seconds = (clips) => clips.reduce((n, c) => n + c.length, 0) / VOICE_RATE + GAP * (clips.length - 1) + TAIL;
+// Pause after a line: the normal gap, plus extra hold time for chapter and recap cards so they can be read.
+const gapAfter = (line) => GAP + (line?.hold || 0);
+const seconds = (clips, lines = []) => clips.reduce((n, c) => n + c.length, 0) / VOICE_RATE
+  + clips.slice(0, -1).reduce((n, _, i) => n + gapAfter(lines[i]), 0) + TAIL;
 
 async function voiceScript(script, say, base = 1.0) {
   const all = [...script.lines, ...script.extras];
@@ -76,21 +81,23 @@ async function voiceScript(script, say, base = 1.0) {
     return out;
   };
   let clips = await speak(script.lines);
-  while (seconds(clips) < MIN_S && script.extras.length) {          // too short: add researched extras
+  while (seconds(clips, script.lines) < MIN_S && script.extras.length) {          // too short: add researched extras
     const extra = script.extras.shift();
-    script.lines.splice(script.lines.length - 1, 0, extra);
-    clips.splice(clips.length - 1, 0, await synthesize(extra.phonemes, speed));
+    let at = script.lines.length - 1;                                  // before the recap / ending
+    while (at > 1 && ["recap", "outro"].includes(script.lines[at - 1].kind)) at--;
+    script.lines.splice(at, 0, extra);
+    clips.splice(at, 0, await synthesize(extra.phonemes, speed));
   }
-  if (seconds(clips) > MAX_S) {                                     // too long: speak a little faster
-    speed = Math.min(base * 1.18, base * (Math.ceil((seconds(clips) / MAX_S) * 50) / 50 + 0.02));
+  if (seconds(clips, script.lines) > MAX_S) {                                     // too long: speak a little faster
+    speed = Math.min(base * 1.18, base * (Math.ceil((seconds(clips, script.lines) / MAX_S) * 50) / 50 + 0.02));
     clips = await speak(script.lines);
   }
-  while (seconds(clips) > MAX_S && script.lines.length > 4) {       // still too long: drop the longest middle line
+  while (seconds(clips, script.lines) > MAX_S && script.lines.length > 4) {       // still too long: drop the longest middle line
     let drop = 1;
-    for (let i = 1; i < script.lines.length - 1; i++) if (script.lines[i].kind !== "chart" && clips[i].length > clips[drop].length) drop = i;
+    for (let i = 1; i < script.lines.length - 1; i++) if (script.lines[i].kind === "media" && (script.lines[drop].kind !== "media" || clips[i].length > clips[drop].length)) drop = i;
     script.lines.splice(drop, 1); clips.splice(drop, 1);
   }
-  if (seconds(clips) < MIN_S && speed > base * 0.92) { speed = base * 0.92; clips = await speak(script.lines); }
+  if (seconds(clips, script.lines) < MIN_S && speed > base * 0.92) { speed = base * 0.92; clips = await speak(script.lines); }
   return clips;
 }
 
@@ -104,15 +111,15 @@ function timings(script, clips) {
     const sum = weights.reduce((a, b) => a + b, 0) || 1;
     let cursor = t + 0.04;
     tokens.forEach((tok, j) => { const d = (dur - 0.08) * weights[j] / sum; words.push({ text: tok, start: cursor, end: cursor + d }); cursor += d; });
-    t += dur + GAP;
+    t += dur + gapAfter(line);
   });
   return { words, spans };
 }
 
-function assembleAudio(clips, mood) {
-  const total = Math.max(seconds(clips), MIN_S), voice = new Float32Array(Math.ceil(total * SR));
+function assembleAudio(clips, mood, lines) {
+  const total = Math.max(seconds(clips, lines), MIN_S), voice = new Float32Array(Math.ceil(total * SR));
   let off = 0;
-  for (const c of clips) { const r = resample(c, VOICE_RATE); voice.set(r.subarray(0, Math.max(0, voice.length - off)), off); off += r.length + Math.round(GAP * SR); }
+  clips.forEach((c, i) => { const r = resample(c, VOICE_RATE); voice.set(r.subarray(0, Math.max(0, voice.length - off)), off); off += r.length + Math.round(gapAfter(lines[i]) * SR); });
   // Gentle compression so the voice is loud and even on phone speakers.
   const drive = 2.0, norm = Math.tanh(drive);
   for (let i = 0; i < voice.length; i++) voice[i] = Math.tanh(voice[i] * drive) / norm;
@@ -123,7 +130,7 @@ function assembleAudio(clips, mood) {
 export function lengthRange(name) { return LENGTHS[name] || LENGTHS.standard; }
 export function estimateSeconds(lines, speed = 1.0) {
   const words = lines.reduce((n, l) => n + speakable(l.text).split(/\s+/).filter(Boolean).length, 0);
-  return words / (2.75 * speed) + GAP * Math.max(0, lines.length - 1) + TAIL;
+  return words / (2.75 * speed) + lines.slice(0, -1).reduce((n, l) => n + gapAfter(l), 0) + TAIL;
 }
 
 // Step 1: research, write the script and find a photo for every scene.
@@ -135,7 +142,7 @@ export async function planReel(opts, ui) {
   const script = opts.mode === "custom"
     ? await customScript(opts, generic, say)
     : await writeScript(opts, data, (t) => say(t, 0.1));
-
+  if (opts.length === "deep") { say("Researching more detail for the deep dive…", 0.15); await deepen(script, opts); }
   return attachPhotos(script, generic, opts, say);
 }
 
@@ -168,6 +175,7 @@ export async function planFromIdea(idea, opts, ui) {
   const generic = data.generic_visuals[opts.niche] || data.generic_visuals["personal finance"];
   const script = scriptFromIdea(idea, { niche: opts.niche, cta: opts.cta, generic, visualFor: visualMatch });
   const say = (text, f = 0) => ui.say(text, Math.min(1, Math.max(0, f)));
+  if (opts.length === "deep") { say("Researching more detail for the deep dive…", 0.1); await deepen(script, opts); }
   return attachPhotos(script, generic, opts, say);
 }
 
@@ -207,7 +215,7 @@ export async function produceReel(plan, opts, ui) {
 
   const clips = await voiceScript(script, stage(0.25, 0.55), opts.voiceSpeed || 1.0);
   const { words, spans } = timings(script, clips);
-  const { audio, total } = assembleAudio(clips, opts.music);
+  const { audio, total } = assembleAudio(clips, opts.music, script.lines);
 
   ui.say("Preparing scenes…", 0.56);
   const scenes = [], credits = [];
@@ -215,8 +223,11 @@ export async function produceReel(plan, opts, ui) {
     const line = script.lines[i];
     const sc = { start: i === 0 ? 0 : spans[i][0] - GAP / 2, end: i === script.lines.length - 1 ? total : spans[i + 1][0] - GAP / 2, kind: "fallback",
       label: (i === 0 ? script.title : line.query || script.title).replace(/\s*#Shorts$/, ""), seed: i };
+    if (opts.showSources !== false && line.source) sc.source = line.source;
     if (line.kind === "outro") sc.kind = "outro";
     else if (line.kind === "chart" && line.chart) { sc.kind = "chart"; sc.chart = line.chart; }
+    else if (line.kind === "section") { sc.kind = "section"; sc.num = line.num; sc.label = line.label; }
+    else if (line.kind === "recap") { sc.kind = "recap"; sc.items = line.items; }
     else {
       line.asset = await line.asset;
       const v = decideVisual(line, i, script.title);
@@ -230,9 +241,14 @@ export async function produceReel(plan, opts, ui) {
     scenes.push(sc);
   }
 
+  if (opts.sfx !== false) addSoundEffects(audio, scenes);
   const job = { title: script.title, brand: opts.brand, accent: opts.accent || "#FFD60A", scenes, words, audio,
     captionStyle: opts.captionStyle || "bold", captionPos: opts.captionPos || "low", handle: opts.handle || "" };
   const result = await renderReel(job, ui.canvas, ui.audioCtx, (f) => ui.say("Rendering your reel on this device…", 0.6 + 0.4 * f), opts.forceEncoder);
+  ui.say("Making the cover and captions…", 0.99);
+  const accentRgb = (() => { const n = parseInt((opts.accent || "#FFD60A").slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; })();
+  const cover = await makeCover({ title: script.title, brand: opts.brand, accent: accentRgb, handle: opts.handle || "", scenes },
+    (ctx, list) => coverBackground(ctx, list, accentRgb)).catch((e) => { console.warn("cover", e); return null; });
   releasePlan(plan);
 
   remember(script);
@@ -240,9 +256,22 @@ export async function produceReel(plan, opts, ui) {
   return {
     id: `${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, "")}-${script.topicId}`,
     ...meta, kind: script.kind, duration: total, created: Date.now(), blob: result.blob, ext: result.ext, how: result.how, sound: result.sound, written: result.written, niche: script.niche,
-    credits, sources: script.sources, handle: opts.handle || "",
+    credits, sources: script.sources, handle: opts.handle || "", srt: makeSrt(words), cover,
     script: script.lines.map((l) => l.text).join("\n"),
   };
+}
+
+// The cover's picture: the reel's first photo, else its first chart or illustration.
+function coverBackground(ctx, scenes, accent) {
+  const photo = scenes.find((s) => s.kind === "image" && s.bitmap);
+  if (photo) {
+    const b = photo.bitmap, sc = Math.max(1080 / b.width, 1920 / b.height), w = 1080 / sc, h = 1920 / sc;
+    ctx.drawImage(b, (b.width - w) / 2, (b.height - h) * 0.4, w, h, 0, 0, 1080, 1920);
+    return;
+  }
+  const gen = scenes.find((s) => s.kind === "stat" || s.kind === "illus");
+  const bg = gen?.kind === "stat" ? new StatBg(gen.spec, accent, "middle") : new IllusBg(gen?.icon || "coins", null, accent, "middle");
+  bg.draw(ctx, 0.95); bg.dispose();
 }
 
 // Which visual a scene uses. mode: "auto" (default), "photo", "chart" or "illus".
@@ -281,6 +310,7 @@ export function releasePlan(plan) {
 // Photos are found again when a draft is opened (your own photos aren't kept, to save space).
 export function draftFromPlan(plan, label) {
   const strip = (l) => ({ text: l.text, visual: l.visual, query: l.query, kind: l.kind, chart: l.chart || null, vmode: l.vmode, concrete: l.concrete,
+    source: l.source, hold: l.hold, items: l.items, num: l.num, label: l.label,
     mine: l.asset && !l.asset.credit ? true : undefined });
   const { script } = plan;
   return {
