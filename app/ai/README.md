@@ -11,7 +11,7 @@ then works with no internet at all. No API, no account, no other app.
 | `data/library.vec` | Meaning vectors for every article, computed by `scripts/embed_library.py` | ~8 MB | Derived from the above |
 | `factcheck.js` | Checks each script line against the library (and live Wikipedia at Deep/Maximum depth), checks money maths by calculation, and shows the evidence | small | MIT (this app) |
 | `models/all-MiniLM-L6-v2` | Semantic search model (understands what a question means) | 23 MB | Apache-2.0 ([sentence-transformers](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2)) |
-| `models/SmolLM2-135M-Instruct` | Small language model that rewrites idea titles. Optional, downloaded only when you tap Download | 270 MB | Apache-2.0 ([Hugging Face SmolLM2](https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct)) |
+| `models/SmolLM2-135M-Instruct` | Small language model that rewrites idea titles. Optional, downloaded only when you tap Download. 8-bit weights, run in its own worker | 137 MB | Apache-2.0 ([Hugging Face SmolLM2](https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct)) |
 | `vendor/transformers.min.js` | Transformers.js 4.3.1, runs the models in the browser | 0.6 MB | Apache-2.0 |
 | `vendor/ort-wasm-simd-threaded.*` | ONNX Runtime Web (WebAssembly) | 14 MB | MIT |
 
@@ -29,11 +29,11 @@ then works with no internet at all. No API, no account, no other app.
 
 ## How the models were prepared
 
-- **SmolLM2-135M-Instruct:** the original full-precision ONNX export, with every weight stored in
-  half precision plus a conversion step that restores full precision when the model loads. That
-  halves the download while keeping the browser's fast full-precision math (4-bit weights were
-  about 15x slower in the browser's CPU runtime). The weights are split into files under 100 MB
-  for GitHub Pages with `scripts/split_onnx.py`.
+- **SmolLM2-135M-Instruct:** the standard 8-bit quantized ONNX export (137 MB). The full-precision
+  version used about 1.4 GB of memory, which iPhones close the page for. The 8-bit version uses about
+  400 MB, and runs in its own worker so Remove gives that memory back.
+- **Kokoro-82M (the natural voice):** the standard 8-bit export (92 MB, about 600 MB of memory while
+  speaking). It runs in its own worker that ends after each voiceover, freeing its memory.
 - **all-MiniLM-L6-v2:** the standard 8-bit quantized ONNX export, unchanged.
 
 ## What the AI does, and doesn't do

@@ -4,7 +4,49 @@
 import * as ort from "./vendor/ort/ort.wasm.min.mjs";
 import { KOKORO_RATE, KOKORO_VOICES } from "./voices.js";
 export { KOKORO_VOICES };
-const kokoro = () => import("./kokoro.js");      // loaded only when a natural voice is used
+// The natural voice runs in a worker (voice-worker.js); ending it frees its memory.
+let worker = null, nextId = 0;
+const pending = new Map();
+function call(cmd, args = {}, onProgress) {
+  if (!worker) {
+    worker = new Worker(new URL("./voice-worker.js", import.meta.url), { type: "module" });
+    worker.onmessage = ({ data }) => {
+      const p = pending.get(data.id); if (!p) return;
+      if (data.progress != null) return p.onProgress?.(data.progress);
+      pending.delete(data.id);
+      data.error ? p.reject(new Error(data.error)) : p.resolve(data.result);
+    };
+    worker.onerror = (e) => { for (const p of pending.values()) p.reject(new Error(e.message || "The voice stopped")); pending.clear(); worker = null; };
+  }
+  return new Promise((resolve, reject) => { const id = ++nextId; pending.set(id, { resolve, reject, onProgress }); worker.postMessage({ id, cmd, args }); });
+}
+function endWorker() {
+  worker?.terminate(); worker = null;
+  for (const p of pending.values()) p.reject(new Error("The voice was stopped")); pending.clear();
+}
+
+// Crash guard. If the phone ever closes the app while the natural voice is working (it ran out of
+// memory), the next reel uses the classic voice, which needs far less.
+const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } } };
+const LEVELS = ["q8", "classic"];
+let downgraded = null;
+function naturalLevel() {
+  let level = LEVELS.includes(store.get("voiceLevel")) ? store.get("voiceLevel") : "q8";
+  if (store.get("voiceBusy") === "1") {                 // the last attempt never finished
+    level = LEVELS[Math.min(LEVELS.length - 1, LEVELS.indexOf(level) + 1)];
+    store.set("voiceLevel", level); store.set("voiceBusy", "0");
+    downgraded = level;
+  }
+  return level;
+}
+// After a crash, a message for the user (once).
+export function voiceNotice() {
+  const d = downgraded; downgraded = null;
+  if (!d) return "";
+  return "The app restarted while making the natural voice last time (your phone ran low on memory), so the classic voice is used for now. Close other apps and pick a natural voice again in Style to retry.";
+}
+// Picking a narrator again resets the fallback.
+export function resetVoiceLevel() { store.set("voiceLevel", "q8"); store.set("voiceBusy", "0"); }
 
 let engine = "natural", voiceId = "af_heart";
 export function setVoice({ engine: e, voice } = {}) {
@@ -13,31 +55,35 @@ export function setVoice({ engine: e, voice } = {}) {
 }
 export const voiceEngine = () => engine;
 export const voiceRate = () => (engine === "natural" ? KOKORO_RATE : PIPER_RATE);
-export const voiceDownloadMB = () => (engine === "natural" ? 163 : 63);
+export const voiceDownloadMB = () => (engine === "natural" ? 92 : 63);
 
 // Loads the chosen voice. If the natural voice can't load (old phone, low memory), falls back to the fast one.
 export async function loadVoice(onProgress) {
   if (engine === "natural") {
-    try { await (await kokoro()).loadKokoro(onProgress); return "natural"; }
-    catch (e) { console.warn("natural voice unavailable, using the fast voice", e); engine = "fast"; }
+    const level = naturalLevel();
+    if (level === "classic") engine = "fast";
+    else {
+      store.set("voiceBusy", "1");                       // cleared by releaseVoice() when the voiceover is done
+      try { await call("load", { dtype: level }, onProgress); return "natural"; }
+      catch (e) { console.warn("natural voice unavailable, using the classic voice", e); endWorker(); store.set("voiceBusy", "0"); engine = "fast"; }
+    }
   }
   await loadPiper(onProgress);
   return "fast";
 }
-export async function releaseVoice() { if (engine === "natural") await (await kokoro()).unloadKokoro(); }
+export async function releaseVoice() { endWorker(); store.set("voiceBusy", "0"); }
 
 export async function phonemize(texts) {
   if (engine === "natural") {
     const lang = KOKORO_VOICES[voiceId]?.lang || "a";
     const out = [];
-    const { kokoroPhonemes } = await kokoro();
-    for (const t of texts) out.push(await kokoroPhonemes(t, lang));
+    out.push(...(await call("phonemes", { texts, lang })));
     return out;
   }
   return piperPhonemize(texts);
 }
 export async function synthesize(phonemes, speed = 1.0) {
-  if (engine === "natural") return trimAndNormalize(await (await kokoro()).kokoroSpeak(phonemes, { voice: voiceId, speed }), KOKORO_RATE);
+  if (engine === "natural") return trimAndNormalize(await call("speak", { phonemes, voice: voiceId, speed }), KOKORO_RATE);
   return piperSynthesize(phonemes, speed);
 }
 

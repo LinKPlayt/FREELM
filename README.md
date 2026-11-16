@@ -28,7 +28,7 @@ on your phone:  research ──► script ──► voice ──► photos ─�
 5. Tap **Save / Share**. Choose **Save Video** to put it in Photos, or pick YouTube, TikTok or Instagram to post it.
 6. Tap **YouTube**, **TikTok** or **Instagram** to copy a caption formatted for that platform, and paste it into your post. It includes the photo credits that the licenses require.
 
-The **first reel** downloads the narrator's voice and the video tools once (about 160 MB for the
+The **first reel** downloads the narrator's voice and the video tools once (about 92 MB for the
 natural voices, or 63 MB for the Classic voice, so use Wi-Fi). After
 that they stay on the phone.
 
@@ -109,10 +109,11 @@ Each scene's picture is chosen from the line being spoken, not from a fixed list
 - **Natural voices.** The narrator is Kokoro-82M, an open StyleTTS 2 voice model (Apache-2.0)
   whose speech is close to a real voiceover: natural rhythm, intonation and breathing between
   phrases. It runs on the phone with no speech service. There are nine voices, American and
-  British. The first reel downloads the model once (about 160 MB), and the phone keeps it after that.
-- **Faster on the phone.** The app's service worker turns on multi-core processing (GitHub Pages
-  can't), which makes the voice about 3× faster. On the first visit the app reloads once to
-  switch it on. The voice also starts loading in the background while you review the script.
+  British. The first reel downloads the model once (about 92 MB), and the phone keeps it after that.
+- **Gentle on memory.** The voice runs in its own background worker, which ends as soon as the
+  voiceover is done and gives all of its memory back before the video is made. If the phone ever
+  closes the app while the voice is working, the next reel uses a lighter version automatically.
+  The voice also starts loading in the background while you review the script.
 - **Studio finishing.** The voice is resampled with the browser's high-quality resampler (the old
   voice was stretched with simple interpolation, which sounded gritty). It then passes through a
   rumble filter, a cut in the boxy low mids, a presence lift for clarity on phone speakers, a
@@ -194,7 +195,7 @@ it uses ships with the app and stays on your phone.
 - **Make this reel.** Any idea becomes a script (hook plus researched facts) on the review screen,
   ready to edit and render.
 - **Save** ideas for later, or tap **Research deeper**.
-- **On-device AI (optional).** Tap **Download** for a small language model (270 MB, once) that
+- **On-device AI (optional).** Tap **Download** for a small language model (137 MB, once) that
   rewrites titles to be catchier. It's checked against the research: a rewrite is used only if it
   adds no new claims or numbers. Tap **Remove** to free the space.
 

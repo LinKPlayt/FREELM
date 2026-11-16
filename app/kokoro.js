@@ -10,29 +10,31 @@ env.allowLocalModels = true;
 env.localModelPath = new URL("models/", AI).pathname;
 env.useBrowserCache = false;
 env.backends.onnx.wasm.wasmPaths = { mjs: AI + "vendor/ort-wasm-simd-threaded.mjs", wasm: AI + "vendor/ort-wasm-simd-threaded.wasm" };
-// Several CPU cores when the page is cross-origin isolated (the service worker adds the headers that
-// GitHub Pages can't), otherwise one.
-env.backends.onnx.wasm.numThreads = self.crossOriginIsolated ? Math.min(4, navigator.hardwareConcurrency || 1) : 1;
+// One CPU core: measured, several cores weren't faster for these models in the browser and cost
+// hundreds of MB of extra memory (too much for an iPhone).
+env.backends.onnx.wasm.numThreads = 1;
 
 export { KOKORO_RATE, KOKORO_VOICES } from "./voices.js";
 export const MODEL_ID = "kokoro-82m";
-export const MODEL_MB = 92;
+// 8-bit weights: a 92 MB download that needs about 600 MB of memory while speaking. (Full precision
+// measured no faster in the browser and needed over 1 GB, too much for many iPhones.)
+export const MODEL_MB = { q8: 92 };
 
 let model = null, tokenizer = null, loading = null, espeak = null;
 const styles = new Map();
 
 // Downloads (first time only; then from the phone) and starts the model. onProgress(0..1).
-export async function loadKokoro(onProgress) {
+export async function loadKokoro(onProgress, dtype = "q8") {
   if (model) return;
   loading ??= (async () => {
     const files = new Map();
     const progress_callback = (p) => {
       if (p.status === "progress" && p.total) { files.set(p.file, [p.loaded, p.total]); }
       const [got, total] = [...files.values()].reduce(([a, b], [c, d]) => [a + c, b + d], [0, 0]);
-      if (total > 1e6) onProgress?.(Math.min(1, got / Math.max(total, MODEL_MB * 1e6)));
+      if (total > 1e6) onProgress?.(Math.min(1, got / Math.max(total, (MODEL_MB[dtype] || 92) * 1e6)));
     };
     const [m, t] = await Promise.all([
-      StyleTextToSpeech2Model.from_pretrained(MODEL_ID, { dtype: "fp32", device: "wasm", progress_callback }),
+      StyleTextToSpeech2Model.from_pretrained(MODEL_ID, { dtype, device: "wasm", progress_callback }),
       AutoTokenizer.from_pretrained(MODEL_ID),
     ]);
     espeak ??= (await import("./vendor/phonemizer/phonemizer.js")).phonemize;

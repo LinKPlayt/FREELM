@@ -1,8 +1,3 @@
 {
-  "model_type": "style_text_to_speech_2",
-  "transformers.js_config": {
-    "use_external_data_format": {
-      "model.onnx": 2
-    }
-  }
+  "model_type": "style_text_to_speech_2"
 }

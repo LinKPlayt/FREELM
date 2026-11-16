@@ -3,7 +3,7 @@ import { seriesTopics, appData, planReel, produceReel, releasePlan, estimateSeco
 import { StatBg, IllusBg } from "./graphics.js";
 import { describeStat } from "./visuals.js";
 import { hookOptions, coach } from "./extras.js";
-import { KOKORO_VOICES, setVoice, loadVoice, phonemize, synthesize, voiceRate } from "./tts.js";
+import { KOKORO_VOICES, setVoice, loadVoice, phonemize, synthesize, voiceRate, releaseVoice, voiceNotice, resetVoiceLevel } from "./tts.js";
 const factModule = () => import("./ai/factcheck.js");
 import { listReels, saveReel, deleteReel, clearReels, listDrafts, saveDraft, deleteDraft } from "./store.js";
 import { platformCaptions, setPronunciations } from "./script.js";
@@ -288,7 +288,7 @@ async function produce() {
   const t0 = performance.now();
   try {
     if (state.ideasUI) { say("Freeing memory…", 0); await state.ideasUI.unloadAI(); }   // rendering needs the memory
-    const reel = await produceReel(state.plan, options(), { say, canvas: $("preview"), audioCtx: state.audioCtx });
+    const reel = await produceReel(state.plan, options(), { say, canvas: $("preview"), audioCtx: state.audioCtx, toast });
     state.plan = null;
     if (state.draftId) { deleteDraft(state.draftId); state.draftId = null; }
     const kept = await saveReel(reel);
@@ -337,7 +337,7 @@ async function produceSeries() {
       s.title = `${i === 0 ? base : s.title.replace(/\s*#Shorts$/, "")} · Part ${i + 1}`;
       const outro = s.lines.find((l) => l.kind === "outro");
       if (outro && i < total - 1) outro.text = `Follow for part ${i + 2}: ${next[i]}.`;
-      const reel = await produceReel(plan, opts, { say: partSay, canvas: $("preview"), audioCtx: state.audioCtx });
+      const reel = await produceReel(plan, opts, { say: partSay, canvas: $("preview"), audioCtx: state.audioCtx, toast });
       await saveReel(reel); made.push(reel);
       if (i === 0) { state.plan = null; if (state.draftId) { deleteDraft(state.draftId); state.draftId = null; } }
     }
@@ -392,6 +392,8 @@ async function previewVoice() {
     const src = ctx.createBufferSource(); src.buffer = buf; src.connect(ctx.destination); src.start();
     await new Promise((r) => { src.onended = r; });
   } catch (e) { toast("Couldn't play the voice: " + (e.message || e)); }
+  await releaseVoice();                                   // give the memory back
+  const n = voiceNotice(); if (n) toast(n);
   previewing = false; btn.disabled = false; btn.textContent = "▶ Hear it";
 }
 
@@ -490,7 +492,7 @@ function showReview() {
 // so making the video starts right away.
 function warmVoice() {
   const v = voiceOpts(state.voice);
-  if (store.get("voiceReady-" + v.engine) !== "1") return;
+  if (store.get("voiceReady-" + v.engine) !== "1" || store.get("voiceBusy") === "1") return;
   setVoice(v);
   loadVoice().catch(() => {});
 }
@@ -705,10 +707,10 @@ async function init() {
   prefChips("lengths", LENGTH_LABELS, "length", "standard", updateEstimate);
   const voiceNote = () => {
     const v = KOKORO_VOICES[state.voice];
-    $("voice-note").textContent = v ? `${v.desc}. Natural voice: sounds like a real narrator. One-time 160 MB download.`
+    $("voice-note").textContent = v ? `${v.desc}. Natural voice: sounds like a real narrator. One-time 92 MB download.`
       : "Classic voice: quicker to make and a 63 MB download, but more robotic.";
   };
-  prefChips("voices", VOICE_LABELS, "voice", "af_heart", voiceNote); voiceNote();
+  prefChips("voices", VOICE_LABELS, "voice", "af_heart", () => { resetVoiceLevel(); voiceNote(); }); voiceNote();
   prefChips("music-vol", { low: "Low", medium: "Medium", high: "High" }, "musicVol", "medium");
   $("say-as").value = store.get("sayAs") || "";
   setPronunciations($("say-as").value);
@@ -747,15 +749,5 @@ async function init() {
   window.__ready = true;
 }
 
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("sw.js").then(() => {
-    // On the first visit the service worker (which turns on multi-core AI) only takes over after a reload.
-    // Do that once, right away, before anything is in progress.
-    if (self.crossOriginIsolated) return;
-    let asked = false; try { asked = sessionStorage.getItem("isolate-reload") === "1"; } catch { /* private mode */ }
-    const reload = () => { if (asked || state.busy || state.plan) return; try { sessionStorage.setItem("isolate-reload", "1"); } catch { return; } location.reload(); };
-    if (navigator.serviceWorker.controller) reload();
-    else navigator.serviceWorker.addEventListener("controllerchange", reload, { once: true });
-  }).catch(() => {});
-}
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 init().catch((e) => { console.error(e); toast("Couldn't start the app: " + e.message); });

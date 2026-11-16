@@ -43,7 +43,12 @@ export async function init(hooks) {
   observer = new IntersectionObserver((entries) => { if (entries.some((e) => e.isIntersecting)) more(3); }, { rootMargin: "400px" });
   observer.observe($("idea-more"));
   renderSaved();
-  if (H.store.get("aiOn") === "1") loadAI(false);          // downloaded before: load it from the phone
+  if (H.store.get("aiOn") === "1") {                       // downloaded before: load it from the phone
+    if (H.store.get("aiLoading") === "1") {                // ...unless loading it last time closed the app
+      H.store.set("aiLoading", "0"); H.store.set("aiOn", "0");
+      $("ai-sub").textContent = "Last time the AI was loading, your phone closed the app (it ran low on memory), so it wasn't loaded automatically. Close other apps and tap Download to try again. Ideas work without it.";
+    } else loadAI(false);
+  }
 }
 
 /* ---------- on-device AI ---------- */
@@ -53,15 +58,18 @@ async function loadAI(userAsked) {
   btn.disabled = true; btn.textContent = "Loading…"; bar.classList.remove("hidden");
   $("ai-sub").textContent = userAsked && H.store.get("aiOn") !== "1"
     ? `Downloading ${MODEL_MB} MB from this app (once). Keep this screen open; Wi-Fi recommended.` : "Loading the AI from your phone…";
+  H.store.set("aiLoading", "1");                           // cleared below; still set after a crash
   try {
     await loadLLM((f) => { bar.firstElementChild.style.width = Math.round(f * 100) + "%"; });
+    H.store.set("aiLoading", "0");
     H.store.set("aiOn", "1");
-    $("ai-sub").textContent = "Ready. Running on your phone. Titles it improves are marked AI. Tap Remove to free 270 MB.";
+    $("ai-sub").textContent = "Ready. Running on your phone. Titles it improves are marked AI. Tap Remove to free 137 MB.";
     btn.textContent = "Remove"; btn.disabled = false; btn.onclick = removeAI; bar.classList.add("hidden");
     for (const idea of shown.values()) if (!idea.ai) titleQueue.push(idea);
     pumpTitles();
   } catch (e) {
     console.warn(e);
+    H.store.set("aiLoading", "0");
     $("ai-sub").textContent = "The AI couldn't start on this phone (" + (e.message || e) + "). Ideas still work without it.";
     btn.disabled = false; btn.textContent = "Try again"; bar.classList.add("hidden");
   }

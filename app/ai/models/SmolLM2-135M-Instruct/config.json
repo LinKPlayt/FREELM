@@ -32,7 +32,7 @@
       "fp16": "float16"
     },
     "use_external_data_format": {
-      "model.onnx": 3
+      "model_quantized.onnx": 2
     }
   },
   "use_cache": true,

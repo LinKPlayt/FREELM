@@ -2,7 +2,7 @@
 import * as research from "./research.js";
 import { buildEvergreen, buildNews, buildMarket, buildCustom, buildMetadata, speakable, statFor, visualMatch } from "./script.js";
 import { MediaFinder } from "./media.js";
-import { loadVoice, phonemize, synthesize, voiceRate, setVoice, releaseVoice, voiceDownloadMB } from "./tts.js";
+import { loadVoice, phonemize, synthesize, voiceRate, setVoice, releaseVoice, voiceDownloadMB, voiceNotice } from "./tts.js";
 import { generateMusic, mix, resample, SR } from "./music.js";
 import { loadFonts, renderReel } from "./render.js";
 import { analyzeLine, iconFor } from "./visuals.js";
@@ -324,7 +324,9 @@ export async function produceReel(plan, opts, ui) {
   const msg = () => `Getting the voice ready (one-time download, about ${voiceDownloadMB()} MB; then it's on your phone)…`;
   say(msg());
   const used = (await Promise.all([loadVoice((f) => say(msg(), f)), loadFonts()]))[0];
-  if (used !== (opts.voiceEngine || "natural")) ui.toast?.("The natural voice couldn't start on this phone, so the fast voice is used.");
+  const notice = voiceNotice();
+  if (notice) ui.toast?.(notice);
+  else if (used !== (opts.voiceEngine || "natural")) ui.toast?.("The natural voice couldn't start on this phone, so the classic voice is used.");
 
   const clips = await voiceScript(script, stage(0.25, 0.55), opts.voiceSpeed || 1.0);
   await releaseVoice();      // free the voice model's memory before the video is encoded

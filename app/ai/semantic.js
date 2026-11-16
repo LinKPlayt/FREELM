@@ -10,9 +10,9 @@ env.allowLocalModels = true;
 env.localModelPath = new URL("models/", BASE).pathname;
 env.useBrowserCache = false;
 env.backends.onnx.wasm.wasmPaths = { mjs: BASE + "vendor/ort-wasm-simd-threaded.mjs", wasm: BASE + "vendor/ort-wasm-simd-threaded.wasm" };
-// Several CPU cores when the page is cross-origin isolated (the service worker adds the headers that
-// GitHub Pages can't), otherwise one.
-env.backends.onnx.wasm.numThreads = self.crossOriginIsolated ? Math.min(4, navigator.hardwareConcurrency || 1) : 1;
+// One CPU core: measured, several cores weren't faster for these models in the browser and cost
+// hundreds of MB of extra memory (too much for an iPhone).
+env.backends.onnx.wasm.numThreads = 1;
 
 let embedder = null, loading = null, vectors = null, dim = 384;
 

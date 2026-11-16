@@ -4,49 +4,34 @@
 // remote model loading is switched off, and the service worker keeps them on the phone after the
 // first download, so it then works fully offline.
 //
-// The weights are stored in half precision (smaller download) and computed in full precision,
-// which is the fast path for the browser's CPU runtime (about 15x faster than 4-bit weights).
-import { env, pipeline } from "./vendor/transformers.min.js";
-
-const BASE = new URL("./", import.meta.url).href;
+// It runs in a worker (llm-worker.js) with 8-bit weights: a 137 MB download that needs about a
+// quarter of the memory of the full-precision model (which used ~1.4 GB and could crash an iPhone).
 export const MODEL = "SmolLM2-135M-Instruct";
-export const MODEL_MB = 270;
+export const MODEL_MB = 137;
 
-env.allowRemoteModels = false;                       // never contact a model hub
-env.allowLocalModels = true;
-// A site-relative path (not a full URL): Transformers.js 4.3 skips its local-file check for full URLs
-// and would then think the tokenizer is missing.
-env.localModelPath = new URL("models/", BASE).pathname;
-env.useBrowserCache = false;                         // our service worker already caches these files
-env.backends.onnx.wasm.wasmPaths = { mjs: BASE + "vendor/ort-wasm-simd-threaded.mjs", wasm: BASE + "vendor/ort-wasm-simd-threaded.wasm" };
-// Several CPU cores when the page is cross-origin isolated (the service worker adds the headers that
-// GitHub Pages can't), otherwise one.
-env.backends.onnx.wasm.numThreads = self.crossOriginIsolated ? Math.min(4, navigator.hardwareConcurrency || 1) : 1;
-env.backends.onnx.wasm.proxy = false;
+let worker = null, ready = false, loading = null, nextId = 0;
+const pending = new Map();
+function call(cmd, args = {}, onProgress) {
+  if (!worker) {
+    worker = new Worker(new URL("./llm-worker.js", import.meta.url), { type: "module" });
+    worker.onmessage = ({ data }) => {
+      const p = pending.get(data.id); if (!p) return;
+      if (data.progress != null) return p.onProgress?.(data.progress);
+      pending.delete(data.id);
+      data.error ? p.reject(new Error(data.error)) : p.resolve(data.result);
+    };
+    worker.onerror = (e) => { for (const p of pending.values()) p.reject(new Error(e.message || "The AI stopped")); pending.clear(); worker = null; ready = false; loading = null; };
+  }
+  return new Promise((resolve, reject) => { const id = ++nextId; pending.set(id, { resolve, reject, onProgress }); worker.postMessage({ id, cmd, args }); });
+}
 
-let generator = null, loading = null;
-
-export const llmReady = () => Boolean(generator);
+export const llmReady = () => ready;
 
 // onProgress(fraction 0..1)
 export function loadLLM(onProgress) {
-  if (generator) return Promise.resolve(generator);
-  if (loading) return loading;
-  loading = (async () => {
-    const files = new Map();
-    const progress_callback = (p) => {
-      if (p.status === "progress" && p.total) {
-        files.set(p.file, p.loaded);
-        let got = 0; for (const l of files.values()) got += l;
-        onProgress?.(Math.min(1, got / (MODEL_MB * 1e6)));
-      }
-    };
-    const g = await pipeline("text-generation", MODEL, { device: "wasm", dtype: "fp32", progress_callback });
-    await g("Hi", { max_new_tokens: 1, do_sample: false });   // warm-up: proves it runs here
-    generator = g;
-    return g;
-  })();
-  loading.catch(() => { loading = null; });
+  if (ready) return Promise.resolve(true);
+  loading ??= call("load", { model: MODEL, mb: MODEL_MB }, onProgress).then(() => { ready = true; return true; });
+  loading.catch(() => { loading = null; unloadLLM(); });
   return loading;
 }
 
@@ -55,16 +40,16 @@ const chatPrompt = (system, user, prefill = "") =>
 
 // Continue a chat whose answer we have already started (prefill), e.g. "1." for a numbered list.
 export async function complete(system, user, prefill, { maxTokens = 48, temperature = 0.75 } = {}) {
-  const g = await loadLLM();
-  const out = await g(chatPrompt(system, user, prefill), {
+  await loadLLM();
+  const text = await call("generate", { prompt: chatPrompt(system, user, prefill), options: {
     max_new_tokens: maxTokens, do_sample: temperature > 0, temperature: Math.max(0.05, temperature),
     top_p: 0.92, repetition_penalty: 1.15, return_full_text: false,
-  });
-  return prefill + String(out[0].generated_text).split("<|im_end|>")[0];
+  } });
+  return prefill + text.split("<|im_end|>")[0];
 }
 
-// Frees the model's memory (done before rendering a video, which needs memory of its own).
+// Frees the model's memory: ends the worker (done before rendering a video, and by Remove).
 export async function unloadLLM() {
-  const g = generator; generator = null; loading = null;
-  try { await g?.dispose?.(); } catch { /* already gone */ }
+  worker?.terminate(); worker = null; ready = false; loading = null;
+  for (const p of pending.values()) p.reject(new Error("The AI was unloaded")); pending.clear();
 }
