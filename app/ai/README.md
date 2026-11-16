@@ -29,7 +29,9 @@ then works with no internet at all. No API, no account, no other app.
 
 ## How the models were prepared
 
-- **SmolLM2-135M-Instruct:** the standard 8-bit quantized ONNX export (137 MB). The full-precision
+- **SmolLM2-135M-Instruct:** the standard 8-bit quantized ONNX export (137 MB), stored as two plain
+  byte chunks (`model_quantized.onnx.part0/.part1`, for GitHub's 100 MB file limit) that
+  `joined-fetch.js` joins while downloading. ONNX's own "external data" split doesn't load on iPhone. The full-precision
   version used about 1.4 GB of memory, which iPhones close the page for. The 8-bit version uses about
   400 MB, and runs in its own worker so Remove gives that memory back.
 - **Kokoro-82M (the natural voice):** the standard 8-bit export (92 MB, about 600 MB of memory while

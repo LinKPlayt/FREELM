@@ -1,6 +1,6 @@
 // Service worker: keeps the app and its big files (voice models, WebAssembly, fonts, research library)
 // on the phone so they download once. Live data (news, photos) always uses the network.
-const VERSION = "reelbot-v17";
+const VERSION = "reelbot-v18";
 // Models, runtimes and fonts never change at the same path (a new model gets a new folder), so they
 // live in a cache that survives app updates: an update doesn't download the voice again.
 const MODELS = "reelbot-models-v1";
@@ -14,7 +14,8 @@ self.addEventListener("activate", (e) => {
 });
 
 // Model files the app no longer uses (both models are 8-bit now): frees their space on the phone.
-const RETIRED = /\/(SmolLM2-135M-Instruct|kokoro-82m)\/onnx\/model\.onnx(_data(_\d+)?)?$/;
+// Also the AI split in ONNX's "external data" format, which doesn't load on iPhone (now joined chunks).
+const RETIRED = /\/(SmolLM2-135M-Instruct|kokoro-82m)\/onnx\/model\.onnx(_data(_\d+)?)?$|\/SmolLM2-135M-Instruct\/onnx\/model_quantized\.onnx(_data(_\d+)?)?$/;
 async function dropRetired() {
   try { const c = await caches.open(MODELS); for (const r of await c.keys()) if (RETIRED.test(new URL(r.url).pathname)) await c.delete(r); } catch { /* storage unavailable */ }
 }

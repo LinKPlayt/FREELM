@@ -30,9 +30,6 @@
     "kv_cache_dtype": {
       "q4f16": "float16",
       "fp16": "float16"
-    },
-    "use_external_data_format": {
-      "model_quantized.onnx": 2
     }
   },
   "use_cache": true,

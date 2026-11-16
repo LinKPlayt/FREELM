@@ -1,6 +1,7 @@
 // Runs the Idea Lab's language model in its own worker. Removing or unloading it ends the worker,
 // which gives all of its memory back to the phone.
 import { env, pipeline } from "./vendor/transformers.min.js";
+import { joinedFetch } from "./joined-fetch.js";
 
 const BASE = new URL("./", import.meta.url).href;
 env.allowRemoteModels = false;
@@ -9,6 +10,8 @@ env.localModelPath = new URL("models/", BASE).pathname;
 env.useBrowserCache = false;
 env.backends.onnx.wasm.wasmPaths = { mjs: BASE + "vendor/ort-wasm-simd-threaded.mjs", wasm: BASE + "vendor/ort-wasm-simd-threaded.wasm" };
 env.backends.onnx.wasm.numThreads = 1;
+// The 137 MB model is stored in two chunks (GitHub's 100 MB limit) and joined while it downloads.
+env.fetch = joinedFetch(self.fetch.bind(self), ["SmolLM2-135M-Instruct/onnx/model_quantized.onnx"]);
 
 let generator = null;
 self.onmessage = async ({ data: { id, cmd, args } }) => {
