@@ -154,6 +154,13 @@ def _price(s: dict) -> str:
     return f"{v:,.0f}" if v >= 1000 else f"{v:,.2f}"
 
 
+def _subject(s: dict, cap: bool = True) -> str:
+    """'The S&P 500' but 'Bitcoin'."""
+    if s["symbol"] in ("BTC-USD", "ETH-USD", "GC=F", "CL=F"):
+        return s["name"] if cap or s["symbol"] in ("BTC-USD", "ETH-USD") else s["name"].lower()
+    return f"{'The' if cap else 'the'} {s['name']}"
+
+
 def _cta(cfg: dict) -> Line:
     return Line(cfg["video"]["call_to_action"], kind="outro")
 
@@ -214,7 +221,7 @@ def build_news(headlines: list[dict], markets: list[dict], cfg: dict) -> Script 
     if markets:
         s = markets[0]
         direction = "up" if s["day_pct"] >= 0 else "down"
-        extras.append(Line(f"Meanwhile, the {s['name']} is {direction} {_pct(s['day_pct'])} today.", kind="chart", chart=s))
+        extras.append(Line(f"Meanwhile, {_subject(s, cap=False)} is {direction} {_pct(s['day_pct'])} today.", kind="chart", chart=s))
     if picks[0]["summary"]:
         sent = re.split(r"(?<=[.!?])\s+", picks[0]["summary"])[0]
         if 6 <= len(sent.split()) <= 24:
@@ -259,9 +266,9 @@ def build_market(markets: list[dict], headlines: list[dict], cfg: dict) -> Scrip
         d = "up" if s["day_pct"] >= 0 else "down"
         m = "up" if s["month_pct"] >= 0 else "down"
         if s["is_yield"]:
-            text = f"The {s['name']} sits at {_price(s)}, {d} {abs(s['day_pct']):.1f}% on the day."
+            text = f"{_subject(s)} sits at {_price(s)}, {d} {abs(s['day_pct']):.1f}% on the day."
         else:
-            text = f"The {s['name']} is at {_price(s)}, {d} {_pct(s['day_pct'])} today and {m} {_pct(s['month_pct'])} this month."
+            text = f"{_subject(s)} is at {_price(s)}, {d} {_pct(s['day_pct'])} today and {m} {_pct(s['month_pct'])} this month."
         lines.append(Line(text, kind="chart", chart=s))
     extras = []
     if headlines:

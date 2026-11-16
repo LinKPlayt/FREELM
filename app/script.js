@@ -83,6 +83,8 @@ export function price(s) {
   if (["BTC-USD", "ETH-USD", "GC=F", "CL=F"].includes(s.symbol)) return "$" + (v >= 100 ? fmt(v, 0) : fmt(v, 2));
   return v >= 1000 ? fmt(v, 0) : fmt(v, 2);
 }
+// "The S&P 500 is…" but "Bitcoin is…"
+const subject = (s, cap = true) => (["BTC-USD", "ETH-USD", "GC=F", "CL=F"].includes(s.symbol) ? s.name : `${cap ? "The" : "the"} ${s.name}`);
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const today = () => new Date().toISOString().slice(0, 10).replaceAll("-", "");
 const ORDINALS = ["First", "Second", "Third", "Fourth"];
@@ -137,7 +139,7 @@ export function buildNews(headlines, markets, opts) {
   const extras = [];
   if (markets.length) {
     const s = markets[0];
-    extras.push(line(`Meanwhile, the ${s.name} is ${s.day_pct >= 0 ? "up" : "down"} ${pct(s.day_pct)} today.`, "", "chart", s));
+    extras.push(line(`Meanwhile, ${subject(s, false).replace(/^(Gold|Oil)$/, (m) => m.toLowerCase())} is ${s.day_pct >= 0 ? "up" : "down"} ${pct(s.day_pct)} today.`, "", "chart", s));
   }
   const sent = (picks[0].summary || "").split(/(?<=[.!?])\s+/)[0] || "";
   const wc = sent.split(/\s+/).filter(Boolean).length;
@@ -164,8 +166,8 @@ export function buildMarket(markets, headlines, opts) {
   for (const s of markets.slice(0, 3)) {
     const d = s.day_pct >= 0 ? "up" : "down", m = s.month_pct >= 0 ? "up" : "down";
     const text = s.is_yield
-      ? `The ${s.name} sits at ${price(s)}, ${d} ${Math.abs(s.day_pct).toFixed(1)}% on the day.`
-      : `The ${s.name} is at ${price(s)}, ${d} ${pct(s.day_pct)} on the day and ${m} ${pct(s.month_pct)} this month.`;
+      ? `${subject(s)} sits at ${price(s)}, ${d} ${Math.abs(s.day_pct).toFixed(1)}% on the day.`
+      : `${subject(s)} is at ${price(s)}, ${d} ${pct(s.day_pct)} on the day and ${m} ${pct(s.month_pct)} this month.`;
     lines.push(line(text, "", "chart", s));
   }
   const extras = [];
