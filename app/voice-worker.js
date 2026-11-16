@@ -13,21 +13,25 @@ const MODEL_BYTES = 92_361_116;
 let session = null, vocab = null;
 const styles = new Map();
 
+// Downloads into one buffer with progress. The size the server reports can't be trusted: GitHub Pages
+// sends the model compressed, so Content-Length is the compressed size while the data that arrives is
+// bigger. The buffer starts at the known model size and grows if more arrives.
 async function download(url, onProgress) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`couldn't download the voice (${res.status})`);
-  const total = Number(res.headers.get("Content-Length")) || MODEL_BYTES;
-  const out = new Uint8Array(total);
-  let got = 0;
+  let out = new Uint8Array(MODEL_BYTES), got = 0;
   const reader = res.body.getReader();
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
-    if (got + value.length > out.length) throw new Error("the voice download was larger than expected");
+    if (got + value.length > out.length) {                  // more than expected: grow (rare)
+      const bigger = new Uint8Array(Math.max(out.length * 1.25, got + value.length) | 0);
+      bigger.set(out.subarray(0, got)); out = bigger;
+    }
     out.set(value, got); got += value.length;
-    onProgress(got / total);
+    onProgress(Math.min(1, got / MODEL_BYTES));
   }
-  return got === out.length ? out : out.subarray(0, got);
+  return got === out.length ? out : out.slice(0, got);
 }
 
 async function load(onProgress) {

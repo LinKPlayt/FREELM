@@ -780,7 +780,8 @@ async function init() {
   prefChips("lengths", LENGTH_LABELS, "length", "standard", updateEstimate);
   const voiceNote = () => {
     const v = KOKORO_VOICES[state.voice], err = lastVoiceError();
-    $("voice-note").textContent = v && store.get("voiceLevel") === "classic"
+    const fixedBug = /larger than expected|Out of memory|no available backend/i.test(err) && store.get("voiceRetried") !== "v24";
+    $("voice-note").textContent = v && store.get("voiceLevel") === "classic" && !fixedBug
       ? `The natural voice didn't work on this phone${err ? ` (${err})` : ""}, so the classic voice is used. Tap a natural voice again to retry.`
       : v ? `${v.desc}. Natural voice: sounds like a real narrator. One-time 92 MB download.`
       : "Classic voice: quicker to make and a 63 MB download, but more robotic.";

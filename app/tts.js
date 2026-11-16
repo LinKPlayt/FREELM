@@ -46,6 +46,10 @@ const store = { get: (k) => { try { return localStorage.getItem(k); } catch { re
 const LEVELS = ["q8", "classic"];
 let downgraded = null;
 function naturalLevel() {
+  // Failures caused by app bugs that are now fixed don't count against this phone: try again.
+  if (/larger than expected|Out of memory|no available backend/i.test(store.get("voiceError") || "") && store.get("voiceRetried") !== "v24") {
+    store.set("voiceRetried", "v24"); store.set("voiceLevel", "q8"); store.set("voiceError", "");
+  }
   let level = LEVELS.includes(store.get("voiceLevel")) ? store.get("voiceLevel") : "q8";
   if (store.get("voiceBusy") === "1") {                 // the last attempt never finished
     level = LEVELS[Math.min(LEVELS.length - 1, LEVELS.indexOf(level) + 1)];
