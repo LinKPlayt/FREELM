@@ -13,7 +13,7 @@ const SCALE = { k: "thousand", m: "million", mn: "million", b: "billion", bn: "b
 
 // Rewrite text so the voice pronounces finance jargon correctly.
 export function speakable(text) {
-  let t = text.replace(/\$(\d[\d,]*(?:\.\d+)?)(?:\s?(trillion|billion|million|thousand)|(tn|bn|mn|[kmbt]))?\b/gi, (_, num, w1, w2) => {
+  let t = text.replace(/\b(?:US|U\.S\.|USD)\s?\$/g, "$").replace(/\$(\d[\d,]*(?:\.\d+)?)(?:\s?(trillion|billion|million|thousand)|(tn|bn|mn|[kmbt]))?\b/gi, (_, num, w1, w2) => {
     const scale = (w1 || w2 || "").toLowerCase();
     const word = SCALE[scale] || scale;
     const unit = (num === "1" || num === "1.0") && !word ? "dollar" : "dollars";
@@ -189,7 +189,12 @@ export function buildMarket(markets, headlines, opts) {
 // A script for any topic, built from the key sentences of its Wikipedia article.
 export function buildCustom(found, opts) {
   const title = found.title.replace(/\s*\(.*\)$/, "");
-  const hook = pick([
+  const person = /\b(?:is|was) an? [\w\s,-]*?\b(?:investor|businessman|businesswoman|entrepreneur|economist|politician|philanthropist|executive|banker|financier|author|writer|businessperson|billionaire|trader|founder)\b/i.test(found.sentences[0] || "");
+  const hook = pick(person ? [
+    `Who is ${title}? Here's the quick version.`,
+    `${title}, explained in thirty seconds.`,
+    `Everyone has heard of ${title}. Here's why.`,
+  ] : [
     `${title}, explained in thirty seconds.`,
     `What is ${title}? Here's the quick version.`,
     `Everyone talks about ${title}. Here's what it actually means.`,

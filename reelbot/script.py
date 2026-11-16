@@ -74,7 +74,7 @@ def _money(match: re.Match) -> str:
 
 def speakable(text: str) -> str:
     """Rewrite text so an offline TTS engine pronounces finance jargon correctly."""
-    t = text
+    t = re.sub(r"\b(?:US|U\.S\.|USD)\s?\$", "$", text)
     t = re.sub(r"\$(\d[\d,]*(?:\.\d+)?)(?:\s?(trillion|billion|million|thousand)|(tn|bn|mn|[kmbt]))?\b", _money, t, flags=re.I)
     t = re.sub(r"(\d)\s?%", r"\1 percent", t)
     t = re.sub(r"(\d)\s?bps\b", r"\1 basis points", t)
