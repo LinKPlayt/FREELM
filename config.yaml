@@ -1,0 +1,54 @@
+# ReelBot configuration. Every setting here is optional; defaults live in reelbot/config.py.
+
+# Which finance niche the channel covers. Built-in niches:
+#   personal finance | investing | crypto | economy | side hustles | real estate
+niche: personal finance
+
+# What kind of reel to make:
+#   auto      - mixes evergreen explainers, news roundups and market recaps
+#   evergreen - timeless explainer from the built-in topic library (+ Wikipedia research)
+#   news      - roundup of today's top headlines for the niche (free RSS feeds)
+#   market    - market recap with live index/crypto/commodity charts
+mode: auto
+
+video:
+  width: 1080
+  height: 1920
+  fps: 30
+  min_seconds: 30
+  max_seconds: 45
+  brand_name: Money Minute          # shown on the header pill and outro card
+  call_to_action: Follow for a new money tip every day.
+  accent_color: "#FFD60A"           # caption highlight / brand colour
+
+voice:
+  engine: piper                     # piper (natural, offline) | espeak (robotic fallback)
+  model: en_US-ryan-high            # any voice from https://huggingface.co/rhasspy/piper-voices
+  speed: 1.0                        # >1 = faster speech
+
+music:
+  enabled: true
+  volume: 0.14                      # background music level (voice is 1.0)
+
+media:
+  sources: [openverse, wikimedia]   # free, keyless, openly licensed media libraries
+  allow_video: true                 # pull short public-domain/CC clips from Wikimedia Commons
+  min_width: 640
+
+# Optional: write scripts with a *local* LLM via Ollama (https://ollama.com). Free, offline, no API key.
+# If Ollama isn't running, ReelBot automatically falls back to its built-in script writer.
+llm:
+  enabled: false
+  url: http://localhost:11434
+  model: llama3.1:8b
+
+youtube:
+  upload: false                     # or pass --upload on the command line
+  privacy: public                   # public | unlisted | private
+  category_id: "27"                 # 27 = Education, 22 = People & Blogs
+  client_secrets: credentials/client_secret.json
+  token: credentials/token.json
+  extra_tags: [finance, money, shorts]
+
+output_dir: output
+cache_dir: .cache

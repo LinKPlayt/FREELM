@@ -1,0 +1,9 @@
+numpy>=1.26
+Pillow>=10.0
+PyYAML>=6.0
+requests>=2.31
+piper-tts>=1.2          # offline neural text-to-speech
+# YouTube upload (only needed if you post automatically)
+google-api-python-client>=2.100
+google-auth-oauthlib>=1.2
+google-auth-httplib2>=0.2
