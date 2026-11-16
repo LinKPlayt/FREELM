@@ -109,7 +109,7 @@ function screen(name) {   // form | job | review
 }
 const say = (text, f) => { $("job-step").textContent = text; if (f != null) $("bar").style.width = Math.round(f * 100) + "%"; };
 function showError(e, what) {
-  console.error(e);
+  console.warn(e);   // shown to the user below; not an app error
   $("result").innerHTML = `<h2>${esc(what)}</h2><p style="color:var(--bad)">${esc(e.message || e)}</p><p>Check your connection and try again. If it keeps failing, close other apps to free up memory.</p>`;
   $("result").classList.remove("hidden");
   window.__lastError = String(e?.stack || e);
@@ -288,7 +288,7 @@ async function soundTest() {
     lines.push(`<span style="color:var(--bad)">Failed: ${esc(e.message || e)}</span>`);
   }
   const info = await encoderInfo();
-  lines.push(`Fast encoder: ${info.webcodecs ? "yes" : "no"} · Recorder: ${info.recorder ? "yes" : "no"} · Audio: ${esc(ctx?.state || "unavailable")} at ${ctx?.sampleRate || "?"} Hz`);
+  lines.push(`H.264 encoder: ${info.webcodecs ? "yes" : "no"} · AAC encoder: ${info.aac ? "yes" : "no"} · Recorder: ${info.recorder ? "yes" : "no"} · Audio: ${esc(ctx?.state || "unavailable")} at ${ctx?.sampleRate || "?"} Hz`);
   lines.push(`<span style="word-break:break-all">${esc(navigator.userAgent)}</span>`);
   out.insertAdjacentHTML("beforeend", `<p class="meta" style="margin-top:10px">${lines.join("<br>")}</p>
     <div class="btns"><button class="btn wide" id="copy-diag">Copy these results</button></div>`);
@@ -318,7 +318,7 @@ async function init() {
   $("sound-test").addEventListener("click", soundTest);
   $("wipe").addEventListener("click", async () => { if (confirm("Delete every reel stored on this phone?")) { await clearReels(); renderLibrary(); toast("Deleted"); } });
   const info = await encoderInfo();
-  $("encoder").textContent = info.webcodecs ? `Video encoder: on-device H.264, ${info.video.width}×${info.video.height}.`
+  $("encoder").textContent = info.webcodecs ? `Video encoder: on-device H.264, ${info.video.width}×${info.video.height}, with uncompressed sound.`
     : info.recorder ? "Video encoder: real-time recording (a reel takes about as long to make as it runs)."
     : "This browser can't encode video. Update iOS and use Safari.";
   window.__ready = true;

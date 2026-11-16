@@ -87,7 +87,7 @@ want to keep to Photos.
 | Photos | Phone fetches directly | [Openverse](https://openverse.org) and [Wikimedia Commons](https://commons.wikimedia.org); only CC0, Public Domain, CC BY and CC BY-SA |
 | Voice | On the phone | [Piper](https://github.com/OHF-Voice/piper1-gpl) neural voice running in WebAssembly; the `joe` voice is **CC0** |
 | Music | On the phone | Synthesized from scratch for every reel |
-| Video | On the phone | Drawn on a canvas, encoded with the phone's H.264 encoder |
+| Video | On the phone | Drawn on a canvas and encoded with the phone's H.264 encoder. The soundtrack is written into the file directly as uncompressed audio, in a QuickTime `.mov` (Apple's native format) |
 | Market numbers | Small data file | See below |
 
 **The one thing that isn't on the phone:** web pages aren't allowed to call market-data sites
@@ -102,7 +102,7 @@ the app still makes Explainer and news reels.
 
 - **iPhone requirements:** a recent iPhone on a current iOS version. The app uses the phone's fast video encoder when Safari offers it; otherwise it records the reel in real time, which takes about as long as the reel runs. The About tab shows which one your phone uses.
 - **Keep the app open** while a reel is being made. iOS pauses web apps in the background.
-- **Sound check:** every reel is checked for sound after it's made. If the fast encoder produces a silent file, the app automatically records it again in real time. If a reel still comes out silent, open **About → Sound test**: it makes a 3-second clip, reports whether sound reached the file, and lists your browser's capabilities so the problem can be pinned down. Tap **Copy these results** to share them.
+- **Sound:** reels are saved as `.mov` files. The app writes the soundtrack into the file itself rather than relying on the browser's audio encoder, which is what made early versions silent on iPhone. Every reel is also checked for sound after it's made; if a file comes out silent, the app automatically tries another method. If a reel still comes out silent, open **About → Sound test**: it makes a 3-second clip, reports whether sound reached the file, and lists your browser's capabilities so the problem can be pinned down. Tap **Copy these results** to share them.
 - **Listening on the phone:** if a saved video seems silent, check the volume and the side Ring/Silent switch, then play it from the Photos app.
 - **Memory:** the voice model is large for a phone browser. If a reel fails, close other apps and try again.
 - **Review before you post.** Photos are matched by keyword and aren't always a perfect fit, and headlines come from public feeds. Videos carry a "not financial advice" note.

@@ -3,6 +3,7 @@
 //   Fallback:  MediaRecorder, which records the canvas in real time.
 import { Muxer, ArrayBufferTarget } from "./vendor/mp4-muxer.mjs";
 import { SR } from "./music.js";
+import { writeMov, pcm16Stereo } from "./mov.js";
 
 export const W = 1080, H = 1920, FPS = 30;
 const FONT_DIR = new URL("../assets/fonts/", import.meta.url).href;
@@ -290,7 +291,7 @@ async function pickAudioConfig(testCodec) {
 
 export async function encoderInfo() {
   const [v, a] = await Promise.all([pickVideoConfig(), pickAudioConfig()]);
-  return { webcodecs: Boolean(v && a), video: v, recorder: typeof MediaRecorder !== "undefined" };
+  return { webcodecs: Boolean(v), video: v, aac: Boolean(a), recorder: typeof MediaRecorder !== "undefined" };
 }
 
 // Strip an ADTS header if the encoder added one (an MP4 file needs raw AAC frames).
@@ -418,6 +419,41 @@ async function encodeRecorder(job, target, audioCtx, onProgress) {
   return { blob: new Blob(parts, { type }), ext: type.includes("mp4") ? "mp4" : "webm", how: "recorded in real time" };
 }
 
+// Preferred: the browser encodes only the picture (H.264); the soundtrack is written into a
+// QuickTime file as uncompressed PCM, so it never depends on the browser's audio encoder or recorder.
+async function encodeH264Pcm(job, target, vcfg, onProgress) {
+  target.width = vcfg.width; target.height = vcfg.height;
+  const painter = new Painter(job, target);
+  const chunks = []; let description = null, failure = null;
+  const venc = new VideoEncoder({
+    output: (chunk, meta) => {
+      if (meta?.decoderConfig?.description && !description) description = new Uint8Array(meta.decoderConfig.description.slice(0));
+      const data = new Uint8Array(chunk.byteLength); chunk.copyTo(data);
+      chunks.push({ data, timestamp: chunk.timestamp, key: chunk.type === "key" });
+    },
+    error: (e) => { failure = e; },
+  });
+  venc.configure(vcfg);
+  const frames = Math.ceil(painter.total * FPS);
+  for (let i = 0; i < frames; i++) {
+    if (failure) throw failure;
+    painter.paint(i / FPS);
+    const frame = new VideoFrame(target, { timestamp: Math.round(i * 1e6 / FPS), duration: Math.round(1e6 / FPS) });
+    venc.encode(frame, { keyFrame: i % (FPS * 2) === 0 }); frame.close();
+    while (venc.encodeQueueSize > 4) await sleep(4);       // don't outrun the encoder (keeps memory flat)
+    if (i % 5 === 0) { onProgress?.(i / frames); await sleep(0); }
+  }
+  await venc.flush(); venc.close(); painter.dispose();
+  if (failure) throw failure;
+  if (!description) throw new Error("the video encoder gave no H.264 configuration");
+  if (chunks.length < frames * 0.9) throw new Error(`the video encoder dropped frames (${chunks.length}/${frames})`);
+  const { parts } = writeMov({
+    video: { width: vcfg.width, height: vcfg.height, fps: FPS, description, chunks },
+    audio: { sampleRate: SR, channels: 2, pcm: pcm16Stereo(job.audio) },
+  });
+  return { blob: new Blob(parts, { type: "video/quicktime" }), ext: "mov", how: `encoded on-device, ${vcfg.width}×${vcfg.height}, uncompressed sound` };
+}
+
 // Decode the finished file and check it really contains sound: true, false, or null (can't tell).
 export async function hasSound(blob) {
   const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
@@ -445,12 +481,22 @@ export async function renderReel(job, target, audioCtx, onProgress, force) {
   const test = force === "vp9" ? "vp9" : undefined;
   const [vcfg, acfg] = await Promise.all([pickVideoConfig(test), pickAudioConfig(test)]);
   let silent = null;
+  if (vcfg && vcfg.codec.startsWith("avc") && !["recorder", "aac"].includes(force)) {
+    try {
+      const r = await encodeH264Pcm(job, target, vcfg, onProgress);
+      // We wrote the sound ourselves, so "can't check" is fine here; only a confirmed silence is not.
+      r.sound = await hasSound(r.blob);
+      if (r.sound !== false) return r;
+      silent = r;
+      console.warn("The QuickTime file decoded as silent; trying the other methods");
+    } catch (e) { console.warn("H.264 + PCM failed; trying the other methods", e); }
+  }
   if (vcfg && acfg && force !== "recorder") {
     try {
       const r = await encodeWebCodecs(job, target, vcfg, acfg, onProgress);
       r.sound = await hasSound(r.blob);
       if (r.sound !== false) return r;
-      silent = r;
+      silent ??= r;
       console.warn("The encoded video has no sound; trying real-time recording instead");
     } catch (e) { console.warn("WebCodecs failed; falling back to real-time recording", e); }
   }
