@@ -22,7 +22,11 @@ const hasNumber = (s) => /\d/.test(s) && /(%|percent|million|billion|trillion|\$
 // (Matches the topic's name as a phrase, so "Cost of Funds Index" isn't taken for "index fund".)
 const topicRe = (brief) => brief._re ??= new RegExp("\\b" + short(brief.main.title).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").split(/\s+/).join("\\s+") + "(?:s|es)?\\b", "i");
 const onTopic = (f, brief) => f.source === brief.main.title || topicRe(brief).test(f.text);
-const topicNumberFacts = (brief) => brief.facts.filter((f) => hasNumber(f.text) && onTopic(f, brief));
+// Facts that can open a video on their own (no "it"/"this" pointing back to an earlier sentence).
+const standalone = (f) => !/^(It|Its|This|These|That|They|Their|He|His|She|Her|Such|For (quite )?some time it)\b/.test(f.text);
+const topicNumberFacts = (brief) => brief.facts.filter((f) => hasNumber(f.text) && onTopic(f, brief) && standalone(f));
+// A different concept to compare with: not one that just shares the topic's name ("Index Fund Advisors").
+const rival = (brief) => brief.related.find((d) => !topicRe(brief).test(d.title) && !d.title.toLowerCase().includes(short(brief.main.title).toLowerCase()));
 const isPerson = (brief) => /\b(?:is|was) an? [\w\s,-]*?\b(investor|businessman|businesswoman|entrepreneur|economist|banker|financier|philanthropist|executive|billionaire|trader|founder|author)\b/i.test(brief.main.sentences[0] || "");
 const isEvent = (brief) => /\b(crash|crisis|bubble|panic|mania|collapse|depression|scandal|squeeze|recession|bailout)\b/i.test(brief.main.title);
 
@@ -43,10 +47,10 @@ const ANGLES = [
   { id: "mistakes", label: "Mistakes to avoid", ok: (b) => b.main.niches.some((n) => ["personal finance", "investing", "real estate", "side hustles"].includes(n)) && !isPerson(b) && !isEvent(b),
     titles: (t) => [`${cap(t)} mistakes that cost you money`, `Don't make this ${t} mistake`, `Avoid these ${t} traps`],
     hook: (b, t) => `Before you deal with ${t}, know this. It could save you money.` },
-  { id: "versus", label: "This vs that", ok: (b) => b.related.length > 0 && !isPerson(b),
-    titles: (t, b) => { const r = short(b.related[0].title); return [`${cap(t)} vs ${r}: what's the difference?`, `${cap(t)} or ${r}? Here's the answer`]; },
-    hook: (b, t) => `${cap(t)} and ${short(b.related[0].title)} sound similar, but they're not the same thing.`,
-    extra: (b) => b.related[0].sentences.slice(0, 1) },
+  { id: "versus", label: "This vs that", ok: (b) => Boolean(rival(b)) && !isPerson(b),
+    titles: (t, b) => { const r = short(rival(b).title); return [`${cap(t)} vs ${r}: what's the difference?`, `${cap(t)} or ${r}? Here's the answer`]; },
+    hook: (b, t) => `${cap(t)} and ${short(rival(b).title)} sound similar, but they're not the same thing.`,
+    extra: (b) => rival(b).sentences.slice(0, 1) },
   { id: "person", label: "Who is…", ok: (b) => isPerson(b),
     titles: (t) => [`Who is ${t}?`, `${cap(t)}'s money lesson in 30 seconds`, `What ${t} can teach you about money`],
     hook: (b, t) => `Who is ${t}, and what can they teach you about money?` },
@@ -60,7 +64,7 @@ function pointsFor(brief, angle) {
   const other = brief.facts.filter((f) => f.source !== brief.main.title && onTopic(f, brief));
   let pts = [...main.slice(0, 3), ...other.slice(0, 2)];
   if (angle.id === "fact") pts = [...topicNumberFacts(brief).slice(1, 2), ...main.slice(0, 3)];
-  if (angle.id === "versus") pts = [...main.slice(0, 2), ...(angle.extra(brief).map((text) => ({ text, source: brief.related[0].title }))), ...other.slice(0, 1)];
+  if (angle.id === "versus") pts = [...main.slice(0, 2), ...(angle.extra(brief).map((text) => ({ text, source: rival(brief).title }))), ...other.slice(0, 1)];
   const seen = new Set();
   return pts.filter((p) => p && !seen.has(p.text) && seen.add(p.text)).slice(0, 4);
 }
@@ -88,8 +92,9 @@ export function acceptTitle(title, topic, facts, original = "") {
   if (/[<>{}|#@\[\]()]/.test(title)) return false;
   if (/\b(I|I'm|I’m|my|me|we|our)\b/i.test(title)) return false;
   if (/doubles every 7 years|checking your credit score/i.test(title)) return false;        // the examples
-  const tt = terms(topic);
-  if (tt.length && !terms(title).some((t) => tt.includes(t))) return false;                 // must keep the topic
+  const tt = terms(topic), mine = terms(title);
+  if (tt.length && !mine.some((t) => tt.includes(t))) return false;                         // must keep the topic
+  if (new Set(mine).size < mine.length) return false;                                       // "Index funds and index funds"
   const known = facts.join(" ") + " " + topic + " " + original;
   for (const n of title.match(/\d[\d,.]*/g) || []) if (!known.includes(n.replace(/[.,]$/, ""))) return false;   // no invented numbers
   // Grounding: every meaningful word must come from the research, the topic or the original title,

@@ -28,6 +28,7 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "app" / "ai" / "data" / "library.json"
 WORK = ROOT / ".cache" / "wikipedia"
 DATASET = "https://huggingface.co/datasets/wikimedia/wikipedia/resolve/main/20231101.en/train-{i:05d}-of-00041.parquet"
+SIMPLE = "https://huggingface.co/datasets/wikimedia/wikipedia/resolve/main/20231101.simple/train-00000-of-00001.parquet"
 FILES = 41
 PER_NICHE, TOTAL = 1500, 7500
 
@@ -192,6 +193,22 @@ def main() -> int:
         chosen[a["t"]] = a
         for n in a["n"]:
             per[n] += 1
+    # Fallback for core topics the English dataset didn't yield: Simple English Wikipedia (one file).
+    missing = [t for t in MUST_HAVE if t not in chosen]
+    if missing:
+        simple = WORK / "simple.parquet"
+        if not simple.exists():
+            subprocess.run(["curl", "-sfL", "--retry", "5", "-o", str(simple), SIMPLE], check=True)
+        table = pq.read_table(simple, columns=["title", "text"])
+        rows = table.filter(pc.is_in(table["title"], value_set=__import__("pyarrow").array(missing))).to_pylist()
+        for row in rows:
+            intro = intro_of(row["text"])
+            sents = sentences_of(intro)
+            if not sents:
+                continue
+            _, niches = score(row["title"], intro)
+            chosen[row["title"]] = {"t": row["title"], "n": niches or ["economy"], "s": sents, "score": 100}
+        print(f"Simple English fallback added: {[r['title'] for r in rows]}", file=sys.stderr)
     articles = [{"t": a["t"], "n": a["n"], "s": a["s"]} for a in sorted(chosen.values(), key=lambda a: a["t"])]
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps({
