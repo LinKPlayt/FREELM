@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import os
 from pathlib import Path
 
 import yaml
@@ -54,6 +55,13 @@ def load_config(path: str | Path | None = None) -> dict:
     if path.exists():
         user = yaml.safe_load(path.read_text()) or {}
     cfg = _merge(DEFAULTS, user)
+    # Hosted deployments can point all writable data at a persistent volume (e.g. /data).
+    data_root = os.environ.get("REELBOT_DATA")
+    if data_root:
+        cfg["output_dir"] = str(Path(data_root) / "output")
+        cfg["cache_dir"] = str(Path(data_root) / "cache")
+        cfg["youtube"]["client_secrets"] = str(Path(data_root) / "credentials" / "client_secret.json")
+        cfg["youtube"]["token"] = str(Path(data_root) / "credentials" / "token.json")
     # Resolve relative paths against the project root.
     for key in ("output_dir", "cache_dir"):
         cfg[key] = str((ROOT / cfg[key]).resolve()) if not Path(cfg[key]).is_absolute() else cfg[key]

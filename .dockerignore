@@ -1,0 +1,9 @@
+.git
+.cache
+output
+credentials/*.json
+__pycache__
+*.pyc
+.venv
+venv
+tests

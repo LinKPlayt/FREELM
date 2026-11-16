@@ -128,6 +128,39 @@ python -m reelbot auto --every 24 --upload
 
 ---
 
+## Web app (works on iPhone)
+
+ReelBot includes a mobile web app with three tabs: **Create**, **Library** and **Settings**. From your phone you can:
+- make reels and watch their progress live
+- watch, download or **Save / Share** a reel (opens the iOS share sheet, where you can tap *Save Video* to put it in Photos)
+- copy the caption
+- post a reel to YouTube
+
+### Deploy free on Hugging Face Spaces (recommended)
+
+Free Spaces include 2 CPUs and 16 GB of RAM, which is plenty to render video.
+
+1. Create a free account at [huggingface.co](https://huggingface.co). Then go to **Settings → Access Tokens** and create a token with **Write** access.
+2. Deploy using either option:
+   - **From any computer:**
+     ```bash
+     pip install huggingface_hub
+     HF_TOKEN=hf_xxx python scripts/deploy_hf.py --space reelbot --password "pick-a-password"
+     ```
+   - **From your phone:** in this GitHub repository, go to **Settings → Secrets and variables → Actions**. Add a secret named `HF_TOKEN`, then run the **Deploy web app** workflow from the Actions tab. On the Space's **Settings** page, add a secret named `APP_PASSWORD`.
+3. Open `https://<your-username>-reelbot.hf.space` in **Safari** on your iPhone. Tap **Share**, then **Add to Home Screen**.
+
+**Connecting YouTube from your phone:** open the app's **Settings** tab and follow the steps there.
+- Use a Google OAuth client of type **Web application**, and register the redirect URI that the page shows you.
+- Free Spaces lose files when they restart. To keep YouTube connected, tap **Copy token** and save it as a Space secret named `YT_TOKEN_JSON`. Do the same for your client JSON with a secret named `GOOGLE_CLIENT_SECRET_JSON`.
+- Free Spaces sleep after about 48 hours without visits and wake up when you open them. For fully hands-off daily posting, use the GitHub Actions schedule described above.
+
+**Other hosts:** the included `Dockerfile` also runs on Render, Railway, Fly.io or any VPS. Set `APP_PASSWORD` and `PUBLIC_URL`. Free tiers with only 512 MB of RAM are too small to render video.
+
+**Run the web app locally:** `pip install -r requirements-web.txt && uvicorn reelbot.web.app:app --port 7860`
+
+---
+
 ## Project layout
 
 ```
@@ -140,7 +173,9 @@ reelbot/
   music.py      procedural royalty-free background music + voice ducking
   render.py     frame compositor: Ken Burns, charts, captions, transitions → ffmpeg
   pipeline.py   end-to-end orchestration, duration control, metadata, history
-  youtube.py    OAuth + resumable upload
+  youtube.py    OAuth (CLI + browser) + resumable upload
+  web/          FastAPI mobile web app + installable iPhone PWA
+Dockerfile      container for Hugging Face Spaces / any Docker host
 config.yaml     all settings
 ```
 

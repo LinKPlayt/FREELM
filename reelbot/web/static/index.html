@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ReelBot</title>
+<meta name="description" content="Make 30–45 second finance reels automatically">
+<meta name="theme-color" content="#0b0f1e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ReelBot">
+<link rel="apple-touch-icon" href="/static/icon-180.png">
+<link rel="icon" type="image/png" href="/static/icon-192.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<style>
+  :root {
+    --bg: #0b0f1e; --surface: #141a2e; --surface-2: #1c2440; --line: #2a3354;
+    --text: #f3f5fb; --muted: #9aa3bf; --accent: #ffd60a; --accent-ink: #14120a;
+    --good: #2ed573; --bad: #ff4757; --radius: 16px;
+    --safe-top: env(safe-area-inset-top); --safe-bottom: env(safe-area-inset-bottom);
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif; }
+  body { min-height: 100dvh; padding: calc(var(--safe-top) + 8px) 16px calc(var(--safe-bottom) + 92px); }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 8px 2px 16px; }
+  header h1 { font-size: 28px; font-weight: 800; margin: 0; letter-spacing: -0.5px; }
+  header h1 span { color: var(--accent); }
+  .pill { font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 99px; background: var(--surface-2); color: var(--muted); }
+  .pill.ok { color: var(--good); } .pill.warn { color: var(--accent); }
+  main { max-width: 560px; margin: 0 auto; }
+  section.tab { display: none; } section.tab.active { display: block; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
+  .card h2 { font-size: 17px; margin: 0 0 4px; } .card p { margin: 4px 0 12px; color: var(--muted); font-size: 14px; }
+  label.field { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin: 14px 0 8px; text-transform: uppercase; letter-spacing: .4px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { border: 1px solid var(--line); background: var(--surface-2); color: var(--text); padding: 9px 14px; border-radius: 99px;
+    font-size: 15px; font-weight: 600; cursor: pointer; }
+  .chip.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  input[type=text], input[type=password], select, textarea { width: 100%; background: var(--surface-2); color: var(--text);
+    border: 1px solid var(--line); border-radius: 12px; padding: 12px; font-size: 16px; font-family: inherit; }
+  textarea { min-height: 110px; font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+  .row:first-of-type { border-top: 0; }
+  .row small { display: block; color: var(--muted); font-size: 13px; }
+  .switch { position: relative; width: 52px; height: 32px; flex: none; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch span { position: absolute; inset: 0; background: var(--line); border-radius: 99px; transition: .2s; }
+  .switch span::after { content: ""; position: absolute; width: 26px; height: 26px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .2s; }
+  .switch input:checked + span { background: var(--good); }
+  .switch input:checked + span::after { transform: translateX(20px); }
+  button.primary, a.primary { display: block; width: 100%; text-align: center; text-decoration: none; background: var(--accent); color: var(--accent-ink);
+    border: 0; border-radius: 14px; padding: 16px; font-size: 17px; font-weight: 800; cursor: pointer; }
+  button.primary:disabled { opacity: .5; }
+  .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+  .btn { background: var(--surface-2); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 12px 10px;
+    font-size: 15px; font-weight: 600; text-align: center; text-decoration: none; cursor: pointer; }
+  .btn.danger { color: var(--bad); } .btn.wide { grid-column: 1 / -1; }
+  .progress { height: 10px; background: var(--surface-2); border-radius: 99px; overflow: hidden; margin: 12px 0; }
+  .progress div { height: 100%; width: 0; background: var(--accent); transition: width .6s; }
+  .log { font: 12px/1.5 ui-monospace, Menlo, monospace; color: var(--muted); max-height: 140px; overflow: hidden; white-space: pre-wrap; word-break: break-word; }
+  video { width: 100%; border-radius: 12px; background: #000; aspect-ratio: 9 / 16; max-height: 70vh; display: block; }
+  .reel-title { font-weight: 700; margin: 12px 0 2px; }
+  .meta { color: var(--muted); font-size: 13px; }
+  .empty { text-align: center; color: var(--muted); padding: 40px 10px; }
+  nav { position: fixed; left: 0; right: 0; bottom: 0; background: rgba(11, 15, 30, .92); backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px); border-top: 1px solid var(--line); display: flex; padding: 8px 8px calc(var(--safe-bottom) + 8px); z-index: 10; }
+  nav button { flex: 1; background: none; border: 0; color: var(--muted); font-size: 11px; font-weight: 600; padding: 4px; cursor: pointer; }
+  nav button svg { display: block; margin: 0 auto 3px; width: 24px; height: 24px; }
+  nav button.active { color: var(--accent); }
+  .toast { position: fixed; left: 50%; bottom: calc(var(--safe-bottom) + 96px); transform: translateX(-50%); background: var(--text); color: var(--bg);
+    padding: 10px 16px; border-radius: 99px; font-weight: 600; font-size: 14px; opacity: 0; transition: .25s; pointer-events: none; z-index: 30; max-width: 90vw; text-align: center; }
+  .toast.show { opacity: 1; }
+  #login { position: fixed; inset: 0; background: var(--bg); z-index: 40; display: none; align-items: center; justify-content: center; padding: 24px; }
+  #login.show { display: flex; }
+  #login .card { width: 100%; max-width: 380px; }
+  ol.steps { padding-left: 20px; margin: 8px 0; color: var(--muted); font-size: 14px; } ol.steps li { margin: 6px 0; }
+  code.copy { display: block; background: var(--surface-2); padding: 10px; border-radius: 10px; font-size: 12px; word-break: break-all; margin: 8px 0; cursor: pointer; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div id="login"><div class="card">
+  <h2>🔒 ReelBot</h2><p>Enter your app password.</p>
+  <input id="pw" type="password" placeholder="Password" autocomplete="current-password">
+  <div style="height:12px"></div>
+  <button class="primary" onclick="doLogin()">Unlock</button>
+</div></div>
+
+<main>
+  <header>
+    <h1>Reel<span>Bot</span></h1>
+    <span id="yt-pill" class="pill">YouTube: …</span>
+  </header>
+
+  <!-- CREATE -->
+  <section id="tab-create" class="tab active">
+    <div class="card">
+      <h2>Make a finance reel</h2>
+      <p>Researches the topic, writes the script, adds voice, visuals and music. About 2–4 minutes.</p>
+      <label class="field">Niche</label>
+      <div class="chips" id="niches"></div>
+      <label class="field">Type</label>
+      <div class="chips" id="modes"></div>
+      <div id="topic-wrap" class="hidden">
+        <label class="field">Topic</label>
+        <select id="topic"></select>
+      </div>
+      <label class="field">Brand name</label>
+      <input id="brand" type="text" maxlength="30">
+    </div>
+    <div class="card">
+      <div class="row"><div>Background music<small>Original, copyright-free</small></div>
+        <label class="switch"><input id="music" type="checkbox" checked><span></span></label></div>
+      <div class="row"><div>Post to YouTube<small id="yt-hint">Connect YouTube in Settings first</small></div>
+        <label class="switch"><input id="upload" type="checkbox"><span></span></label></div>
+      <div class="row" id="privacy-row"><div>Visibility</div>
+        <select id="privacy" style="width:auto"><option>public</option><option>unlisted</option><option>private</option></select></div>
+    </div>
+    <button class="primary" id="go" onclick="startJob()">Make my reel</button>
+
+    <div class="card hidden" id="job" style="margin-top:14px">
+      <h2 id="job-title">Working…</h2>
+      <div class="progress"><div id="bar"></div></div>
+      <div class="log" id="log"></div>
+      <div id="job-result"></div>
+    </div>
+  </section>
+
+  <!-- LIBRARY -->
+  <section id="tab-library" class="tab"><div id="reels"></div></section>
+
+  <!-- SETTINGS -->
+  <section id="tab-settings" class="tab">
+    <div class="card">
+      <h2>YouTube</h2>
+      <p id="yt-status">Checking…</p>
+      <div id="yt-connected" class="hidden">
+        <div class="btns">
+          <button class="btn wide" onclick="copyToken()">Copy token (to keep connection)</button>
+          <button class="btn danger wide" onclick="disconnectYT()">Disconnect</button>
+        </div>
+        <p id="persist-hint" style="margin-top:12px">To stay connected after the server restarts, add the copied token as a Space secret named <b>YT_TOKEN_JSON</b>.</p>
+      </div>
+      <div id="yt-setup">
+        <ol class="steps">
+          <li>In <a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" style="color:var(--accent)">Google Cloud</a>, enable <b>YouTube Data API v3</b>.</li>
+          <li>Set up the OAuth consent screen (External) and add yourself as a test user.</li>
+          <li>Create credentials → OAuth client ID → <b>Web application</b>, and add this redirect URI:
+            <code class="copy" id="redirect" onclick="copy(this.textContent)">…</code></li>
+          <li>Download the JSON and paste it below (or choose the file).</li>
+        </ol>
+        <textarea id="client-json" placeholder='{"web": {"client_id": "...", ...}}'></textarea>
+        <div class="btns">
+          <label class="btn">Choose file<input type="file" accept=".json,application/json" class="hidden" onchange="readClientFile(this)"></label>
+          <button class="btn" onclick="saveClient()">Save</button>
+          <a class="primary wide" style="grid-column:1/-1" href="/auth/start" id="connect-btn">Connect YouTube</a>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Install on iPhone</h2>
+      <ol class="steps">
+        <li>Open this page in <b>Safari</b>.</li>
+        <li>Tap the <b>Share</b> button (square with arrow).</li>
+        <li>Choose <b>Add to Home Screen</b>, then <b>Add</b>.</li>
+      </ol>
+      <p>ReelBot then opens full-screen like a normal app.</p>
+    </div>
+    <div class="card" id="logout-card">
+      <button class="btn danger" style="width:100%" onclick="logout()">Log out</button>
+    </div>
+  </section>
+</main>
+
+<nav>
+  <button data-tab="create" class="active" onclick="show('create')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Create</button>
+  <button data-tab="library" onclick="show('library')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="9" rx="1.5"/><rect x="3" y="15" width="7" height="6" rx="1.5"/><rect x="14" y="15" width="7" height="6" rx="1.5"/></svg>Library</button>
+  <button data-tab="settings" onclick="show('settings')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Settings</button>
+</nav>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const state = { niche: null, mode: "auto", options: null, yt: null, poll: null };
+const MODE_LABELS = { auto: "Auto", evergreen: "Explainer", news: "Today's news", market: "Market recap" };
+
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 2600); }
+function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+async function api(path, opts = {}) {
+  const res = await fetch(path, { headers: { "Content-Type": "application/json" }, credentials: "same-origin", ...opts });
+  if (res.status === 401 && path !== "/login") { $("login").classList.add("show"); throw new Error("login required"); }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
+  return data;
+}
+async function copy(text) {
+  try { await navigator.clipboard.writeText(text); toast("Copied"); }
+  catch { const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); toast("Copied"); }
+}
+
+function show(tab) {
+  document.querySelectorAll("section.tab").forEach(s => s.classList.toggle("active", s.id === "tab-" + tab));
+  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+  if (tab === "library") loadReels();
+  if (tab === "settings") loadYT();
+  history.replaceState(null, "", "#" + tab);
+  window.scrollTo(0, 0);
+}
+
+async function doLogin() {
+  try { await api("/login", { method: "POST", body: JSON.stringify({ password: $("pw").value }) });
+        $("login").classList.remove("show"); init(); }
+  catch (e) { toast(e.message); }
+}
+$("pw").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
+async function logout() { await api("/api/logout", { method: "POST" }); location.reload(); }
+
+function chips(el, items, current, onPick, labels = {}) {
+  el.innerHTML = "";
+  items.forEach(v => {
+    const b = document.createElement("button");
+    b.className = "chip" + (v === current ? " on" : ""); b.textContent = labels[v] || v.replace(/\b\w/g, c => c.toUpperCase());
+    b.onclick = () => { onPick(v); [...el.children].forEach(c => c.classList.toggle("on", c === b)); };
+    el.appendChild(b);
+  });
+}
+function renderTopics() {
+  const sel = $("topic");
+  const list = state.options.topics.filter(t => t.niches.includes(state.niche));
+  sel.innerHTML = `<option value="">🎲 Surprise me</option>` + list.map(t => `<option value="${t.id}">${esc(t.title)}</option>`).join("");
+  $("topic-wrap").classList.toggle("hidden", state.mode !== "evergreen");
+}
+
+async function init() {
+  const o = await api("/api/options");
+  state.options = o; state.niche = o.defaults.niche; state.mode = o.defaults.mode;
+  chips($("niches"), o.niches, state.niche, v => { state.niche = v; renderTopics(); });
+  chips($("modes"), o.modes, state.mode, v => { state.mode = v; renderTopics(); }, MODE_LABELS);
+  $("brand").value = localStorage.getItem("brand") || o.defaults.brand;
+  $("privacy").value = o.defaults.privacy;
+  $("logout-card").classList.toggle("hidden", !o.password_protected);
+  renderTopics();
+  loadYT();
+  const pending = localStorage.getItem("job");
+  if (pending) watchJob(pending);
+  const hash = location.hash.replace("#", "");
+  const [tab, query] = hash.split("?");
+  if (["library", "settings"].includes(tab)) show(tab);
+  if (query) { const q = new URLSearchParams(query); if (q.get("error")) toast("YouTube: " + q.get("error")); if (q.get("connected")) toast("YouTube connected ✅"); }
+}
+
+async function loadYT() {
+  try {
+    const s = await api("/api/youtube"); state.yt = s;
+    $("yt-pill").textContent = s.connected ? "YouTube ✓" : "YouTube: off";
+    $("yt-pill").className = "pill " + (s.connected ? "ok" : "warn");
+    $("yt-hint").textContent = s.connected ? "Uploads as a YouTube Short" : "Connect YouTube in Settings first";
+    $("upload").disabled = !s.connected; if (!s.connected) $("upload").checked = false;
+    $("redirect").textContent = s.redirect_uri;
+    $("yt-status").textContent = s.connected ? "Connected. Reels can be posted to your channel."
+      : s.client_configured ? "OAuth client saved. Tap Connect YouTube." : "Not connected yet. One-time setup:";
+    $("yt-connected").classList.toggle("hidden", !s.connected);
+    $("yt-setup").classList.toggle("hidden", s.connected);
+    $("connect-btn").classList.toggle("hidden", !s.client_configured);
+    $("persist-hint").classList.toggle("hidden", s.from_env);
+  } catch (e) { /* login overlay handles 401 */ }
+}
+function readClientFile(input) { const f = input.files[0]; if (!f) return; f.text().then(t => { $("client-json").value = t; saveClient(); }); }
+async function saveClient() {
+  try { await api("/api/youtube/client", { method: "POST", body: JSON.stringify({ json: $("client-json").value }) }); toast("Saved. Now tap Connect YouTube"); loadYT(); }
+  catch (e) { toast(e.message); }
+}
+async function copyToken() { try { const t = await api("/api/youtube/token"); copy(t.token); } catch (e) { toast(e.message); } }
+async function disconnectYT() { if (!confirm("Disconnect YouTube?")) return; await api("/api/youtube/disconnect", { method: "POST" }); loadYT(); }
+
+async function startJob() {
+  localStorage.setItem("brand", $("brand").value);
+  const body = { niche: state.niche, mode: state.mode, topic: state.mode === "evergreen" ? $("topic").value : "",
+    brand: $("brand").value, music: $("music").checked, upload: $("upload").checked, privacy: $("privacy").value };
+  try { const { id } = await api("/api/jobs", { method: "POST", body: JSON.stringify(body) }); localStorage.setItem("job", id); watchJob(id); }
+  catch (e) { toast(e.message); }
+}
+function watchJob(id) {
+  $("job").classList.remove("hidden"); $("go").disabled = true; $("job-result").innerHTML = "";
+  $("job-title").textContent = "Starting…";
+  clearInterval(state.poll);
+  const tick = async () => {
+    let j;
+    try { j = await api("/api/jobs/" + id); } catch (e) { clearInterval(state.poll); $("go").disabled = false; localStorage.removeItem("job"); $("job").classList.add("hidden"); return; }
+    $("bar").style.width = j.progress + "%";
+    $("log").textContent = j.log.join("\n");
+    $("job-title").textContent = j.status === "queued" ? `Queued (${j.ahead} ahead)…` : j.status === "running" ? `Making your reel… ${j.progress}%`
+      : j.status === "done" ? "Your reel is ready 🎉" : "Something went wrong";
+    if (j.status === "done" || j.status === "error") {
+      clearInterval(state.poll); $("go").disabled = false; localStorage.removeItem("job");
+      if (j.status === "done") $("job-result").innerHTML = reelCard(j.result, true);
+      else $("job-result").innerHTML = `<p style="color:var(--bad)">${esc(j.error)}</p>`;
+    }
+  };
+  tick(); state.poll = setInterval(tick, 2500);
+}
+
+function reelCard(r, inline = false) {
+  const yt = r.youtube_url ? `<a class="btn" href="${r.youtube_url}" target="_blank">▶ On YouTube</a>`
+    : `<button class="btn" onclick="postYT('${r.id}', this)">Post to YouTube</button>`;
+  return `<div class="${inline ? "" : "card"}" id="reel-${r.id}">
+    <video src="${r.video}#t=0.5" controls playsinline preload="metadata"></video>
+    <div class="reel-title">${esc(r.title.replace(" #Shorts", ""))}</div>
+    <div class="meta">${r.duration ? Math.round(r.duration) + "s · " : ""}${esc(r.kind || "")} · ${r.size_mb} MB</div>
+    <div class="btns">
+      <button class="btn" onclick="shareReel('${r.id}', this)">Save / Share</button>
+      ${yt}
+      <button class="btn" onclick="copyCaption('${r.id}')">Copy caption</button>
+      <a class="btn" href="${r.video}?download=1">Download</a>
+      ${inline ? "" : `<button class="btn danger wide" onclick="deleteReel('${r.id}')">Delete</button>`}
+    </div></div>`;
+}
+let reelCache = {};
+async function loadReels() {
+  const list = await api("/api/reels");
+  reelCache = Object.fromEntries(list.map(r => [r.id, r]));
+  $("reels").innerHTML = list.length ? list.map(r => reelCard(r)).join("") : `<div class="empty">No reels yet.<br>Make your first one in Create.</div>`;
+}
+async function shareReel(id, btn) {
+  const url = `/media/${id}/reel.mp4`;
+  try {
+    btn.textContent = "Preparing…";
+    const blob = await (await fetch(url)).blob();
+    const file = new File([blob], `${id}.mp4`, { type: "video/mp4" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) await navigator.share({ files: [file] });
+    else location.href = url + "?download=1";
+  } catch (e) { if (e.name !== "AbortError") toast("Couldn't share: " + e.message); }
+  btn.textContent = "Save / Share";
+}
+async function copyCaption(id) {
+  let r = reelCache[id];
+  if (!r) { const list = await api("/api/reels"); r = list.find(x => x.id === id); }
+  if (r) copy(r.title + "\n\n" + r.description);
+}
+async function postYT(id, btn) {
+  if (!state.yt?.connected) { toast("Connect YouTube in Settings first"); show("settings"); return; }
+  btn.disabled = true; btn.textContent = "Uploading…";
+  try { const r = await api(`/api/reels/${id}/upload`, { method: "POST", body: JSON.stringify({ privacy: $("privacy").value }) });
+        btn.outerHTML = `<a class="btn" href="${r.youtube_url}" target="_blank">▶ On YouTube</a>`; toast("Posted to YouTube ✅"); }
+  catch (e) { toast(e.message); btn.disabled = false; btn.textContent = "Post to YouTube"; }
+}
+async function deleteReel(id) { if (!confirm("Delete this reel?")) return; await api("/api/reels/" + id, { method: "DELETE" }); $("reel-" + id)?.remove(); }
+
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+init().catch(() => {});
+</script>
+</body>
+</html>

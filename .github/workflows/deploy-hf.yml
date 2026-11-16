@@ -1,0 +1,26 @@
+# Auto-deploys the web app to your Hugging Face Space whenever you push.
+# Requires a repository secret HF_TOKEN (a Hugging Face token with "write" access).
+# Optional repository variable HF_SPACE (defaults to "reelbot").
+name: Deploy web app
+
+on:
+  push:
+    branches: [main, "claude/**"]
+    paths: ["reelbot/**", "assets/**", "Dockerfile", "requirements*.txt", "config.yaml", "scripts/deploy_hf.py"]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Deploy to Hugging Face Spaces
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          if [ -z "$HF_TOKEN" ]; then echo "No HF_TOKEN secret set; skipping deploy."; exit 0; fi
+          pip install -q huggingface_hub
+          python scripts/deploy_hf.py --space "${{ vars.HF_SPACE || 'reelbot' }}"
