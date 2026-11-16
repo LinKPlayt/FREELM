@@ -107,7 +107,12 @@ jobs:
           git init -q -b gh-pages
           git add -A
           git -c user.name="reelbot" -c user.email="reelbot@users.noreply.github.com" commit -qm "Publish ReelBot app"
-          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
+          # GitHub occasionally refuses a push for a moment; retry before giving up.
+          for attempt in 1 2 3 4; do
+            if git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages; then break; fi
+            if [ "$attempt" = 4 ]; then echo "::error::Could not publish to gh-pages"; exit 1; fi
+            sleep $((attempt * 20))
+          done
           OWNER="${GITHUB_REPOSITORY_OWNER,,}"
           echo "APP_URL=https://${OWNER}.github.io/${GITHUB_REPOSITORY#*/}/" >> "$GITHUB_ENV"
 
