@@ -63,12 +63,15 @@ export async function hybridSearch(lib, query, k = 10, niche = null, exclude = n
   const kw = search(lib, query, 40, niche, exclude);
   if (!semanticReady()) return kw.slice(0, k);
   const sem = (await semanticSearch(query, 40)).filter(([id]) => !exclude.has(id));
+  // Questions in plain words ("how do I stop living paycheck to paycheck") are about meaning, so
+  // meaning counts for more; short topic names lean more on keywords.
+  const words = query.trim().split(/\s+/).length, wSem = words >= 4 ? 0.75 : 0.55, wKw = 1 - wSem;
   const maxKw = kw[0]?.score || 1, combined = new Map();
-  for (const r of kw) combined.set(r.doc.id, 0.45 * (r.score / maxKw));
+  for (const r of kw) combined.set(r.doc.id, wKw * (r.score / maxKw));
   for (const [id, sim] of sem) {
     const d = lib.docs[id];
     const semScore = Math.max(0, (sim - 0.2) / 0.6) * (niche && d.niches.includes(niche) ? 1.1 : 1);
-    combined.set(id, (combined.get(id) || 0) + 0.55 * Math.min(1, semScore));
+    combined.set(id, (combined.get(id) || 0) + wSem * Math.min(1, semScore));
   }
   return [...combined].sort((a, b) => b[1] - a[1]).slice(0, k).map(([id, score]) => ({ doc: lib.docs[id], score }));
 }
@@ -154,6 +157,7 @@ export async function deepResearch(query, { niche = null, onStep } = {}) {
     if (/\d/.test(s) && /(%|percent|million|billion|trillion|\$)/i.test(s)) score *= 1.45;   // hard numbers
     if (i === 0 && doc === main) score *= 2.2;                               // the definition
     if (/^(It|This|These|They|He|She|Such)\b/.test(s) && i > 0) score *= 0.55;   // needs context
+    if (doc !== main && overlap === 0) score *= 0.2;                         // other articles: only facts about the topic
     pool.push({ text: s, source: doc.title, score, index: i, doc });
   });
   consider(main, 3);

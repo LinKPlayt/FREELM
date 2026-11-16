@@ -18,6 +18,11 @@ const short = (t) => {
 };
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const hasNumber = (s) => /\d/.test(s) && /(%|percent|million|billion|trillion|\$|\b1[5-9]\d\d\b|\b20\d\d\b)/i.test(s);
+// A fact about this topic: from its own article, or mentioning the topic by name.
+// (Matches the topic's name as a phrase, so "Cost of Funds Index" isn't taken for "index fund".)
+const topicRe = (brief) => brief._re ??= new RegExp("\\b" + short(brief.main.title).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").split(/\s+/).join("\\s+") + "(?:s|es)?\\b", "i");
+const onTopic = (f, brief) => f.source === brief.main.title || topicRe(brief).test(f.text);
+const topicNumberFacts = (brief) => brief.facts.filter((f) => hasNumber(f.text) && onTopic(f, brief));
 const isPerson = (brief) => /\b(?:is|was) an? [\w\s,-]*?\b(investor|businessman|businesswoman|entrepreneur|economist|banker|financier|philanthropist|executive|billionaire|trader|founder|author)\b/i.test(brief.main.sentences[0] || "");
 const isEvent = (brief) => /\b(crash|crisis|bubble|panic|mania|collapse|depression|scandal|squeeze|recession|bailout)\b/i.test(brief.main.title);
 
@@ -26,9 +31,9 @@ const ANGLES = [
   { id: "explainer", label: "Explainer", ok: () => true,
     titles: (t) => [`${cap(t)}, explained in 30 seconds`, `What is ${t}? The quick version`, `${cap(t)} in plain English`],
     hook: (b, t) => pick([`What is ${t}? Here's the quick version.`, `${cap(t)}, explained in thirty seconds.`]) },
-  { id: "fact", label: "Surprising fact", ok: (b) => b.facts.some((f) => hasNumber(f.text)),
+  { id: "fact", label: "Surprising fact", ok: (b) => topicNumberFacts(b).length > 0,
     titles: (t) => [`The ${t} fact nobody talks about`, `This ${t} fact will surprise you`, `1 surprising fact about ${t}`],
-    hook: (b) => "Here's something most people don't know. " + b.facts.find((f) => hasNumber(f.text)).text },
+    hook: (b) => "Here's something most people don't know. " + topicNumberFacts(b)[0].text },
   { id: "story", label: "The story", ok: (b) => isEvent(b) || b.facts.some((f) => /\b(1[5-9]\d\d|20\d\d)\b/.test(f.text)),
     titles: (t) => [`The wild story of ${t}`, `How ${t} really happened`, `${cap(t)}: the story in 30 seconds`],
     hook: (b, t) => `This is the story of ${t}, and why it still matters for your money.` },
@@ -52,9 +57,9 @@ const ANGLES = [
 
 function pointsFor(brief, angle) {
   const main = brief.facts.filter((f) => f.source === brief.main.title);
-  const other = brief.facts.filter((f) => f.source !== brief.main.title);
+  const other = brief.facts.filter((f) => f.source !== brief.main.title && onTopic(f, brief));
   let pts = [...main.slice(0, 3), ...other.slice(0, 2)];
-  if (angle.id === "fact") pts = [...brief.facts.filter((f) => hasNumber(f.text)).slice(0, 2), ...main.slice(0, 2)];
+  if (angle.id === "fact") pts = [...topicNumberFacts(brief).slice(1, 2), ...main.slice(0, 3)];
   if (angle.id === "versus") pts = [...main.slice(0, 2), ...(angle.extra(brief).map((text) => ({ text, source: brief.related[0].title }))), ...other.slice(0, 1)];
   const seen = new Set();
   return pts.filter((p) => p && !seen.has(p.text) && seen.add(p.text)).slice(0, 4);
@@ -118,7 +123,7 @@ export function ideasFromBrief(brief, { max = 3, usedAngles = new Set() } = {}) 
       topic: t, angle: angle.id, angleLabel: angle.label, title: pick(angle.titles(t, brief)), ai: false,
       hook: angle.hook(brief, t), points: points.map((p) => p.text),
       sources: [...new Set([brief.main.title, ...points.map((p) => p.source)])],
-      niches: brief.main.niches, keyFact: (brief.facts.find((f) => hasNumber(f.text)) || brief.facts[0])?.text || "",
+      niches: brief.main.niches, keyFact: (topicNumberFacts(brief)[0] || brief.facts[0])?.text || "",
     };
   });
 }

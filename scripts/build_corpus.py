@@ -40,7 +40,7 @@ LEXICON = {
                   "index fund", "exchange-traded fund", "bond", "dividend", "hedge fund", "asset management", "equity", "securities",
                   "s&p 500", "nasdaq", "dow jones", "market capitalization", "initial public offering", "venture capital",
                   "private equity", "valuation", "short selling", "options trading", "derivative", "brokerage", "value investing", "stock"],
-    "crypto": ["cryptocurrency", "bitcoin", "blockchain", "ethereum", "crypto", "stablecoin", "decentralized finance", "non-fungible token",
+    "crypto": ["cryptocurrency", "cryptocurrencies", "bitcoin", "blockchain", "ethereum", "crypto exchange", "crypto market", "stablecoin", "decentralized finance", "non-fungible token",
                "digital currency", "cryptocurrency exchange", "smart contract", "proof of work", "proof of stake", "crypto wallet", "altcoin"],
     "economy": ["inflation", "recession", "gross domestic product", "gdp", "central bank", "monetary policy", "fiscal policy",
                 "unemployment", "federal reserve", "interest rates", "trade deficit", "tariff", "financial crisis", "economic bubble",
@@ -52,7 +52,7 @@ LEXICON = {
                      "affiliate marketing", "business model", "sole proprietorship"],
 }
 TITLE_WORDS = re.compile(r"\b(financ|money|bank|stock|bond|fund|invest|tax|debt|credit|loan|mortgage|budget|saving|pension|retire|"
-                         r"insurance|crypto|bitcoin|blockchain|inflation|recession|econom|market|trade|currency|dollar|price|"
+                         r"insurance|cryptocurrenc|bitcoin|blockchain|inflation|recession|econom|market|trade|currency|dollar|price|"
                          r"wealth|income|wage|rent|housing|real estate|business|entrepreneur|startup|capital|asset|dividend|interest)", re.I)
 MUST_HAVE = [
     "Compound interest", "Rule of 72", "Dollar cost averaging", "Index fund", "Emergency fund", "Credit score in the United States",
@@ -99,17 +99,34 @@ def sentences_of(intro: str) -> list[str]:
     text = re.sub(r"\s*\[[^\]]*\]", "", text)
     text = re.sub(r"\s+", " ", text).strip()
     parts = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9\"“])", text)
-    return [s.strip() for s in parts if 5 <= len(s.split()) <= 45][:8]
+    out = []
+    for s in parts:
+        s = s.strip()
+        if len(s.split()) > 45 and ";" in s:          # long definitions: split at semicolons
+            head, *rest = [x.strip() for x in s.split(";") if x.strip()]
+            pieces = [head.rstrip(",") + "."] + [r[0].upper() + r[1:].rstrip(".") + "." for r in rest]
+        else:
+            pieces = [s]
+        out += [x for x in pieces if 5 <= len(x.split()) <= 70]
+    return out[:8]
 
 
-TERM_RES = {n: [re.compile(r"(?<![a-z])" + re.escape(t) + r"(?:s|es)?(?![a-z])") for t in terms] for n, terms in LEXICON.items()}
+TERM_NICHES: dict[str, list[str]] = {}
+for _n, _terms in LEXICON.items():
+    for _t in _terms:
+        TERM_NICHES.setdefault(_t, []).append(_n)
+# One combined whole-word pattern (much faster than one regex per term).
+ALL_TERMS_RE = re.compile(r"(?<![a-z])(" + "|".join(re.escape(t) for t in sorted(TERM_NICHES, key=len, reverse=True)) + r")(?:s|es)?(?![a-z])")
 COMPANY = re.compile(r"^[^.]{0,160}\b(?:is|was) an? [^.]{0,80}?\b(company|firm|corporation|conglomerate|bank|group|plc|holding|subsidiary|brand)\b", re.I)
 BIG_ECONOMIES = ("United States", "China", "Japan", "India", "Germany", "United Kingdom", "France", "Canada", "Brazil", "Russia", "Australia")
 
 
 def score(title: str, intro: str) -> tuple[float, list[str]]:
     low = intro[:1800].lower()
-    niche_hits = {n: sum(1 for r in res if r.search(low)) for n, res in TERM_RES.items()}   # whole words only
+    niche_hits = {n: 0 for n in LEXICON}
+    for term in set(ALL_TERMS_RE.findall(low)):                                  # distinct whole-word terms
+        for n in TERM_NICHES[term]:
+            niche_hits[n] += 1
     distinct = sum(niche_hits.values())
     niches = [n for n, c in niche_hits.items() if c >= 2] or ([max(niche_hits, key=niche_hits.get)] if distinct else [])
     s = distinct + (3 if TITLE_WORDS.search(title) else 0)
@@ -153,7 +170,7 @@ def main() -> int:
             if (s < 4 or not niches) and not is_must:
                 continue
             sents = sentences_of(intro)
-            if len(sents) < 2:
+            if len(sents) < (1 if is_must else 2):
                 continue
             found[title] = {"t": title, "n": niches, "s": sents, "score": s + (100 if is_must else 0)}
         part.write_text(json.dumps(found))
