@@ -1,0 +1,133 @@
+# ReelBot's engine. Everything runs on GitHub: no other hosting, accounts or API keys.
+#
+#   * The phone app (GitHub Pages) opens a pre-filled issue titled "reel | niche=... | mode=...".
+#     Submitting it starts this workflow, which renders the reel, publishes it to the app,
+#     replies on the issue and closes it. Only the repository owner's requests are accepted.
+#   * A daily schedule makes one reel automatically (and posts it once YouTube is connected).
+#   * "Run workflow" on the Actions tab does the same by hand.
+#
+# Optional secret: YT_TOKEN_JSON (created in the app's Settings tab) enables YouTube posting.
+name: Make reel
+
+on:
+  issues:
+    types: [opened]
+  schedule:
+    - cron: "17 14 * * *"   # every day at 14:17 UTC; change to suit your audience
+  workflow_dispatch:
+    inputs:
+      niche:
+        description: Niche
+        type: choice
+        default: personal finance
+        options: [personal finance, investing, crypto, economy, side hustles, real estate]
+      mode:
+        description: Type of reel
+        type: choice
+        default: auto
+        options: [auto, evergreen, news, market]
+      topic:
+        description: Evergreen topic id (optional, e.g. compound-interest)
+        default: ""
+      upload:
+        description: Post to YouTube
+        type: boolean
+        default: false
+      privacy:
+        description: YouTube visibility
+        type: choice
+        default: public
+        options: [public, unlisted, private]
+  push:
+    branches: [main, "claude/**"]   # TEMP: claude/** is here only to test the workflow before merging
+    paths: ["site/**", "reelbot/topics.py", "scripts/publish_site.py", "config.yaml", ".github/workflows/make-reel.yml"]
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: reelbot
+  cancel-in-progress: false
+
+jobs:
+  reel:
+    # Ignore issues that aren't reel requests from the repository owner.
+    if: >-
+      github.event_name != 'issues' ||
+      (github.event.issue.user.login == github.repository_owner && startsWith(github.event.issue.title, 'reel'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ISSUE: ${{ github.event.issue.number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install ffmpeg and Python packages
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          pip install -q -r requirements.txt
+
+      - name: Tell the requester we started
+        if: github.event_name == 'issues'
+        run: |
+          gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" \
+            --body "🎬 Making your reel now. This takes about 4 minutes. [Watch progress]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"
+
+      - name: Fetch the published app (previous reels and history)
+        run: |
+          git clone -q --depth 1 --branch gh-pages "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" prev || mkdir -p prev
+          mkdir -p output
+          if [ -f prev/data/history.json ]; then cp prev/data/history.json output/history.json; fi
+
+      - name: Make the reel
+        # A push to main only refreshes the app's files; it doesn't make a reel.
+        if: github.event_name != 'push' || github.ref_name != 'main'
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          IN_NICHE: ${{ inputs.niche }}
+          IN_MODE: ${{ inputs.mode }}
+          IN_TOPIC: ${{ inputs.topic }}
+          IN_UPLOAD: ${{ inputs.upload }}
+          IN_PRIVACY: ${{ inputs.privacy }}
+          YT_TOKEN_JSON: ${{ secrets.YT_TOKEN_JSON }}
+        run: python scripts/ci_make.py
+
+      - name: Publish the app and reels to GitHub Pages
+        run: |
+          python scripts/publish_site.py --prev prev --out _site
+          cd _site
+          git init -q -b gh-pages
+          git add -A
+          git -c user.name="reelbot" -c user.email="reelbot@users.noreply.github.com" commit -qm "Publish ReelBot app"
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
+          OWNER="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "APP_URL=https://${OWNER}.github.io/${GITHUB_REPOSITORY#*/}/" >> "$GITHUB_ENV"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            if [ -f reel_result.md ]; then cat reel_result.md; fi
+            if [ -n "$APP_URL" ]; then echo "App: $APP_URL"; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Reply on the request
+        if: always() && github.event_name == 'issues'
+        env:
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          if [ "$JOB_STATUS" = "success" ]; then
+            { echo "✅ Your reel is ready."; echo; cat reel_result.md; echo; echo "Open the app (it can take a minute to appear): $APP_URL"; } > reply.md
+          else
+            echo "❌ Something went wrong. [See the log]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)" > reply.md
+          fi
+          gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body-file reply.md
+          gh issue close "$ISSUE" --repo "$GITHUB_REPOSITORY"

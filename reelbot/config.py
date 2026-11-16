@@ -22,7 +22,7 @@ DEFAULTS: dict = {
         "call_to_action": "Follow for a new money tip every day.",
         "accent_color": "#FFD60A",
     },
-    "voice": {"engine": "piper", "model": "en_US-ryan-high", "speed": 1.0},
+    "voice": {"engine": "piper", "model": "en_US-joe-medium", "speed": 1.0},
     "music": {"enabled": True, "volume": 0.14},
     "media": {"sources": ["openverse", "wikimedia"], "allow_video": True, "min_width": 640},
     "llm": {"enabled": False, "url": "http://localhost:11434", "model": "llama3.1:8b"},

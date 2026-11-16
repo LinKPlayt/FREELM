@@ -3,7 +3,7 @@
 Run locally:   uvicorn reelbot.web.app:app --host 0.0.0.0 --port 7860
 Environment:
   APP_PASSWORD               password required to use the app (strongly recommended when public)
-  PUBLIC_URL                 e.g. https://you-reelbot.hf.space  (auto-detected on Hugging Face via SPACE_HOST)
+  PUBLIC_URL                 the https address people use to reach this server (needed for YouTube sign-in)
   GOOGLE_CLIENT_SECRET_JSON  optional: Google OAuth client JSON (Web application type)
   YT_TOKEN_JSON              optional: saved YouTube token, so the connection survives restarts
   REELBOT_DATA               optional: directory for persistent data (e.g. /data)
@@ -298,8 +298,6 @@ async def options():
 def _public_url() -> str:
     if os.environ.get("PUBLIC_URL"):
         return os.environ["PUBLIC_URL"].rstrip("/")
-    if os.environ.get("SPACE_HOST"):  # set automatically on Hugging Face Spaces
-        return "https://" + os.environ["SPACE_HOST"]
     return "http://localhost:7860"
 
 

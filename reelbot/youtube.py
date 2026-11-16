@@ -80,9 +80,10 @@ def get_credentials(cfg: dict, interactive: bool = True):
     from google_auth_oauthlib.flow import InstalledAppFlow
 
     creds = _load_token(cfg)
-    if creds and creds.valid:
+    # A token without an expiry time (e.g. one created by the phone app) may be stale: refresh it.
+    if creds and creds.valid and creds.expiry is not None:
         return creds
-    if creds and creds.expired and creds.refresh_token:
+    if creds and creds.refresh_token:
         creds.refresh(Request())
     else:
         if not interactive:

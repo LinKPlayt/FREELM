@@ -79,6 +79,14 @@ def test_metadata():
     assert "photo credit" in meta["description"] and "Not financial advice" in meta["description"]
 
 
+def test_ci_request_is_whitelisted():
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"))
+    import ci_make
+    req = ci_make.clean(ci_make.parse_title("reel | niche=investing | mode=news | brand=A$(rm -rf /)`b` | upload=yes | x=1"))
+    assert req == {"niche": "investing", "mode": "news", "brand": "Arm -rf b", "upload": True}
+    assert ci_make.clean(ci_make.parse_title("reel | niche=../etc | mode=;ls | topic=nope | privacy=all")) == {}
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

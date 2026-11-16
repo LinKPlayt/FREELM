@@ -23,7 +23,7 @@ video:
 
 voice:
   engine: piper                     # piper (natural, offline) | espeak (robotic fallback)
-  model: en_US-ryan-high            # any voice from https://huggingface.co/rhasspy/piper-voices
+  model: en_US-joe-medium           # bundled CC0 voice; see assets/voices/README.md to swap it
   speed: 1.0                        # >1 = faster speech
 
 music:

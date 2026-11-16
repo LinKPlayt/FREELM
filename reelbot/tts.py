@@ -1,7 +1,7 @@
 """Offline text-to-speech.
 
 Primary engine: Piper (neural, natural sounding, runs locally on CPU). The voice model is
-downloaded once from the public rhasspy/piper-voices repository and cached.
+bundled in assets/voices (CC0 licensed), so nothing is downloaded at run time.
 Fallback: espeak-ng (robotic, but always available on Linux via apt).
 """
 from __future__ import annotations
@@ -14,6 +14,8 @@ import wave
 from pathlib import Path
 
 import numpy as np
+
+from .config import ROOT
 
 log = logging.getLogger(__name__)
 
@@ -47,16 +49,15 @@ class Speaker:
 
     def _load_piper(self):
         from piper import PiperVoice
-        from piper.download_voices import download_voice
 
-        model = self.cfg["voice"].get("model", "en_US-ryan-high")
-        voice_dir = Path(self.cfg["cache_dir"]) / "voices"
-        voice_dir.mkdir(parents=True, exist_ok=True)
-        onnx = voice_dir / f"{model}.onnx"
-        if not onnx.exists():
-            log.info("Downloading Piper voice '%s' (one time)...", model)
-            download_voice(model, voice_dir)
-        return PiperVoice.load(str(onnx))
+        model = self.cfg["voice"].get("model", "en_US-joe-medium")
+        # Voices ship with the app (assets/voices); nothing is downloaded at run time.
+        for folder in (ROOT / "assets" / "voices", Path(self.cfg["cache_dir"]) / "voices"):
+            onnx = folder / f"{model}.onnx"
+            if onnx.exists():
+                return PiperVoice.load(str(onnx))
+        raise FileNotFoundError(f"Voice '{model}' not found. Put {model}.onnx and {model}.onnx.json "
+                                f"in {ROOT / 'assets' / 'voices'}.")
 
     def say(self, text: str, speed_mult: float = 1.0) -> np.ndarray:
         """Synthesize text -> float32 mono samples at SAMPLE_RATE, trimmed of edge silence."""
