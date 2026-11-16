@@ -2,7 +2,7 @@
 import * as research from "./research.js";
 import { buildEvergreen, buildNews, buildMarket, buildCustom, buildMetadata, speakable, statFor, visualMatch } from "./script.js";
 import { MediaFinder } from "./media.js";
-import { loadVoice, phonemize, synthesize, voiceRate, setVoice, releaseVoice, voiceDownloadMB, voiceNotice } from "./tts.js";
+import { loadVoice, phonemize, synthesize, voiceRate, setVoice, releaseVoice, voiceDownloadMB, voiceNotice, voiceEngine, naturalFailed } from "./tts.js";
 import { generateMusic, mix, resample, SR } from "./music.js";
 import { loadFonts, renderReel } from "./render.js";
 import { analyzeLine, iconFor } from "./visuals.js";
@@ -311,6 +311,8 @@ async function customScript(opts, generic, say) {
   return buildCustom(found, { niche: opts.niche, cta: opts.cta, generic });
 }
 
+const lastVoiceErrorText = () => { try { const e = localStorage.getItem("voiceError"); return e ? ` (${e})` : ""; } catch { return ""; } };
+
 // Step 2: voice, music and video, all on the device.
 // opts: { brand, accent, music, voiceSpeed, forceEncoder }   ui: { say, canvas, audioCtx }
 export async function produceReel(plan, opts, ui) {
@@ -326,9 +328,20 @@ export async function produceReel(plan, opts, ui) {
   const used = (await Promise.all([loadVoice((f) => say(msg(), f)), loadFonts()]))[0];
   const notice = voiceNotice();
   if (notice) ui.toast?.(notice);
-  else if (used !== (opts.voiceEngine || "natural")) ui.toast?.("The natural voice couldn't start on this phone, so the classic voice is used.");
+  else if (used !== (opts.voiceEngine || "natural")) ui.toast?.(`The natural voice couldn't start on this phone${lastVoiceErrorText()}, so the classic voice is used.`);
 
-  const clips = await voiceScript(script, stage(0.25, 0.55), opts.voiceSpeed || 1.0);
+  let clips;
+  try { clips = await voiceScript(script, stage(0.25, 0.55), opts.voiceSpeed || 1.0); }
+  catch (e) {
+    if (voiceEngine() !== "natural") throw e;
+    // The natural voice failed part-way (error or no response): redo it with the classic voice.
+    console.warn("natural voice failed, redoing with the classic voice", e);
+    naturalFailed(e);
+    ui.toast?.(`The natural voice didn't work on this phone (${e.message || e}), so the classic voice is used.`);
+    say("Switching to the classic voice…", 0);
+    await loadVoice((f) => say("Getting the classic voice ready…", f));
+    clips = await voiceScript(script, stage(0.25, 0.55), opts.voiceSpeed || 1.0);
+  }
   await releaseVoice();      // free the voice model's memory before the video is encoded
   const { words, spans } = timings(script, clips);
   const { audio, total } = await assembleAudio(clips, opts.music, script.lines, opts.musicVolume ?? 1);

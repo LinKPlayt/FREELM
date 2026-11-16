@@ -3,11 +3,14 @@
 //   "fast": Piper (VITS), smaller and quicker but more robotic; also the fallback if the natural voice can't load
 import * as ort from "./vendor/ort/ort.wasm.min.mjs";
 import { KOKORO_RATE, KOKORO_VOICES } from "./voices.js";
+import { kokoroPhonemes } from "./kokoro-text.js";
 export { KOKORO_VOICES };
 // The natural voice runs in a worker (voice-worker.js); ending it frees its memory.
 let worker = null, nextId = 0;
 const pending = new Map();
-function call(cmd, args = {}, onProgress) {
+// Every call has a watchdog: if the worker goes quiet (no progress, no answer) for `quiet` ms, the call
+// fails instead of hanging, and the app switches to the classic voice.
+function call(cmd, args = {}, onProgress, quiet = 90000) {
   if (!worker) {
     worker = new Worker(new URL("./voice-worker.js", import.meta.url), { type: "module" });
     worker.onmessage = ({ data }) => {
@@ -16,9 +19,21 @@ function call(cmd, args = {}, onProgress) {
       pending.delete(data.id);
       data.error ? p.reject(new Error(data.error)) : p.resolve(data.result);
     };
-    worker.onerror = (e) => { for (const p of pending.values()) p.reject(new Error(e.message || "The voice stopped")); pending.clear(); worker = null; };
+    worker.onerror = (e) => { e.preventDefault?.(); for (const p of pending.values()) p.reject(new Error(e.message || "the voice worker couldn't start")); pending.clear(); worker = null; };
+    worker.onmessageerror = () => { for (const p of pending.values()) p.reject(new Error("the voice worker sent unreadable data")); pending.clear(); };
   }
-  return new Promise((resolve, reject) => { const id = ++nextId; pending.set(id, { resolve, reject, onProgress }); worker.postMessage({ id, cmd, args }); });
+  return new Promise((resolve, reject) => {
+    const id = ++nextId;
+    let timer = null;
+    const arm = () => { clearTimeout(timer); timer = setTimeout(() => { pending.delete(id); reject(new Error(`the voice stopped responding (${cmd})`)); }, quiet); };
+    pending.set(id, {
+      resolve: (v) => { clearTimeout(timer); resolve(v); },
+      reject: (e) => { clearTimeout(timer); reject(e); },
+      onProgress: (f) => { arm(); onProgress?.(f); },
+    });
+    arm();
+    worker.postMessage({ id, cmd, args });
+  });
 }
 function endWorker() {
   worker?.terminate(); worker = null;
@@ -46,7 +61,14 @@ export function voiceNotice() {
   return "The app restarted while making the natural voice last time (your phone ran low on memory), so the classic voice is used for now. Close other apps and pick a natural voice again in Style to retry.";
 }
 // Picking a narrator again resets the fallback.
-export function resetVoiceLevel() { store.set("voiceLevel", "q8"); store.set("voiceBusy", "0"); }
+export function resetVoiceLevel() { store.set("voiceLevel", "q8"); store.set("voiceBusy", "0"); store.set("voiceError", ""); }
+// The natural voice didn't work (error or timeout): use the classic voice from now on, and remember why.
+export function naturalFailed(e) {
+  endWorker();
+  store.set("voiceBusy", "0"); store.set("voiceLevel", "classic"); store.set("voiceError", String(e?.message || e).slice(0, 300));
+  engine = "fast";
+}
+export const lastVoiceError = () => store.get("voiceError") || "";
 
 let engine = "natural", voiceId = "af_heart";
 export function setVoice({ engine: e, voice } = {}) {
@@ -64,8 +86,11 @@ export async function loadVoice(onProgress) {
     if (level === "classic") engine = "fast";
     else {
       store.set("voiceBusy", "1");                       // cleared by releaseVoice() when the voiceover is done
-      try { await call("load", { dtype: level }, onProgress); return "natural"; }
-      catch (e) { console.warn("natural voice unavailable, using the classic voice", e); endWorker(); store.set("voiceBusy", "0"); engine = "fast"; }
+      try {
+        await call("ping", {}, null, 20000);              // the worker itself starts
+        await call("load", { dtype: level }, onProgress, 120000);
+        return "natural";
+      } catch (e) { console.warn("natural voice unavailable, using the classic voice", e); naturalFailed(e); }
     }
   }
   await loadPiper(onProgress);
@@ -77,13 +102,13 @@ export async function phonemize(texts) {
   if (engine === "natural") {
     const lang = KOKORO_VOICES[voiceId]?.lang || "a";
     const out = [];
-    out.push(...(await call("phonemes", { texts, lang })));
+    for (const t of texts) out.push(await kokoroPhonemes(t, lang, espeakIPA));
     return out;
   }
   return piperPhonemize(texts);
 }
 export async function synthesize(phonemes, speed = 1.0) {
-  if (engine === "natural") return trimAndNormalize(await call("speak", { phonemes, voice: voiceId, speed }), KOKORO_RATE);
+  if (engine === "natural") return trimAndNormalize(await call("speak", { phonemes, voice: voiceId, speed }, null, 120000), KOKORO_RATE);
   return piperSynthesize(phonemes, speed);
 }
 
@@ -134,23 +159,29 @@ function loadPhonemizer() {
   });
 }
 
-// text[] -> phoneme[][] (one list per input text), using espeak-ng compiled to WebAssembly
-async function piperPhonemize(texts) {
+// eSpeak NG (piper-phonemize, WebAssembly), loaded once. Returns, per text, a list per sentence.
+let espeakModule = null;
+const espeakOut = [];
+async function espeak(texts, voice) {
   await loadPhonemizer();
-  const results = [];
-  const mod = await window.createPiperPhonemize({
-    print: (line) => { try { results.push(JSON.parse(line)); } catch { /* not JSON: ignore */ } },
+  espeakModule ??= window.createPiperPhonemize({
+    print: (line) => { try { espeakOut.push(JSON.parse(line)); } catch { /* not JSON: ignore */ } },
     printErr: () => {},
     locateFile: (f) => VENDOR + "piper/" + f,
   });
-  for (const text of texts) {
-    const before = results.length;
-    mod.callMain(["-l", config.espeak.voice, "--input", JSON.stringify([{ text }]), "--espeak_data", "/espeak-ng-data"]);
-    const mine = results.slice(before);
-    results.length = before;
-    results.push(mine.flatMap((r) => r.phonemes || []));
-  }
-  return results;
+  const mod = await espeakModule;
+  return texts.map((text) => {
+    espeakOut.length = 0;
+    mod.callMain(["-l", voice, "--input", JSON.stringify([{ text }]), "--espeak_data", "/espeak-ng-data"]);
+    return espeakOut.map((r) => r.phonemes || []);
+  });
+}
+// For the natural voice: IPA strings, sentences joined with a space.
+const espeakIPA = async (texts, voice) => (await espeak(texts, voice)).map((sentences) => sentences.map((p) => p.join("")).join(" "));
+
+// text[] -> phoneme[][] (one list per input text), for the classic voice
+async function piperPhonemize(texts) {
+  return (await espeak(texts, config.espeak.voice)).map((sentences) => sentences.flat());
 }
 
 function toIds(phonemes) {

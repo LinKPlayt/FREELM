@@ -3,7 +3,7 @@ import { seriesTopics, appData, planReel, produceReel, releasePlan, estimateSeco
 import { StatBg, IllusBg } from "./graphics.js";
 import { describeStat } from "./visuals.js";
 import { hookOptions, coach } from "./extras.js";
-import { KOKORO_VOICES, setVoice, loadVoice, phonemize, synthesize, voiceRate, releaseVoice, voiceNotice, resetVoiceLevel } from "./tts.js";
+import { KOKORO_VOICES, setVoice, loadVoice, phonemize, synthesize, voiceRate, releaseVoice, voiceNotice, resetVoiceLevel, naturalFailed, lastVoiceError } from "./tts.js";
 const factModule = () => import("./ai/factcheck.js");
 import { listReels, saveReel, deleteReel, clearReels, listDrafts, saveDraft, deleteDraft } from "./store.js";
 import { platformCaptions, setPronunciations } from "./script.js";
@@ -373,29 +373,56 @@ function unlockAudio() {
 }
 
 // Plays a sample line in the chosen narrator's voice (downloads the voice the first time).
-let previewing = false;
+// It plays through an <audio> element, not Web Audio: on iPhone, Web Audio is silent when the
+// ring/silent switch is on, and an <audio> element unlocked during the tap can play later.
+let previewing = false, previewAudio = null;
+const SILENCE = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=";
+function wavBlob(samples, rate) {
+  const buf = new ArrayBuffer(44 + samples.length * 2), v = new DataView(buf);
+  const w = (o, str) => { for (let i = 0; i < str.length; i++) v.setUint8(o + i, str.charCodeAt(i)); };
+  w(0, "RIFF"); v.setUint32(4, 36 + samples.length * 2, true); w(8, "WAVE"); w(12, "fmt "); v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true);
+  v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, "data"); v.setUint32(40, samples.length * 2, true);
+  for (let i = 0; i < samples.length; i++) v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, samples[i])) * 32767, true);
+  return new Blob([buf], { type: "audio/wav" });
+}
 async function previewVoice() {
   if (previewing) return;
-  const ctx = unlockAudio(), btn = $("voice-preview");
+  const btn = $("voice-preview");
+  // Unlock audio playback now, while we're inside the tap.
+  previewAudio ??= Object.assign(new Audio(), { playsInline: true });
+  previewAudio.src = SILENCE; previewAudio.play().catch(() => {});
   previewing = true; btn.disabled = true;
-  try {
-    setVoice(voiceOpts(state.voice));
+  const line = "Here's the thing about compound interest: your money earns money, and then that money earns money too.";
+  const speak = async () => {
     btn.textContent = "Loading…";
     const used = await loadVoice((f) => { btn.textContent = `Downloading ${Math.round(f * 100)}%`; });
-    if (used !== voiceOpts(state.voice).engine) toast("The natural voice couldn't start on this phone; this is the classic voice.");
     btn.textContent = "Speaking…";
-    const line = "Here's the thing about compound interest: your money earns money, and then that money earns money too.";
     const [ph] = await phonemize([line]);
-    const samples = await synthesize(ph, SPEEDS[state.speed] || 1);
-    const buf = ctx.createBuffer(1, samples.length, voiceRate());
-    buf.copyToChannel(samples, 0);
-    const src = ctx.createBufferSource(); src.buffer = buf; src.connect(ctx.destination); src.start();
-    await new Promise((r) => { src.onended = r; });
+    return { used, samples: await synthesize(ph, SPEEDS[state.speed] || 1) };
+  };
+  try {
+    setVoice(voiceOpts(state.voice));
+    let r;
+    try { r = await speak(); }
+    catch (e) {
+      if (voiceOpts(state.voice).engine !== "natural") throw e;
+      naturalFailed(e); await releaseVoice(); r = await speak();       // the natural voice failed: the classic one
+    }
+    const err = lastVoiceError();
+    if (r.used !== voiceOpts(state.voice).engine || err) toast(`The natural voice didn't work on this phone${err ? ` (${err})` : ""}. This is the classic voice.`);
+    const url = URL.createObjectURL(wavBlob(r.samples, voiceRate()));
+    previewAudio.src = url;
+    await previewAudio.play();
+    await new Promise((res) => { previewAudio.onended = res; previewAudio.onerror = res; setTimeout(res, 20000); });
+    URL.revokeObjectURL(url);
   } catch (e) { toast("Couldn't play the voice: " + (e.message || e)); }
   await releaseVoice();                                   // give the memory back
   const n = voiceNotice(); if (n) toast(n);
+  showVoiceNote();
   previewing = false; btn.disabled = false; btn.textContent = "▶ Hear it";
 }
+let showVoiceNote = () => {};
 
 /* ---------- review screen ---------- */
 function drawThumb(cv, asset) {
@@ -655,10 +682,12 @@ async function soundTest() {
     out.querySelectorAll(`[data-ans^="${k}:"]`).forEach((x) => x.classList.toggle("main", x === b));
   }));
   $("beep").onclick = () => playBeep();
-  $("copy-diag").onclick = () => copy([
+  $("copy-diag").onclick = async () => copy([
     `Clip: ${answers.clip === "heard" ? "heard the notes" : answers.clip === "silent" ? "NO sound" : "not answered"}`,
     `Speaker beep: ${answers.beep === "heard" ? "heard" : answers.beep === "silent" ? "NO sound" : "not answered"}`,
     $("diag").innerText,
+    `Narrator: ${state.voice} · natural voice ${store.get("voiceLevel") === "classic" ? "switched off after a problem" : "on"}${lastVoiceError() ? ` · last problem: ${lastVoiceError()}` : ""}`,
+    `App version: ${(await caches.keys().catch(() => [])).filter((k) => /^reelbot-v/.test(k)).join(", ") || "unknown"}`,
   ].join("\n"));
   btn.disabled = false; btn.textContent = "Run sound test";
 }
@@ -706,10 +735,13 @@ async function init() {
   prefChips("moods", MOODS, "mood", store.get("musicOff") === "1" ? "none" : "lofi");
   prefChips("lengths", LENGTH_LABELS, "length", "standard", updateEstimate);
   const voiceNote = () => {
-    const v = KOKORO_VOICES[state.voice];
-    $("voice-note").textContent = v ? `${v.desc}. Natural voice: sounds like a real narrator. One-time 92 MB download.`
+    const v = KOKORO_VOICES[state.voice], err = lastVoiceError();
+    $("voice-note").textContent = v && store.get("voiceLevel") === "classic"
+      ? `The natural voice didn't work on this phone${err ? ` (${err})` : ""}, so the classic voice is used. Tap a natural voice again to retry.`
+      : v ? `${v.desc}. Natural voice: sounds like a real narrator. One-time 92 MB download.`
       : "Classic voice: quicker to make and a 63 MB download, but more robotic.";
   };
+  showVoiceNote = voiceNote;
   prefChips("voices", VOICE_LABELS, "voice", "af_heart", () => { resetVoiceLevel(); voiceNote(); }); voiceNote();
   prefChips("music-vol", { low: "Low", medium: "Medium", high: "High" }, "musicVol", "medium");
   $("say-as").value = store.get("sayAs") || "";
