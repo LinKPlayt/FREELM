@@ -11,6 +11,7 @@ issue title is ever passed to a shell.
 """
 from __future__ import annotations
 
+import logging
 import os
 import re
 import sys
@@ -63,6 +64,9 @@ def clean(raw: dict) -> dict:
 
 
 def main() -> int:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s", datefmt="%H:%M:%S")
+    for noisy in ("urllib3", "googleapiclient", "PIL"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
     event = os.environ.get("EVENT_NAME", "workflow_dispatch")
     if event == "issues":
         raw = parse_title(os.environ.get("ISSUE_TITLE", ""))
