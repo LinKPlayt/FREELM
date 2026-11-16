@@ -61,6 +61,23 @@ Turn it off under **Style → Review before making** if you'd rather go straight
 The length estimate updates as you edit. Reels are kept between 30 and 45 seconds: long scripts
 are spoken slightly faster or trimmed, and short ones hold the end card longer.
 
+### Visuals that match what's being said
+
+Each scene's picture is chosen from the line being spoken, not from a fixed list:
+
+- **Charts from the numbers in the script.** "Fifty percent goes to needs" becomes an animated
+  50% ring labelled NEEDS; "50/30/20" becomes a split ring; "three to six months" a 3–6 month
+  timeline; "doubles every seven years" a doubling curve; "twice as much" or "ten times" a
+  comparison; "$1,000" a counter; a year like 1637 a timeline. Numbers written as words count too.
+- **Illustrations for concepts.** 17 drawn icons (piggy bank, house, credit card, bank, shield,
+  coins, rising and falling charts, shopping cart, hourglass, graduation cap, briefcase, scales,
+  target, calendar, bitcoin, receipt), picked from the line's meaning and animated.
+- **Photos only when they fit.** The photo search uses the line's own subject, and a photo is used
+  only when it matches what was searched for. Otherwise the scene gets an illustration instead of
+  an unrelated stock photo.
+- **Your call on every scene.** The review screen shows each scene's visual and lets you switch it
+  between **Auto**, **Photo**, **Chart** (when the line has a number) and **Picture**.
+
 ### Style
 
 The Style card shows a **live preview** that updates as you change settings.

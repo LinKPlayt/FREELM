@@ -4,6 +4,7 @@
 import { Muxer, ArrayBufferTarget } from "./vendor/mp4-muxer.mjs";
 import { SR } from "./music.js";
 import { writeMov, pcm16Stereo } from "./mov.js";
+import { StatBg, IllusBg } from "./graphics.js";
 
 export const W = 1080, H = 1920, FPS = 30;
 const FONT_DIR = new URL("../assets/fonts/", import.meta.url).href;
@@ -342,6 +343,8 @@ class Painter {
       if (sc.kind === "image" && sc.bitmap) return new ImageBg(sc.bitmap);
       if (sc.kind === "outro") return new OutroBg(this.job.brand, this.accent, this.job.handle);
       if (sc.kind === "chart") return new ChartBg(sc.chart);
+      if (sc.kind === "stat" && sc.spec) return new StatBg(sc.spec, this.accent, this.job.captionPos, sc.seed || 0);
+      if (sc.kind === "illus") return new IllusBg(sc.icon, sc.label, this.accent, this.job.captionPos, sc.seed || 0);
     } catch (e) { console.warn("scene fallback", e); }
     return sc.label ? new TypeBg(sc.label, this.accent, sc.seed || 0) : new ChartBg(null);
   }
@@ -361,7 +364,7 @@ class Painter {
     const into = t - sc.start;
     if (this.hasSnap && idx > 0 && into < 0.25) { ctx.globalAlpha = 1 - ease(into / 0.25); ctx.drawImage(this.snap, 0, 0); ctx.globalAlpha = 1; }
     ctx.drawImage(sc.kind === "outro" ? this.plain : this.header, 0, 0);
-    if (sc.stat && sc.kind !== "outro" && sc.kind !== "chart") drawStatPop(ctx, sc.stat, into, sc.end - t, this.popY, this.accent);
+    if (sc.stat && !["outro", "chart", "stat"].includes(sc.kind)) drawStatPop(ctx, sc.stat, into, sc.end - t, this.popY, this.accent);
     this.captions.draw(ctx, t, sc.kind === "outro" ? 1180 : this.captionY);
     ctx.fillStyle = rgba(this.accent); ctx.fillRect(0, H - 12, W * (t / this.total), 12);
   }

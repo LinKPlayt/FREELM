@@ -30,6 +30,8 @@ export function speakable(text) {
 }
 
 const HEADLINE_VISUALS = [
+  [/\brepair|mechanic/, "car repair garage"],
+  [/job loss|lose your job|laid off|layoff/, "office workers"],
   [/\bfed\b|federal reserve|powell|rate cut|rate hike|interest rate/, "federal reserve building"],
   [/inflation|\bcpi\b|consumer prices/, "grocery store prices"],
   [/mortgage|home ?buyer|housing|home prices/, "suburban house"],

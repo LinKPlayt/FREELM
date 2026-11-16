@@ -5,6 +5,7 @@ import { MediaFinder } from "./media.js";
 import { loadVoice, phonemize, synthesize, VOICE_RATE } from "./tts.js";
 import { generateMusic, mix, resample, SR } from "./music.js";
 import { loadFonts, renderReel } from "./render.js";
+import { analyzeLine, iconFor } from "./visuals.js";
 
 const GAP = 0.28, TAIL = 0.8;
 // Reel length presets: [shortest, longest] in seconds.
@@ -144,7 +145,10 @@ async function attachPhotos(script, generic, opts, say) {
   if (opts.offline) finder.find = finder.findImage = async () => null;
   const media = [...script.lines, ...script.extras].filter((l) => l.kind === "media");
   for (const line of media) {
-    let q = line.visual || generic[0];
+    // Search for what THIS line talks about; fall back to the topic's own visuals.
+    const own = visualMatch(line.text);
+    line.concrete = Boolean(own);
+    let q = own || line.visual || generic[0];
     if (usedQueries.has(q)) q = generic.find((g) => !usedQueries.has(g)) || q;   // avoid repeating the same subject
     usedQueries.add(q);
     line.query = q;
@@ -214,8 +218,13 @@ export async function produceReel(plan, opts, ui) {
     if (line.kind === "outro") sc.kind = "outro";
     else if (line.kind === "chart" && line.chart) { sc.kind = "chart"; sc.chart = line.chart; }
     else {
-      const asset = await line.asset;
-      if (asset) { sc.kind = "image"; sc.bitmap = asset.bitmap; if (asset.credit && !credits.includes(asset.credit)) credits.push(asset.credit); }
+      line.asset = await line.asset;
+      const v = decideVisual(line, i, script.title);
+      if (v.type === "photo") {
+        sc.kind = "image"; sc.bitmap = line.asset.bitmap;
+        if (line.asset.credit && !credits.includes(line.asset.credit)) credits.push(line.asset.credit);
+      } else if (v.type === "stat") { sc.kind = "stat"; sc.spec = v.spec; }
+      else { sc.kind = "illus"; sc.icon = v.icon; sc.label = v.label; }
       if (opts.pops !== false && i > 0) sc.stat = statFor(line.text);   // big callout for the key number
     }
     scenes.push(sc);
@@ -236,6 +245,31 @@ export async function produceReel(plan, opts, ui) {
   };
 }
 
+// Which visual a scene uses. mode: "auto" (default), "photo", "chart" or "illus".
+//   auto: a spoken number -> its chart; a photo of what the line itself names -> the photo;
+//         otherwise an illustration of the line's concept (rather than a loosely related stock photo).
+export function decideVisual(line, i, topicTitle = "") {
+  if (line.kind !== "media") return { type: line.kind };
+  const an = line.analysis ??= analyzeLine(line.text);
+  const icon = an.icon || iconFor(topicTitle)?.icon || "coins";
+  const label = an.icon ? an.label : iconFor(topicTitle)?.label || null;
+  const photo = line.asset?.bitmap ? "photo" : null;
+  // A photo "matches" when its own title shares a word with what we searched for (or you chose it).
+  const qWords = (line.query || "").toLowerCase().match(/[a-z]{4,}/g) || [];
+  const tWords = (line.asset?.title || "").toLowerCase();
+  const matches = Boolean(photo) && (!line.asset.credit || qWords.some((w) => tWords.includes(w.replace(/s$/, ""))));
+  const mode = line.vmode || "auto";
+  if (mode === "chart" && an.stat) return { type: "stat", spec: an.stat };
+  if (mode === "illus") return { type: "illus", icon, label };
+  if (mode === "photo") return photo ? { type: "photo" } : { type: "illus", icon, label };
+  if (an.stat && i > 0) return { type: "stat", spec: an.stat };
+  if (photo && ((line.concrete && matches) || i === 0)) return { type: "photo" };
+  if (an.icon) return { type: "illus", icon, label };
+  if (photo && matches) return { type: "photo" };
+  if (an.stat) return { type: "stat", spec: an.stat };
+  return { type: "illus", icon, label };
+}
+
 // Free the decoded photos (they hold a lot of memory on a phone).
 export function releasePlan(plan) {
   for (const l of [...plan.script.lines, ...plan.script.extras]) {
@@ -246,7 +280,7 @@ export function releasePlan(plan) {
 /* ---------- drafts: save a reviewed script and finish it later ---------- */
 // Photos are found again when a draft is opened (your own photos aren't kept, to save space).
 export function draftFromPlan(plan, label) {
-  const strip = (l) => ({ text: l.text, visual: l.visual, query: l.query, kind: l.kind, chart: l.chart || null,
+  const strip = (l) => ({ text: l.text, visual: l.visual, query: l.query, kind: l.kind, chart: l.chart || null, vmode: l.vmode, concrete: l.concrete,
     mine: l.asset && !l.asset.credit ? true : undefined });
   const { script } = plan;
   return {

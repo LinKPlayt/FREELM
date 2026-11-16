@@ -1,5 +1,7 @@
 // UI glue for the phone app.
-import { appData, planReel, produceReel, releasePlan, estimateSeconds, lengthRange, draftFromPlan, planFromDraft, planFromIdea } from "./make.js";
+import { appData, planReel, produceReel, releasePlan, estimateSeconds, lengthRange, draftFromPlan, planFromDraft, planFromIdea, decideVisual } from "./make.js";
+import { StatBg, IllusBg } from "./graphics.js";
+import { describeStat } from "./visuals.js";
 import { listReels, saveReel, deleteReel, clearReels, listDrafts, saveDraft, deleteDraft } from "./store.js";
 import { platformCaptions } from "./script.js";
 import { encoderInfo, renderReel, loadFonts, previewFrame } from "./render.js";
@@ -264,38 +266,70 @@ function updateEstimate() {
     : secs < lo ? (spare ? ` (researched lines will be added to reach ${lo}s)` : " (short: tap + Add a line, or the end card stays on longer)") : "");
   el.classList.toggle("warn", secs > hi || secs < lo);
 }
+// Thumbnail of a generated chart or illustration (drawn with the real renderer at full size, then scaled).
+let thumbStage = null;
+function drawGenerated(cv, v) {
+  thumbStage ??= Object.assign(document.createElement("canvas"), { width: 1080, height: 1920 });
+  const n = parseInt(state.accent.slice(1), 16), accent = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  const bg = v.type === "stat" ? new StatBg(v.spec, accent, state.capPos) : new IllusBg(v.icon, v.label, accent, state.capPos);
+  bg.draw(thumbStage.getContext("2d"), 0.9);
+  cv.getContext("2d").drawImage(thumbStage, 0, 0, cv.width, cv.height);
+  bg.dispose();
+}
+const VISUAL_NAMES = { photo: "Photo", stat: "Chart", illus: "Picture" };
+
 function showReview() {
   const { script } = state.plan;
   $("review-title").textContent = script.title;
   const content = script.lines.filter((l) => l.kind !== "outro").length;
+  const visuals = script.lines.map((l, i) => decideVisual(l, i, script.title));
   $("scenes").innerHTML = script.lines.map((l, i) => {
-    const tag = i === 0 ? "Hook" : l.kind === "outro" ? "Ending" : l.kind === "chart" ? "Chart" : `Scene ${i}`;
+    const v = visuals[i];
+    let tag = i === 0 ? "Hook" : l.kind === "outro" ? "Ending" : l.kind === "chart" ? "Chart" : `Scene ${i}`;
+    if (l.kind === "media") tag += ` · ${VISUAL_NAMES[v.type]}${v.type === "stat" ? ": " + describeStat(v.spec) : v.type === "illus" ? ": " + (v.label || v.icon).toLowerCase() : ""}`;
     const thumb = l.kind === "outro" ? `<div class="thumb">END<br>CARD</div>` : l.kind === "chart" ? `<div class="thumb">LIVE<br>CHART</div>`
-      : `<div class="thumb">${l.asset?.bitmap ? `<canvas width="152" height="270" data-thumb="${i}"></canvas>` : "NO<br>PHOTO"}</div>`;
+      : `<div class="thumb"><canvas width="152" height="270" data-thumb="${i}"></canvas></div>`;
+    const mode = l.vmode || "auto", hasStat = Boolean(l.analysis?.stat);
+    const chips = l.kind !== "media" ? "" : `<div class="mini vis">${[["auto", "Auto"], ["photo", "Photo"], ["chart", "Chart"], ["illus", "Picture"]]
+      .filter(([m]) => m !== "chart" || hasStat)
+      .map(([m, txt]) => `<button data-vmode="${i}:${m}" class="${mode === m ? "on" : ""}">${txt}</button>`).join("")}</div>`;
     const tools = l.kind !== "media" ? (l.kind === "chart" && content > 2 ? `<div class="mini"><button class="del" data-del="${i}">Remove</button></div>` : "")
       : `<div class="mini"><button data-swap="${i}">New photo</button><button data-search="${i}">Search…</button><button data-mine="${i}">My photo</button>${content > 2 ? `<button class="del" data-del="${i}">Remove</button>` : ""}</div>`;
-    return `<div class="scene"><div>${thumb}</div><div><div class="scene-tag"><span>${tag}</span></div>
-      <textarea data-line="${i}" rows="3">${esc(l.text)}</textarea>${tools}</div></div>`;
+    return `<div class="scene"><div>${thumb}</div><div><div class="scene-tag"><span>${esc(tag)}</span></div>
+      <textarea data-line="${i}" rows="3">${esc(l.text)}</textarea>${chips}${tools}</div></div>`;
   }).join("");
-  script.lines.forEach((l, i) => { const cv = document.querySelector(`[data-thumb="${i}"]`); if (cv && l.asset?.bitmap) drawThumb(cv, l.asset); });
+  script.lines.forEach((l, i) => {
+    const cv = document.querySelector(`[data-thumb="${i}"]`), v = visuals[i];
+    if (!cv) return;
+    if (v.type === "photo" && l.asset?.bitmap) drawThumb(cv, l.asset);
+    else if (v.type === "stat" || v.type === "illus") drawGenerated(cv, v);
+  });
   updateEstimate();
   screen("review");
 }
 $("scenes").addEventListener("input", (e) => {
   const i = e.target.dataset.line; if (i == null) return;
-  state.plan.script.lines[+i].text = e.target.value.replace(/\s+/g, " ").trim();
+  const line = state.plan.script.lines[+i];
+  line.text = e.target.value.replace(/\s+/g, " ").trim();
+  line.analysis = null;                                  // re-read numbers and concepts from the new text
   state.plan.edited = true; updateEstimate();
 });
 async function setAsset(i, assetPromise, label) {
   const line = state.plan.script.lines[i];
   const btn = document.querySelector(`[data-swap="${i}"]`); if (btn) btn.textContent = label;
   const asset = await assetPromise.catch(() => null);
-  if (asset) { line.asset?.bitmap?.close?.(); line.asset = asset; } else toast("No other photo found. Try Search…");
+  if (asset) { line.asset?.bitmap?.close?.(); line.asset = asset; line.vmode = "photo"; } else toast("No other photo found. Try Search…");
   showReview();
 }
+$("scenes").addEventListener("change", (e) => { if (e.target.dataset.line != null) showReview(); });   // update visuals after editing
 $("scenes").addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b) return;
   const plan = state.plan;
+  if (b.dataset.vmode != null) {
+    const [i, m] = b.dataset.vmode.split(":");
+    plan.script.lines[+i].vmode = m === "auto" ? undefined : m;
+    return showReview();
+  }
   if (b.dataset.swap != null) { const i = +b.dataset.swap; setAsset(i, plan.finder.findImage(plan.script.lines[i].query || plan.generic[0]), "Finding…"); }
   if (b.dataset.search != null) {
     const i = +b.dataset.search, q = prompt("Search free photos for:", plan.script.lines[i].query || "");
