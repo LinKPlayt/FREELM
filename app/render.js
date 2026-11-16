@@ -112,7 +112,7 @@ class ChartBg {
 }
 
 class OutroBg {
-  constructor(brand, accent) {
+  constructor(brand, accent, handle = "") {
     this.accent = accent;
     const bg = canvas(W, H), c = bg.getContext("2d");
     const g = c.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "rgb(10,14,32)"); g.addColorStop(1, rgba(accent.map((v) => Math.round(v * 0.35))));
@@ -122,6 +122,7 @@ class OutroBg {
     while (c.measureText(brand.toUpperCase()).width > W - 120 && size > 60) { size -= 6; c.font = `${size}px Anton`; }
     c.lineJoin = "round"; c.lineWidth = 8; c.strokeStyle = "rgba(0,0,0,0.8)"; c.strokeText(brand.toUpperCase(), W / 2, 640);
     c.fillStyle = rgba(accent); c.fillText(brand.toUpperCase(), W / 2, 640);
+    if (handle) { c.fillStyle = "#fff"; c.font = "800 52px Montserrat"; c.fillText(handle, W / 2, 1010); }
     c.fillStyle = "rgba(255,255,255,0.6)"; c.font = "500 30px Montserrat"; c.fillText("NOT FINANCIAL ADVICE · FOR EDUCATION ONLY", W / 2, 1790);
     this.bg = bg;
   }
@@ -147,7 +148,7 @@ function wrap(c, text, maxWidth) {
   return lines;
 }
 
-function overlay(title, brand, accent) {
+function overlay(title, brand, accent, handle = "") {
   const ov = canvas(W, H), c = ov.getContext("2d");
   let g = c.createLinearGradient(0, 0, 0, 560); g.addColorStop(0, "rgba(0,0,0,0.69)"); g.addColorStop(1, "rgba(0,0,0,0)");
   c.fillStyle = g; c.fillRect(0, 0, W, 560);
@@ -159,6 +160,12 @@ function overlay(title, brand, accent) {
     const tw = c.measureText(brand.toUpperCase()).width, px = W / 2, py = 150;
     c.fillStyle = rgba(accent); c.beginPath(); c.roundRect(px - tw / 2 - 28, py - 32, tw + 56, 64, 32); c.fill();
     c.fillStyle = "rgb(12,12,20)"; c.fillText(brand.toUpperCase(), px, py + 2);
+  }
+  if (handle) {
+    c.font = "800 34px Montserrat"; c.textAlign = "center";
+    c.shadowColor = "rgba(0,0,0,0.8)"; c.shadowBlur = 12;
+    c.fillStyle = "rgba(255,255,255,0.9)"; c.fillText(handle, W / 2, H - 70);
+    c.shadowColor = "transparent"; c.shadowBlur = 0;
   }
   if (title) {
     c.font = "800 60px Montserrat"; c.lineJoin = "round"; c.lineWidth = 10; c.strokeStyle = "#000"; c.fillStyle = "#fff";
@@ -179,9 +186,11 @@ export function chunkWords(words, maxWords = 3, maxChars = 16) {
   return chunks;
 }
 
+// Caption styles: "bold" (big outlined words), "boxed" (words on a dark card, the spoken word on
+// a coloured chip) and "clean" (sentence case with a soft shadow).
 class Captions {
-  constructor(words, accent) {
-    this.words = words; this.accent = accent; this.chunks = chunkWords(words);
+  constructor(words, accent, style = "bold") {
+    this.words = words; this.accent = accent; this.style = style; this.chunks = chunkWords(words);
     this.times = this.chunks.map((ch, k) => {
       const start = words[ch[0]].start, lastEnd = words[ch[ch.length - 1]].end;
       const end = k + 1 < this.chunks.length ? words[this.chunks[k + 1][0]].start : lastEnd + 0.3;
@@ -189,19 +198,21 @@ class Captions {
     });
     this.layout = new Map();
   }
+  font(size) { return this.style === "clean" ? `800 ${size}px Montserrat` : `${size}px Anton`; }
   draw(ctx, t, centerY) {
     const k = this.times.findIndex(([s, e]) => t >= s && t < e);
     if (k < 0) return;
     const idxs = this.chunks[k];
     let lay = this.layout.get(k);
     if (!lay) {
-      const texts = idxs.map((i) => this.words[i].text.replace(/["“”]/g, "").toUpperCase());
-      let size = 118, widths, total;
+      const texts = idxs.map((i) => { const x = this.words[i].text.replace(/["“”]/g, ""); return this.style === "clean" ? x : x.toUpperCase(); });
+      let size = { bold: 118, boxed: 100, clean: 92 }[this.style] || 118, widths, total;
+      const maxW = this.style === "bold" ? W - 120 : W - 200;
       for (;;) {
-        ctx.font = `${size}px Anton`;
+        ctx.font = this.font(size);
         widths = texts.map((x) => ctx.measureText(x).width);
         total = widths.reduce((a, b) => a + b, 0) + size * 0.28 * (texts.length - 1);
-        if (total <= W - 120 || size <= 60) break;
+        if (total <= maxW || size <= 54) break;
         size -= 6;
       }
       lay = { texts, size, widths, total }; this.layout.set(k, lay);
@@ -209,17 +220,64 @@ class Captions {
     let active = idxs.find((i) => t >= this.words[i].start && t < this.words[i].end + 0.05);
     if (active === undefined) active = t >= this.words[idxs[idxs.length - 1]].start ? idxs[idxs.length - 1] : idxs[0];
     const age = t - this.times[k][0], s = age < 0.12 ? 0.82 + 0.18 * ease(age / 0.12) : 1;
+    const gap = lay.size * 0.28;
     ctx.save();
     ctx.translate(W / 2, centerY); ctx.scale(s, s);
-    ctx.font = `${lay.size}px Anton`; ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
+    ctx.font = this.font(lay.size); ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
+    if (this.style === "boxed") {
+      const padX = 34, h = lay.size * 1.35;
+      ctx.fillStyle = "rgba(10,12,22,0.78)";
+      ctx.beginPath(); ctx.roundRect(-lay.total / 2 - padX, -h / 2, lay.total + padX * 2, h, 22); ctx.fill();
+    }
+    if (this.style === "clean") {
+      // A soft translucent backing keeps light text readable on bright photos.
+      const padX = 44, h = lay.size * 1.6;
+      ctx.fillStyle = "rgba(0,0,0,0.42)";
+      ctx.beginPath(); ctx.roundRect(-lay.total / 2 - padX, -h / 2, lay.total + padX * 2, h, h / 2); ctx.fill();
+      ctx.shadowColor = "rgba(0,0,0,0.9)"; ctx.shadowBlur = 18; ctx.shadowOffsetY = 3;
+    }
     let x = -lay.total / 2;
     lay.texts.forEach((txt, j) => {
-      ctx.lineWidth = 18; ctx.strokeStyle = "#000"; ctx.strokeText(txt, x, 0);
-      ctx.fillStyle = idxs[j] === active ? rgba(this.accent) : "#fff"; ctx.fillText(txt, x, 0);
-      x += lay.widths[j] + lay.size * 0.28;
+      const on = idxs[j] === active;
+      if (this.style === "bold") {
+        ctx.lineWidth = 18; ctx.strokeStyle = "#000"; ctx.strokeText(txt, x, 0);
+        ctx.fillStyle = on ? rgba(this.accent) : "#fff";
+      } else if (this.style === "boxed") {
+        if (on) {
+          const ph = lay.size * 1.16;
+          ctx.fillStyle = rgba(this.accent); ctx.beginPath(); ctx.roundRect(x - 12, -ph / 2 + lay.size * 0.03, lay.widths[j] + 24, ph, 14); ctx.fill();
+        }
+        ctx.fillStyle = on ? "rgb(14,14,22)" : "#fff";
+      } else {
+        ctx.fillStyle = on ? rgba(this.accent) : "#fff";
+      }
+      ctx.fillText(txt, x, lay.size * (this.style === "clean" ? 0.04 : 0.02));
+      x += lay.widths[j] + gap;
     });
     ctx.restore();
   }
+}
+
+// A big animated callout for the key number in a scene ("20%", "$1,000", "3–6 MONTHS").
+function drawStatPop(ctx, text, into, left, y, accent) {
+  const appear = 0.15;
+  if (into < appear) return;
+  const a = into - appear;
+  const scale = a < 0.18 ? 0.4 + 0.75 * ease(a / 0.18) : a < 0.32 ? 1.15 - 0.15 * ease((a - 0.18) / 0.14) : 1;
+  const alpha = Math.min(1, a / 0.12) * Math.min(1, Math.max(0, left / 0.25));
+  if (alpha <= 0) return;
+  let size = 230;
+  ctx.font = `${size}px Anton`;
+  while (ctx.measureText(text).width > W - 160 && size > 90) { size -= 10; ctx.font = `${size}px Anton`; }
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(W / 2, y); ctx.rotate(-0.045); ctx.scale(scale, scale);
+  ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
+  ctx.shadowColor = "rgba(0,0,0,0.6)"; ctx.shadowBlur = 30; ctx.shadowOffsetY = 10;
+  ctx.lineWidth = 22; ctx.strokeStyle = "rgb(10,12,22)"; ctx.strokeText(text, 0, 0);
+  ctx.shadowColor = "transparent";
+  ctx.fillStyle = rgba(accent); ctx.fillText(text, 0, 0);
+  ctx.restore();
 }
 
 /* ------------------------------------------------------------------ frame painter */
@@ -229,9 +287,11 @@ class Painter {
     this.job = job;
     this.accent = hexToRgb(job.accent || "#FFD60A");
     this.total = job.scenes[job.scenes.length - 1].end;
-    this.header = overlay(job.title, job.brand, this.accent);
+    this.header = overlay(job.title, job.brand, this.accent, job.handle);
     this.plain = overlay("", "", this.accent);
-    this.captions = new Captions(job.words, this.accent);
+    this.captions = new Captions(job.words, this.accent, job.captionStyle);
+    this.captionY = job.captionPos === "middle" ? 1000 : 1440;
+    this.popY = job.captionPos === "middle" ? 1430 : 1150;
     this.snap = canvas(W, H);
     this.hasSnap = false; this.idx = -1; this.bg = null;
     this.ctx = target.getContext("2d", { alpha: false });
@@ -240,7 +300,7 @@ class Painter {
   makeBg(sc) {
     try {
       if (sc.kind === "image" && sc.bitmap) return new ImageBg(sc.bitmap);
-      if (sc.kind === "outro") return new OutroBg(this.job.brand, this.accent);
+      if (sc.kind === "outro") return new OutroBg(this.job.brand, this.accent, this.job.handle);
       if (sc.kind === "chart") return new ChartBg(sc.chart);
     } catch (e) { console.warn("scene fallback", e); }
     return new ChartBg(null);
@@ -261,10 +321,18 @@ class Painter {
     const into = t - sc.start;
     if (this.hasSnap && idx > 0 && into < 0.25) { ctx.globalAlpha = 1 - ease(into / 0.25); ctx.drawImage(this.snap, 0, 0); ctx.globalAlpha = 1; }
     ctx.drawImage(sc.kind === "outro" ? this.plain : this.header, 0, 0);
-    this.captions.draw(ctx, t, sc.kind === "outro" ? 1180 : 1440);
+    if (sc.stat && sc.kind !== "outro" && sc.kind !== "chart") drawStatPop(ctx, sc.stat, into, sc.end - t, this.popY, this.accent);
+    this.captions.draw(ctx, t, sc.kind === "outro" ? 1180 : this.captionY);
     ctx.fillStyle = rgba(this.accent); ctx.fillRect(0, H - 12, W * (t / this.total), 12);
   }
   dispose() { this.bg?.dispose(); for (const c of [this.header, this.plain, this.snap]) c.width = c.height = 0; }
+}
+
+// Draws a single frame of a job onto a canvas (used for the style preview).
+export function previewFrame(job, target, t) {
+  const painter = new Painter(job, target);
+  painter.paint(t);
+  painter.dispose();
 }
 
 /* ------------------------------------------------------------------ encoders */

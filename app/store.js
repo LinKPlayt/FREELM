@@ -30,3 +30,12 @@ export async function saveReel(reel) {
 }
 export const deleteReel = (id) => tx("readwrite", (s) => s.delete(id)).catch(() => {});
 export const clearReels = () => tx("readwrite", (s) => s.clear()).catch(() => {});
+
+// Drafts are small (text only), so they live in localStorage.
+const DRAFTS = "drafts", MAX_DRAFTS = 12;
+export function listDrafts() { try { return JSON.parse(localStorage.getItem(DRAFTS) || "[]"); } catch { return []; } }
+export function saveDraft(d) {
+  const all = [d, ...listDrafts().filter((x) => x.id !== d.id)].slice(0, MAX_DRAFTS);
+  try { localStorage.setItem(DRAFTS, JSON.stringify(all)); return true; } catch { return false; }
+}
+export function deleteDraft(id) { try { localStorage.setItem(DRAFTS, JSON.stringify(listDrafts().filter((x) => x.id !== id))); } catch { /* ignore */ } }

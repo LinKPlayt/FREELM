@@ -1,12 +1,16 @@
 // The whole pipeline, on the phone: research -> script -> voice -> photos -> music -> render.
 import * as research from "./research.js";
-import { buildEvergreen, buildNews, buildMarket, buildCustom, buildMetadata, speakable } from "./script.js";
+import { buildEvergreen, buildNews, buildMarket, buildCustom, buildMetadata, speakable, statFor } from "./script.js";
 import { MediaFinder } from "./media.js";
 import { loadVoice, phonemize, synthesize, VOICE_RATE } from "./tts.js";
 import { generateMusic, mix, resample, SR } from "./music.js";
 import { loadFonts, renderReel } from "./render.js";
 
-const GAP = 0.28, TAIL = 0.8, MIN_S = 30, MAX_S = 45;
+const GAP = 0.28, TAIL = 0.8;
+// Reel length presets: [shortest, longest] in seconds.
+export const LENGTHS = { short: [20, 30], standard: [30, 45], long: [40, 60] };
+let MIN_S = 30, MAX_S = 45;
+function setLength(name) { [MIN_S, MAX_S] = LENGTHS[name] || LENGTHS.standard; }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 
@@ -104,17 +108,18 @@ function timings(script, clips) {
   return { words, spans };
 }
 
-function assembleAudio(clips, withMusic) {
+function assembleAudio(clips, mood) {
   const total = Math.max(seconds(clips), MIN_S), voice = new Float32Array(Math.ceil(total * SR));
   let off = 0;
   for (const c of clips) { const r = resample(c, VOICE_RATE); voice.set(r.subarray(0, Math.max(0, voice.length - off)), off); off += r.length + Math.round(GAP * SR); }
   // Gentle compression so the voice is loud and even on phone speakers.
   const drive = 2.0, norm = Math.tanh(drive);
   for (let i = 0; i < voice.length; i++) voice[i] = Math.tanh(voice[i] * drive) / norm;
-  return { audio: mix(voice, withMusic ? generateMusic(total) : null, 0.14), total };
+  return { audio: mix(voice, mood && mood !== "none" ? generateMusic(total, mood) : null, mood === "cinematic" ? 0.17 : 0.14), total };
 }
 
 // Rough spoken length of a script, for the review screen.
+export function lengthRange(name) { return LENGTHS[name] || LENGTHS.standard; }
 export function estimateSeconds(lines, speed = 1.0) {
   const words = lines.reduce((n, l) => n + speakable(l.text).split(/\s+/).filter(Boolean).length, 0);
   return words / (2.75 * speed) + GAP * Math.max(0, lines.length - 1) + TAIL;
@@ -159,6 +164,7 @@ async function customScript(opts, generic, say) {
 // opts: { brand, accent, music, voiceSpeed, forceEncoder }   ui: { say, canvas, audioCtx }
 export async function produceReel(plan, opts, ui) {
   const { script } = plan;
+  setLength(opts.length);
   if (plan.edited) script.extras = [];      // you approved these exact lines: don't add any
   const stage = (lo, hi) => (text, f = 0) => ui.say(text, lo + (hi - lo) * Math.min(1, Math.max(0, f)));
 
@@ -180,11 +186,13 @@ export async function produceReel(plan, opts, ui) {
     else {
       const asset = await line.asset;
       if (asset) { sc.kind = "image"; sc.bitmap = asset.bitmap; if (asset.credit && !credits.includes(asset.credit)) credits.push(asset.credit); }
+      if (opts.pops !== false && i > 0) sc.stat = statFor(line.text);   // big callout for the key number
     }
     scenes.push(sc);
   }
 
-  const job = { title: script.title, brand: opts.brand, accent: opts.accent || "#FFD60A", scenes, words, audio };
+  const job = { title: script.title, brand: opts.brand, accent: opts.accent || "#FFD60A", scenes, words, audio,
+    captionStyle: opts.captionStyle || "bold", captionPos: opts.captionPos || "low", handle: opts.handle || "" };
   const result = await renderReel(job, ui.canvas, ui.audioCtx, (f) => ui.say("Rendering your reel on this device…", 0.6 + 0.4 * f), opts.forceEncoder);
   releasePlan(plan);
 
@@ -192,7 +200,8 @@ export async function produceReel(plan, opts, ui) {
   const meta = buildMetadata(script, credits);
   return {
     id: `${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, "")}-${script.topicId}`,
-    ...meta, kind: script.kind, duration: total, created: Date.now(), blob: result.blob, ext: result.ext, how: result.how, sound: result.sound, written: result.written,
+    ...meta, kind: script.kind, duration: total, created: Date.now(), blob: result.blob, ext: result.ext, how: result.how, sound: result.sound, written: result.written, niche: script.niche,
+    credits, sources: script.sources, handle: opts.handle || "",
     script: script.lines.map((l) => l.text).join("\n"),
   };
 }
@@ -202,4 +211,25 @@ export function releasePlan(plan) {
   for (const l of [...plan.script.lines, ...plan.script.extras]) {
     Promise.resolve(l.asset).then((a) => a?.bitmap?.close?.()).catch(() => {});
   }
+}
+
+/* ---------- drafts: save a reviewed script and finish it later ---------- */
+// Photos are found again when a draft is opened (your own photos aren't kept, to save space).
+export function draftFromPlan(plan, label) {
+  const strip = (l) => ({ text: l.text, visual: l.visual, query: l.query, kind: l.kind, chart: l.chart || null,
+    mine: l.asset && !l.asset.credit ? true : undefined });
+  const { script } = plan;
+  return {
+    id: "draft-" + Date.now(), saved: Date.now(), label: label || script.title, edited: plan.edited, generic: plan.generic,
+    script: { ...script, lines: script.lines.map(strip), extras: script.extras.map(strip) },
+  };
+}
+export async function planFromDraft(draft, ui) {
+  const finder = new MediaFinder(draft.generic);
+  const script = { ...draft.script, lines: draft.script.lines.map((l) => ({ ...l })), extras: draft.script.extras.map((l) => ({ ...l })) };
+  const shown = script.lines.filter((l) => l.kind === "media");
+  let got = 0;
+  await Promise.all(shown.map(async (l) => { l.asset = await finder.find(l.query || draft.generic[0]).catch(() => null); ui?.say?.("Finding photos again…", ++got / shown.length); }));
+  for (const l of script.extras) if (l.kind === "media") l.asset = finder.find(l.query || draft.generic[0]).catch(() => null);
+  return { script, finder, generic: draft.generic, edited: draft.edited };
 }

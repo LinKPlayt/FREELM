@@ -1,7 +1,8 @@
 // UI glue for the phone app.
-import { appData, planReel, produceReel, releasePlan, estimateSeconds } from "./make.js";
-import { listReels, saveReel, deleteReel, clearReels } from "./store.js";
-import { encoderInfo, renderReel, loadFonts } from "./render.js";
+import { appData, planReel, produceReel, releasePlan, estimateSeconds, lengthRange, draftFromPlan, planFromDraft } from "./make.js";
+import { listReels, saveReel, deleteReel, clearReels, listDrafts, saveDraft, deleteDraft } from "./store.js";
+import { platformCaptions } from "./script.js";
+import { encoderInfo, renderReel, loadFonts, previewFrame } from "./render.js";
 import { SR } from "./music.js";
 
 const $ = (id) => document.getElementById(id);
@@ -10,6 +11,42 @@ const MODES = ["auto", "evergreen", "news", "market", "custom"];
 const MODE_LABELS = { auto: "Auto", evergreen: "Explainer", news: "Today's news", market: "Market recap", custom: "Your topic" };
 const COLORS = ["#FFD60A", "#2ED573", "#00D2FF", "#FF6B81", "#FF9F1A", "#B388FF", "#FFFFFF"];
 const SPEEDS = { slow: 0.92, normal: 1.0, fast: 1.1 };
+const CAPTION_STYLES = { bold: "Bold", boxed: "Boxed", clean: "Clean" };
+const CAPTION_POS = { low: "Low", middle: "Middle" };
+const MOODS = { lofi: "Lo-fi", upbeat: "Upbeat", cinematic: "Cinematic", calm: "Calm", none: "None" };
+const LENGTH_LABELS = { short: "Short 20–30s", standard: "Standard 30–45s", long: "Long 40–60s" };
+// A small chip group whose choice is remembered on the phone.
+function prefChips(id, labels, key, fallback, after) {
+  const saved = store.get(key), value = labels[saved] ? saved : fallback;
+  state[key] = value;
+  chips($(id), Object.keys(labels), value, (v) => { state[key] = v; store.set(key, v); after?.(); }, labels);
+}
+// Live preview of the current style: a sample scene drawn with the real renderer.
+let sampleBitmap = null;
+async function drawStylePreview() {
+  try {
+    await loadFonts();
+    if (!sampleBitmap) {
+      const c = document.createElement("canvas"); c.width = 540; c.height = 960;
+      const g = c.getContext("2d"), grad = g.createLinearGradient(0, 0, 0, 960);
+      grad.addColorStop(0, "#86a8c8"); grad.addColorStop(0.55, "#d9cdb6"); grad.addColorStop(1, "#6b5a45");
+      g.fillStyle = grad; g.fillRect(0, 0, 540, 960);
+      g.fillStyle = "rgba(40,50,70,0.55)";                                   // a simple city skyline
+      [[20, 420, 80], [110, 330, 70], [190, 470, 90], [290, 380, 60], [360, 300, 85], [455, 440, 70]].forEach(([x, y, w]) => g.fillRect(x, y, w, 960 - y));
+      sampleBitmap = await createImageBitmap(c);
+    }
+    const handle = cleanHandle($("handle").value);
+    const words = ["Fifty", "percent", "goes"].map((t, i) => ({ text: t, start: i * 0.4, end: i * 0.4 + 0.4 }));
+    previewFrame({ title: "Your reel title here", brand: $("brand").value.trim() || "Money Minute", accent: state.accent,
+      captionStyle: state.capStyle, captionPos: state.capPos, handle, audio: new Float32Array(1),
+      scenes: [{ start: 0, end: 3, kind: "image", bitmap: sampleBitmap, stat: $("pops").checked ? "50%" : null }], words }, $("style-preview"), 0.55);
+  } catch (e) { console.warn("preview", e); }
+}
+
+function cleanHandle(v) {
+  const h = (v || "").trim().replace(/^@+/, "").replace(/[^A-Za-z0-9._]/g, "").slice(0, 30);
+  return h ? "@" + h : "";
+}
 const CTA = "Follow for a new money tip every day.";
 const state = { niche: "personal finance", mode: "auto", data: null, urls: new Map(), reels: new Map(), busy: false,
   accent: "#FFD60A", speed: "normal", plan: null };
@@ -55,7 +92,7 @@ function renderSwatches() {
 }
 $("swatches").addEventListener("click", (e) => {
   const b = e.target.closest("[data-color]"); if (!b) return;
-  state.accent = b.dataset.color; store.set("accent", state.accent); renderSwatches();
+  state.accent = b.dataset.color; store.set("accent", state.accent); renderSwatches(); drawStylePreview();
 });
 
 /* ---------- reels ---------- */
@@ -69,19 +106,46 @@ function reelCard(r, inline = false) {
     <div class="meta">${Math.round(r.duration)}s · ${esc(r.kind)} · ${mb} MB</div>
     <div class="btns">
       <button class="btn main wide" data-act="share">Save / Share</button>
-      <button class="btn" data-act="caption">Copy title and caption</button>
-      <a class="btn" href="${urlFor(r)}" download="${esc(r.id)}.${esc(r.ext)}">Download</a>
+      <a class="btn wide" href="${urlFor(r)}" download="${esc(r.id)}.${esc(r.ext)}">Download</a>
+    </div>
+    <div class="meta" style="margin-top:12px">Copy the caption for:</div>
+    <div class="copy-row">
+      <button class="btn" data-act="cap-youtube">YouTube</button><button class="btn" data-act="cap-tiktok">TikTok</button><button class="btn" data-act="cap-instagram">Instagram</button>
+    </div>
+    <div class="btns" style="margin-top:0">
       ${inline ? "" : `<button class="btn danger wide" data-act="delete">Delete</button>`}
     </div></div>`;
 }
+function renderDrafts() {
+  const drafts = listDrafts();
+  $("drafts").innerHTML = drafts.length ? `<div class="card"><h2>Drafts</h2><p>Scripts you saved to finish later.</p>${drafts.map((d) => `
+    <div class="draft"><div><b>${esc(d.label)}</b><div class="meta">${new Date(d.saved).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} · ${d.script.lines.length} scenes</div></div>
+      <div class="mini" style="margin:0"><button data-draft-open="${esc(d.id)}">Open</button><button class="del" data-draft-del="${esc(d.id)}">Delete</button></div></div>`).join("")}</div>` : "";
+}
+$("drafts").addEventListener("click", async (e) => {
+  const open = e.target.closest("[data-draft-open]"), del = e.target.closest("[data-draft-del]");
+  if (del) { deleteDraft(del.dataset.draftDel); renderDrafts(); return; }
+  if (!open || state.busy) return;
+  const d = listDrafts().find((x) => x.id === open.dataset.draftOpen); if (!d) return;
+  state.busy = true; show("create");
+  screen("job"); $("job-title").textContent = "Opening your draft…"; $("preview").classList.add("hidden"); say("Finding photos again…", 0);
+  try { state.plan = await planFromDraft(d, { say }); state.draftId = d.id; showReview(); }
+  catch (err) { screen("form"); showError(err, "The draft couldn't be opened"); }
+  state.busy = false;
+});
 async function renderLibrary() {
+  renderDrafts();
   const list = await listReels();
   $("reels").innerHTML = list.length ? list.map((r) => reelCard(r)).join("") : `<div class="empty">No reels yet.<br>Make your first one in Create.</div>`;
 }
 document.addEventListener("click", async (ev) => {
   const btn = ev.target.closest("[data-act]"); if (!btn) return;
   const card = btn.closest("[data-reel]"), r = state.reels.get(card.dataset.reel); if (!r) return;
-  if (btn.dataset.act === "caption") copy(r.title + "\n\n" + r.description);
+  if (btn.dataset.act.startsWith("cap-")) {
+    const which = btn.dataset.act.slice(4);
+    copy(platformCaptions(r)[which]);
+    toast(`${{ youtube: "YouTube", tiktok: "TikTok", instagram: "Instagram" }[which]} caption copied`);
+  }
   if (btn.dataset.act === "delete" && confirm("Delete this reel from your phone?")) { await deleteReel(r.id); card.remove(); }
   if (btn.dataset.act === "share") {
     const file = new File([r.blob], `${r.id}.${r.ext}`, { type: r.blob.type });
@@ -96,8 +160,11 @@ document.addEventListener("click", async (ev) => {
 function options() {
   return {
     niche: state.niche, mode: state.mode, topicId: state.mode === "evergreen" ? $("topic").value : "",
-    customTopic: $("custom").value, brand: $("brand").value.trim() || "Money Minute", cta: CTA, repo: repo(),
-    music: $("music").checked, accent: state.accent, voiceSpeed: SPEEDS[state.speed] || 1, forceEncoder: params.get("encoder") || undefined,
+    customTopic: $("custom").value, brand: $("brand").value.trim() || "Money Minute", repo: repo(),
+    handle: cleanHandle($("handle").value),
+    cta: cleanHandle($("handle").value) ? `Follow ${cleanHandle($("handle").value)} for a new money tip every day.` : CTA,
+    music: state.mood, accent: state.accent, voiceSpeed: SPEEDS[state.speed] || 1, length: state.length,
+    captionStyle: state.capStyle, captionPos: state.capPos, pops: $("pops").checked, forceEncoder: params.get("encoder") || undefined,
   };
 }
 function screen(name) {   // form | job | review
@@ -120,10 +187,12 @@ async function start() {
   if (state.mode === "custom" && $("custom").value.trim().length < 2) { toast("Type a topic first"); $("custom").focus(); return; }
   state.busy = true;
   store.set("brand", $("brand").value);
+  $("handle").value = cleanHandle($("handle").value); store.set("handle", $("handle").value);
   if (state.mode === "custom") store.set("custom", $("custom").value.trim());
   unlockAudio();   // must happen during this tap
   screen("job"); $("job-title").textContent = "Writing your script…"; $("preview").classList.add("hidden"); say("Researching…", 0.02);
   try {
+    state.draftId = null;
     state.plan = await planReel(options(), { say });
     if ($("review-on").checked) { state.busy = false; return showReview(); }
     await produce();
@@ -139,6 +208,7 @@ async function produce() {
   try {
     const reel = await produceReel(state.plan, options(), { say, canvas: $("preview"), audioCtx: state.audioCtx });
     state.plan = null;
+    if (state.draftId) { deleteDraft(state.draftId); state.draftId = null; }
     const kept = await saveReel(reel);
     screen("form");
     const soundNote = reel.sound === false
@@ -186,9 +256,10 @@ function updateEstimate() {
   const secs = Math.round(estimateSeconds(plan.script.lines, SPEEDS[state.speed] || 1));
   const el = $("estimate");
   const spare = plan.edited ? 0 : plan.script.extras.length;
-  el.textContent = `about ${secs} seconds` + (secs > 45 ? " (long: it will be sped up or trimmed to 45s)"
-    : secs < 30 ? (spare ? " (researched lines will be added to reach 30s)" : " (short: tap + Add a line, or the end card stays on longer)") : "");
-  el.classList.toggle("warn", secs > 45 || secs < 30);
+  const [lo, hi] = lengthRange(state.length);
+  el.textContent = `about ${secs} seconds` + (secs > hi ? ` (long: it will be sped up or trimmed to ${hi}s)`
+    : secs < lo ? (spare ? ` (researched lines will be added to reach ${lo}s)` : " (short: tap + Add a line, or the end card stays on longer)") : "");
+  el.classList.toggle("warn", secs > hi || secs < lo);
 }
 function showReview() {
   const { script } = state.plan;
@@ -258,6 +329,13 @@ $("produce").addEventListener("click", () => {
   for (let i = lines.length - 1; i >= 0; i--) if (!lines[i].text) lines.splice(i, 1);   // drop empty lines
   if (lines.filter((l) => l.kind !== "outro").length < 2) { toast("Keep at least two lines"); return showReview(); }
   produce();
+});
+$("save-draft").addEventListener("click", () => {
+  if (!state.plan) return;
+  const d = draftFromPlan(state.plan);
+  if (state.draftId) d.id = state.draftId;
+  state.draftId = d.id;
+  toast(saveDraft(d) ? "Draft saved. Find it in the Library." : "Couldn't save the draft (storage full?)");
 });
 $("reroll").addEventListener("click", () => { if (state.plan) releasePlan(state.plan); state.plan = null; start(); });
 $("cancel-review").addEventListener("click", () => { if (state.plan) releasePlan(state.plan); state.plan = null; closeAudio(); screen("form"); });
@@ -338,6 +416,17 @@ async function init() {
   state.speed = SPEEDS[store.get("speed")] ? store.get("speed") : "normal";
   renderSwatches();
   chips($("speeds"), Object.keys(SPEEDS), state.speed, (v) => { state.speed = v; store.set("speed", v); updateEstimate(); });
+  prefChips("cap-styles", CAPTION_STYLES, "capStyle", "bold", drawStylePreview);
+  prefChips("cap-pos", CAPTION_POS, "capPos", "low", drawStylePreview);
+  prefChips("moods", MOODS, "mood", store.get("musicOff") === "1" ? "none" : "lofi");
+  prefChips("lengths", LENGTH_LABELS, "length", "standard", updateEstimate);
+  $("handle").value = store.get("handle") || "";
+  $("handle").addEventListener("change", () => { $("handle").value = cleanHandle($("handle").value); store.set("handle", $("handle").value); });
+  $("pops").checked = store.get("pops") !== "0";
+  $("pops").addEventListener("change", () => { store.set("pops", $("pops").checked ? "1" : "0"); drawStylePreview(); });
+  $("handle").addEventListener("input", drawStylePreview);
+  $("brand").addEventListener("input", drawStylePreview);
+  drawStylePreview();
   $("review-on").checked = store.get("review") !== "0";
   $("review-on").addEventListener("change", () => store.set("review", $("review-on").checked ? "1" : "0"));
   $("custom").addEventListener("keydown", (e) => { if (e.key === "Enter") start(); });

@@ -23,10 +23,10 @@ on your phone:  research ──► script ──► voice ──► photos ─�
 
 1. Open **https://linkplayt.github.io/FREELM/** in **Safari** on your iPhone.
 2. Tap **Share → Add to Home Screen** so it opens like an app.
-3. Pick a niche and a type (or type **your own topic**), choose a colour and voice speed, then tap **Make my reel**.
+3. Pick a niche and a type (or type **your own topic**), set your style (see the live preview), then tap **Make my reel**.
 4. **Review it:** every scene is listed with its line and photo. Edit any line, remove scenes, add researched lines, or change a photo. Then tap **Make the video**, and keep the screen open while it renders.
 5. Tap **Save / Share**. Choose **Save Video** to put it in Photos, or pick YouTube, TikTok or Instagram to post it.
-6. Tap **Copy title and caption** and paste it into your post. It includes the photo credits that the licenses require.
+6. Tap **YouTube**, **TikTok** or **Instagram** to copy a caption formatted for that platform, and paste it into your post. It includes the photo credits that the licenses require.
 
 The **first reel** downloads the voice and video tools once (about 90 MB, so use Wi-Fi). After
 that they stay on the phone.
@@ -63,11 +63,35 @@ are spoken slightly faster or trimmed, and short ones hold the end card longer.
 
 ### Style
 
-- **Caption and brand colour:** seven colours for the highlighted caption word, the brand pill, the end card and the progress bar
-- **Voice speed:** slow, normal or fast
-- **Background music:** on or off
+The Style card shows a **live preview** that updates as you change settings.
+
+| Setting | Options |
+|---|---|
+| Colour | Seven colours for the highlighted caption word, brand pill, number pops, end card and progress bar |
+| Captions | **Bold** (big outlined words), **Boxed** (words on a dark card, the spoken word on a coloured chip), **Clean** (sentence case on a soft backing) |
+| Caption position | Low or Middle |
+| Music | **Lo-fi**, **Upbeat**, **Cinematic**, **Calm** or **None**. Each is composed fresh for every reel |
+| Voice speed | Slow, normal or fast |
+| Length | **Short** 20–30 s, **Standard** 30–45 s, **Long** 40–60 s |
+| Number pops | Key figures in a line ("20%", "$1,000", "3–6 months", including ones written as words) pop up big on screen |
+| Your @handle | Shown at the bottom of every scene and on the end card, and spoken in the call to action ("Follow @yourchannel…") |
 
 Your choices are remembered on the phone.
+
+### Drafts
+
+On the review screen, tap **Save draft** to keep the script and finish it later. Drafts appear
+at the top of the Library: tap **Open** to continue editing, then make the video. Free photos are
+found again when a draft is opened; photos from your own library need to be picked again.
+
+### Captions for each platform
+
+Every reel has **YouTube**, **TikTok** and **Instagram** copy buttons. Each copies a caption
+formatted for that platform:
+
+- **YouTube Shorts:** the title with #Shorts and the full description, including sources and credits
+- **TikTok:** the hook, your @handle, niche hashtags and compact photo credits
+- **Instagram:** the hook, the key points as a list, a save-and-share prompt, credits, sources and hashtags
 
 ### The Library
 

@@ -90,6 +90,10 @@
   .mini .del { color: var(--bad); }
   .sticky-actions { position: sticky; bottom: calc(var(--safe-bottom) + 76px); background: linear-gradient(transparent, var(--bg) 30%); padding-top: 18px; }
   .estimate { font-weight: 700; } .estimate.warn { color: var(--accent); }
+  .draft { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+  .draft:first-of-type { border-top: 0; }
+  .copy-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+  .copy-row .btn { padding: 10px 6px; font-size: 14px; }
   .hidden { display: none !important; }
 </style>
 </head>
@@ -113,7 +117,7 @@
         <h2 id="review-title">Review your reel</h2>
         <p>Edit any line, change photos, or remove scenes. Length: <span class="estimate" id="estimate"></span></p>
         <div id="scenes"></div>
-        <div class="mini" style="margin-top:12px"><button id="add-line">+ Add a line</button><button id="reroll">New script</button></div>
+        <div class="mini" style="margin-top:12px"><button id="add-line">+ Add a line</button><button id="reroll">New script</button><button id="save-draft">Save draft</button></div>
       </div>
       <div class="sticky-actions">
         <button class="primary" id="produce">Make the video</button>
@@ -141,15 +145,27 @@
         </div>
         <label class="field">Brand name</label>
         <input id="brand" type="text" maxlength="30">
+        <label class="field">Your @handle <span style="text-transform:none;font-weight:500">(optional)</span></label>
+        <input id="handle" type="text" maxlength="31" placeholder="@yourchannel" autocapitalize="off" autocorrect="off" spellcheck="false">
       </div>
       <div class="card">
         <h2>Style</h2>
+        <canvas id="style-preview" width="360" height="640" style="width:150px;aspect-ratio:9/16;display:block;margin:6px auto 4px;border-radius:12px;background:#000"></canvas>
+        <p class="meta" style="text-align:center;margin:0 0 4px">Live preview</p>
         <label class="field">Caption and brand colour</label>
         <div class="swatches" id="swatches"></div>
+        <label class="field">Captions</label>
+        <div class="chips" id="cap-styles"></div>
+        <label class="field">Caption position</label>
+        <div class="chips" id="cap-pos"></div>
+        <label class="field">Music</label>
+        <div class="chips" id="moods"></div>
         <label class="field">Voice speed</label>
         <div class="chips" id="speeds"></div>
-        <div class="row" style="margin-top:14px"><div>Background music<small>Original, copyright-free</small></div>
-          <label class="switch"><input id="music" type="checkbox" checked><span></span></label></div>
+        <label class="field">Length</label>
+        <div class="chips" id="lengths"></div>
+        <div class="row" style="margin-top:14px"><div>Number pops<small>Show key figures big on screen, like “20%”</small></div>
+          <label class="switch"><input id="pops" type="checkbox" checked><span></span></label></div>
         <div class="row"><div>Review before making<small>Edit the script and photos first</small></div>
           <label class="switch"><input id="review-on" type="checkbox" checked><span></span></label></div>
       </div>
@@ -160,6 +176,7 @@
 
   <!-- LIBRARY -->
   <section id="tab-library" class="tab">
+    <div id="drafts"></div>
     <div id="reels"></div>
     <p class="meta" style="text-align:center">Stored only on this phone. The newest 8 are kept.</p>
   </section>

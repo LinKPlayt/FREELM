@@ -46,7 +46,9 @@ async function searchCommons(query) {
     const lic = strip(info.extmetadata?.LicenseShortName?.value);
     const title = page.title.replace(/^File:/, "");
     if (!OK_LICENSE.test(lic) || BAD_TITLE.test(title) || UNSAFE_TITLE.test(title) || !relevant(title, query)) continue;
-    const artist = strip(info.extmetadata?.Artist?.value).slice(0, 80) || "unknown";
+    let artist = strip(info.extmetadata?.Artist?.value).replace(/\s+/g, " ").trim();
+    if (!artist || /unknown author|not provided/i.test(artist)) artist = "unknown author";
+    artist = artist.slice(0, 80);
     out.push({
       url: info.thumburl || info.url, width: info.thumbwidth || info.width || 0, height: info.thumbheight || info.height || 0, title,
       credit: `"${title}" by ${artist} (${lic}, Wikimedia Commons) ${info.descriptionurl || ""}`,
