@@ -3,6 +3,7 @@ import { seriesTopics, appData, planReel, produceReel, releasePlan, estimateSeco
 import { StatBg, IllusBg } from "./graphics.js";
 import { describeStat } from "./visuals.js";
 import { hookOptions, coach } from "./extras.js";
+import { drawArt, conceptsOf, styleFor, ART_STYLES, forgetArt, savedArt } from "./illustrator.js";
 import { KOKORO_VOICES, setVoice, loadVoice, phonemize, synthesize, voiceRate, releaseVoice, voiceNotice, resetVoiceLevel, naturalFailed, lastVoiceError } from "./tts.js";
 const factModule = () => import("./ai/factcheck.js");
 import { listReels, saveReel, deleteReel, clearReels, listDrafts, saveDraft, deleteDraft } from "./store.js";
@@ -55,7 +56,7 @@ async function drawStylePreview() {
     const handle = cleanHandle($("handle").value);
     const words = ["Fifty", "percent", "goes"].map((t, i) => ({ text: t, start: i * 0.4, end: i * 0.4 + 0.4 }));
     previewFrame({ title: "Your reel title here", brand: $("brand").value.trim() || "Money Minute", accent: state.accent,
-      captionStyle: state.capStyle, captionPos: state.capPos, handle, audio: new Float32Array(1),
+      captionStyle: state.capStyle, captionPos: state.capPos, artStyle: state.art, handle, audio: new Float32Array(1),
       scenes: [{ start: 0, end: 3, kind: "image", bitmap: sampleBitmap, stat: $("pops").checked ? "50%" : null }], words }, $("style-preview"), 0.55);
   } catch (e) { console.warn("preview", e); }
 }
@@ -579,15 +580,22 @@ function updateEstimate() {
 }
 // Thumbnail of a generated chart or illustration (drawn with the real renderer at full size, then scaled).
 let thumbStage = null;
-function drawGenerated(cv, v) {
+function drawGenerated(cv, v, line) {
   thumbStage ??= Object.assign(document.createElement("canvas"), { width: 1080, height: 1920 });
   const n = parseInt(state.accent.slice(1), 16), accent = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  if (v.type === "illus" && line && state.art !== "icons") {
+    const script = state.plan?.script || {};
+    drawArt(thumbStage.getContext("2d"), { motifs: conceptsOf(line.text, script.topicTitle || script.title || ""), style: styleFor(state.art, script.niche), accent });
+    cv.getContext("2d").drawImage(thumbStage, 0, 0, cv.width, cv.height);
+    return;
+  }
   const bg = v.type === "stat" ? new StatBg(v.spec, accent, state.capPos) : new IllusBg(v.icon, v.label, accent, state.capPos);
   bg.draw(thumbStage.getContext("2d"), 0.9);
   cv.getContext("2d").drawImage(thumbStage, 0, 0, cv.width, cv.height);
   bg.dispose();
 }
-const VISUAL_NAMES = { photo: "Photo", stat: "Chart", illus: "Picture" };
+const VISUAL_NAMES = { photo: "Photo", stat: "Chart", illus: "Illustration" };
+const ART_CHOICES = { auto: "Auto (matches niche)", ...ART_STYLES, icons: "Animated icons" };
 
 // Fact-check badge for a line, with the evidence (the source sentences) one tap away.
 const FACT_LABEL = { verified: "✓ Verified", partial: "≈ Partly verified", unverified: "⚠ Not verified", conflict: "⚠ Source disagrees", tip: "Tip · advice, not a fact claim", takeaway: "Takeaway · opinion, not a fact claim" };
@@ -619,7 +627,7 @@ function showReview() {
       : l.kind === "section" ? `<div class="thumb">PART ${l.num}<br>${esc(l.label || "")}</div>` : l.kind === "recap" ? `<div class="thumb">QUICK<br>RECAP</div>`
       : `<div class="thumb"><canvas width="152" height="270" data-thumb="${i}"></canvas></div>`;
     const mode = l.vmode || "auto", hasStat = Boolean(l.analysis?.stat);
-    const chips = l.kind !== "media" ? "" : `<div class="mini vis">${[["auto", "Auto"], ["photo", "Photo"], ["chart", "Chart"], ["illus", "Picture"]]
+    const chips = l.kind !== "media" ? "" : `<div class="mini vis">${[["auto", "Auto"], ["photo", "Photo"], ["chart", "Chart"], ["illus", "Illustration"]]
       .filter(([m]) => m !== "chart" || hasStat)
       .map(([m, txt]) => `<button data-vmode="${i}:${m}" class="${mode === m ? "on" : ""}">${txt}</button>`).join("")}</div>`;
     const tools = l.kind !== "media" ? (["chart", "section", "recap"].includes(l.kind) && content > 2 ? `<div class="mini"><button class="del" data-del="${i}">Remove</button></div>` : "")
@@ -632,7 +640,7 @@ function showReview() {
     const cv = document.querySelector(`[data-thumb="${i}"]`), v = visuals[i];
     if (!cv) return;
     if (v.type === "photo" && l.asset?.bitmap) drawThumb(cv, l.asset);
-    else if (v.type === "stat" || v.type === "illus") drawGenerated(cv, v);
+    else if (v.type === "stat" || v.type === "illus") drawGenerated(cv, v, l);
   });
   updateEstimate();
   const rate = makeRate(), secs = estimateSeconds(script.lines, SPEEDS[state.speed] || 1);
@@ -889,6 +897,7 @@ const STORAGE_ITEMS = [
   ["Classic voice", /\/assets\/voices\//, "The classic voice downloads again (63 MB) when it's next needed."],
   ["Ideas AI", /\/SmolLM2-135M-Instruct\//, "Download it again from the Ideas tab when you want it."],
   ["Full-text research library", /\/ai\/data\/depth\//, "Deep research downloads article text again as needed."],
+  ["Saved illustrations", /\/user\/art\//, "They're drawn again the next time a video needs them."],
 ];
 async function renderStorage() {
   const fmt = (b) => (b > 1e9 ? (b / 1e9).toFixed(1) + " GB" : Math.round(b / 1e6) + " MB");
@@ -899,14 +908,27 @@ async function renderStorage() {
     for (const name of await caches.keys()) for (const req of await (await caches.open(name)).keys()) keys.push([name, req]);
     $("storage-items").innerHTML = STORAGE_ITEMS.map(([label, re, note], i) => {
       const n = keys.filter(([, r]) => re.test(new URL(r.url).pathname)).length;
-      return `<div class="store-row"><div>${label}<small class="meta" style="display:block">${n ? "Saved on this phone" : "Not downloaded"}</small></div>${n ? `<button class="btn" data-free="${i}" style="flex:none">Delete</button>` : ""}</div>`;
+      const art = label === "Saved illustrations", reuses = art ? savedArt().reduce((s, e) => s + Math.max(0, (e.uses || 1) - 1), 0) : 0;
+      const note = art ? (n ? `${n} drawn on this phone${reuses ? `, reused ${reuses} time${reuses === 1 ? "" : "s"}` : ""}` : "None yet: they're drawn as you make videos") : n ? "Saved on this phone" : "Not downloaded";
+      return `<div class="store-row"><div>${label}<small class="meta" style="display:block">${note}</small></div>${n ? `<button class="btn" data-free="${i}" style="flex:none">Delete</button>` : ""}</div>`;
     }).join("");
+    // The newest saved illustrations, small.
+    const artKeys = keys.filter(([name, r]) => name === "reelbot-user-art" && /\/user\/art\//.test(new URL(r.url).pathname)).slice(-12).reverse();
+    const gallery = $("art-gallery");
+    if (gallery) {
+      for (const u of state.artUrls || []) URL.revokeObjectURL(u);
+      state.artUrls = [];
+      for (const [name, req] of artKeys) { const res = await (await caches.open(name)).match(req); if (res) state.artUrls.push(URL.createObjectURL(await res.blob())); }
+      gallery.innerHTML = state.artUrls.map((u) => `<img src="${u}" alt="" loading="lazy">`).join("");
+      gallery.classList.toggle("hidden", !state.artUrls.length);
+    }
     $("storage-items").onclick = async (e) => {
       const b = e.target.closest("[data-free]"); if (!b) return;
       const [label, re, note] = STORAGE_ITEMS[+b.dataset.free];
       if (!confirm(`Delete the ${label.toLowerCase()} from this phone? ${note}`)) return;
       for (const [name, req] of keys) if (re.test(new URL(req.url).pathname)) await (await caches.open(name)).delete(req);
       if (label === "Ideas AI") { store.set("aiOn", "0"); await import("./ai/llm.js").then((m) => m.unloadLLM()).catch(() => {}); }
+      if (label === "Saved illustrations") forgetArt();
       if (label.endsWith("voice")) store.set(`voiceReady-${label === "Natural voice" ? "natural" : "fast"}`, "0");
       toast(`${label} deleted.`); renderStorage();
     };
@@ -968,6 +990,7 @@ async function init() {
   prefChips("music-vol", { low: "Low", medium: "Medium", high: "High" }, "musicVol", "medium");
   prefChips("ctas", CTA_LABELS, "cta", "follow");
   prefChips("covers", COVER_STYLES, "cover", "bold");
+  prefChips("art-styles", ART_CHOICES, "art", "auto", () => { if (state.plan && !$("review").classList.contains("hidden")) showReview(); });
   // Your own music: kept in the app's storage on the phone (not uploaded anywhere).
   const showMusic = () => {
     const name = store.get("musicName");

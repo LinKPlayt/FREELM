@@ -7,6 +7,8 @@ import { generateMusic, mix, resample, SR } from "./music.js";
 import { loadFonts, renderReel } from "./render.js";
 import { analyzeLine, iconFor } from "./visuals.js";
 import { dramatize } from "./hook.js";
+import { artFor, conceptsOf, styleFor } from "./illustrator.js";
+const accentOf = (hex = "#FFD60A") => { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
 import { deepen, addSoundEffects, makeSrt, makeCover } from "./extras.js";
 import { polish, insertIndex } from "./story.js";
 import { StatBg, IllusBg } from "./graphics.js";
@@ -487,6 +489,13 @@ export async function produceReel(plan, opts, ui) {
         sc.kind = "image"; sc.bitmap = line.asset.bitmap; sc.relevant = line.asset.relevant !== false;
         if (line.asset.credit && !credits.includes(line.asset.credit)) credits.push(line.asset.credit);
       } else if (v.type === "stat") { sc.kind = "stat"; sc.spec = v.spec; }
+      else if (opts.artStyle !== "icons") {
+        // Drawn for this line (or reused if this idea was drawn before), in the reel's art style.
+        try {
+          const art = await artFor({ motifs: conceptsOf(line.text, script.topicTitle || script.title), style: styleFor(opts.artStyle, script.niche), accent: accentOf(opts.accent) }, script.topicTitle || script.title);
+          sc.kind = "image"; sc.bitmap = art.bitmap; sc.art = true; sc.relevant = true;
+        } catch (e) { console.warn("illustration", e); sc.kind = "illus"; sc.icon = v.icon; sc.label = v.label; }
+      }
       else { sc.kind = "illus"; sc.icon = v.icon; sc.label = v.label; }
       if (opts.pops !== false && i > 0) sc.stat = statFor(line.text);   // big callout for the key number
     }
@@ -505,6 +514,7 @@ export async function produceReel(plan, opts, ui) {
   const question = script.lines.find((l) => l.kind === "media" && /\?\s*$/.test(l.text) && l.text.split(/\s+/).length <= 12)?.text || "";
   const cover = await makeCover({ title: script.title, brand: opts.brand, accent: accentRgb, handle: opts.handle || "", scenes, style: opts.coverStyle || "bold", keyNumber, question },
     (ctx, list) => coverBackground(ctx, list, accentRgb)).catch((e) => { console.warn("cover", e); return null; });
+  for (const sc of scenes) if (sc.art) sc.bitmap?.close?.();      // drawn illustrations are saved; free the memory
   releasePlan(plan);
 
   remember(script);

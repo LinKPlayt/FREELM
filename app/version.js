@@ -1,9 +1,16 @@
 // The app's version and its update notes, shown once in a "What's new" window after each update.
 // When you deploy: bump APP_VERSION, add an entry at the top of UPDATES, and set the same number in
 // sw.js (VERSION = "reelbot-v<APP_VERSION>"). A test checks the two match.
-export const APP_VERSION = 33;
+export const APP_VERSION = 34;
 
 export const UPDATES = [
+  { version: 34, title: "Illustrations drawn for your video", items: [
+    "When no photo fits, the app now draws a full-screen illustration of what's being said: a house for mortgages, a falling chart for a crash, an umbrella for an emergency fund, and 40 more subjects.",
+    "Five art styles: Flat, Neon, Paper cut, Blueprint and Pop art. Auto picks one per niche so your channel keeps one look (Style → Illustration style).",
+    "Every illustration is saved on your phone and reused the next time the same idea comes up, so a series looks consistent.",
+    "See your newest illustrations and how often they've been reused under About → Storage.",
+    "The review screen previews each illustration, and any scene can be switched to one with the Illustration button.",
+  ] },
   { version: 33, title: "Sounds like a person, takes a stand", items: [
     "Scripts are spoken in plain, natural English (“isn't”, “usually”, “Simply put, a stablecoin is…”) without changing what the facts say.",
     "A clear “Bottom line” for common topics, like “Credit cards are a great tool if you pay in full, and an expensive one if you don't.”",

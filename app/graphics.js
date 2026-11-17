@@ -182,7 +182,7 @@ function circle(c, x, y, r, fill) { c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2
 function poly(c, pts, fill) { c.beginPath(); pts.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y))); c.closePath(); c.fillStyle = fill; c.fill(); }
 function coin(c, x, y, r, a) { circle(c, x, y, r, rgba(mix(a, 0.7))); circle(c, x, y, r * 0.84, rgba(a)); c.fillStyle = INK; c.font = `${Math.round(r * 1.1)}px Anton`; c.textAlign = "center"; c.textBaseline = "middle"; c.fillText("$", x, y + r * 0.05); }
 
-const ICON_DRAW = {
+export const ICON_DRAW = {
   piggy(c, a, t) {
     const drop = (t * 1.2) % 1;
     coin(c, 20, -230 + drop * 120, 40, a);

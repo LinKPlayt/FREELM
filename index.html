@@ -122,6 +122,8 @@
   .job-steps li { padding: 3px 0; color: var(--muted); } .job-steps li.done { color: var(--good); } .job-steps li.now { color: var(--text); font-weight: 700; }
   .job-steps li::before { content: "○ "; } .job-steps li.done::before { content: "✓ "; } .job-steps li.now::before { content: "● "; }
   .news h3 { margin: 12px 0 4px; font-size: 16px; } .news ul { margin: 0; padding-left: 18px; } .news li { margin: 4px 0; }
+  .art-gallery { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; padding: 8px 0 2px; }
+  .art-gallery img { width: 100%; aspect-ratio: 9 / 16; object-fit: cover; border-radius: 8px; display: block; }
   .store-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
   .copy-sheet { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: flex-end; justify-content: center; z-index: 60; padding: 16px; }
   .copy-box { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 16px; width: 100%; max-width: 520px; margin-bottom: env(safe-area-inset-bottom); }
@@ -206,6 +208,8 @@
         <div class="chips" id="speeds"></div>
         <label class="field">Music volume</label>
         <div class="chips" id="music-vol"></div>
+        <label class="field">Illustration style <span style="text-transform:none;font-weight:500">(drawn on your phone when no photo fits)</span></label>
+        <div class="chips" id="art-styles"></div>
         <label class="field">Cover image style</label>
         <div class="chips" id="covers"></div>
         <label class="field">Ending (call to action)</label>
@@ -284,6 +288,7 @@
       <h2>Storage on this phone</h2>
       <p class="meta" id="storage-total">Checking…</p>
       <div id="storage-items"></div>
+      <div id="art-gallery" class="art-gallery hidden"></div>
     </div>
     <div class="card">
       <h2>Save and post</h2>
