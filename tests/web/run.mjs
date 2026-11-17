@@ -57,7 +57,7 @@ async function newPage(opts = {}) {
   // One handler for every dialog: prompts get a photo subject, confirms are accepted.
   page.on("dialog", (d) => d.accept(d.type() === "prompt" ? "piggy bank" : undefined).catch(() => {}));
   page.on("pageerror", (e) => pageErrors.push(e.message));
-  page.on("console", (m) => { if (m.type() === "error" && !/Failed to load resource|429|MODEL_TYPE_MAPPING/.test(m.text())) pageErrors.push(m.text().slice(0, 300)); });
+  page.on("console", (m) => { if (m.type() === "error" && !/Failed to load resource|429|MODEL_TYPE_MAPPING|(openverse|wikimedia)\.org.*blocked by CORS policy/.test(m.text())) pageErrors.push(m.text().slice(0, 300)); });
   // Wikipedia is reached through the test machine (its own rate limits apply to browsers).
   await page.route(/https:\/\/en\.wikipedia\.org\/.*/, async (route) => {
     try {

@@ -146,13 +146,16 @@ export default async function ({ t, newPage }) {
 
   t.section("Features: crash guards");
   try {
-    await page.evaluate(() => { localStorage.setItem("aiOn", "1"); localStorage.setItem("aiLoading", "1"); localStorage.setItem("voiceBusy", "1"); });
+    // (A real crash gives the page no chance to react; a reload counts as leaving the app, which clears the
+    // voice flag. So the voice flags are set after the reload, as a crash would have left them.)
+    await page.evaluate(() => { localStorage.setItem("aiOn", "1"); localStorage.setItem("aiLoading", "1"); });
     await page.reload(); await until(page, () => window.__ready, null, 60000);
+    await page.evaluate(() => { localStorage.setItem("voiceBusy", "1"); localStorage.setItem("voiceStrikes", "1"); });
     await page.click('nav [data-tab="ideas"]'); await until(page, () => /articles on your phone/.test(document.getElementById("lib-info").textContent), null, 60000);
     t.ok(/closed the app/.test(await page.textContent("#ai-sub")), "after a crash while loading the AI, it isn't auto-loaded again");
     await page.click('nav [data-tab="create"]').catch(() => {});
     await page.click("#voice-preview"); await until(page, () => document.getElementById("voice-preview").textContent.includes("Hear it"), null, 300000);
-    t.ok(await page.evaluate(() => localStorage.getItem("voiceLevel")) === "classic", "after a crash while voicing, the classic voice is used");
+    t.ok(await page.evaluate(() => localStorage.getItem("voiceLevel")) === "classic", "after two crashes in a row while voicing, the classic voice is used");
     await page.click('#voices .chip >> text="Michael"');
     t.ok(await page.evaluate(() => localStorage.getItem("voiceLevel")) === "q8", "tapping a natural voice retries it");
   } catch (e) { t.ok(false, "section crashed: Features: crash guards", String(e.message || e).split("\n")[0]); await page.goto(page.url()).catch(() => {}); }
@@ -197,6 +200,27 @@ export default async function ({ t, newPage }) {
     await page.click('nav [data-tab="create"]').catch(() => {}); await page.click("#music-remove"); await page.click('#covers .chip >> text="Bold title"');
     t.ok(await page.evaluate(async () => !(await (await caches.open("reelbot-user-v1")).match("/user/music"))), "Remove deletes your music");
   } catch (e) { t.ok(false, "section crashed: Features: your music, cover style, results, remix", String(e.message || e).split("\n")[0]); await page.goto(page.url()).catch(() => {}); }
+
+  t.section("Features: no false low-memory alarms");
+  try {
+    await page.click('#voices .chip >> text="Michael"');
+    // one interrupted attempt: still the natural voice
+    await page.reload(); await until(page, () => window.__ready, null, 60000);
+    await page.evaluate(() => { localStorage.setItem("voiceBusy", "1"); localStorage.setItem("voiceStrikes", "0"); });
+    await page.click("#voice-preview"); await until(page, () => document.getElementById("voice-preview").textContent.includes("Hear it"), null, 300000);
+    t.ok(await page.evaluate(() => localStorage.getItem("voiceLevel")) === "q8", "one interrupted attempt keeps the natural voice");
+    // the warm-up on the review screen, then closing the app: no alarm
+    await page.click('#modes .chip >> text="Explainer"'); await page.click("#go"); await page.waitForSelector("#review:not(.hidden)", { timeout: 180000 });
+    await page.waitForTimeout(6000);
+    t.ok(await page.evaluate(() => localStorage.getItem("voiceBusy")) !== "1", "a loaded, idle voice (review warm-up) doesn't leave the busy flag up");
+    await page.reload(); await until(page, () => window.__ready, null, 60000);
+    await page.click("#voice-preview"); await until(page, () => document.getElementById("voice-preview").textContent.includes("Hear it"), null, 300000);
+    t.ok(await page.evaluate(() => localStorage.getItem("voiceLevel")) === "q8", "closing the app after the warm-up doesn't switch to the classic voice");
+    // phones switched by mistake in earlier versions are switched back once
+    await page.evaluate(() => { localStorage.setItem("voiceLevel", "classic"); localStorage.setItem("voiceError", ""); localStorage.removeItem("voiceRetried"); });
+    await page.click("#voice-preview"); await until(page, () => document.getElementById("voice-preview").textContent.includes("Hear it"), null, 300000);
+    t.ok(await page.evaluate(() => localStorage.getItem("voiceLevel")) === "q8", "a mistaken switch to the classic voice is undone after the update");
+  } catch (e) { t.ok(false, "section crashed: Features: no false low-memory alarms", String(e.message || e).split("\n")[0]); await page.goto(page.url()).catch(() => {}); }
 
   t.section("Features: Library management");
   try {

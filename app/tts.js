@@ -34,6 +34,10 @@ function call(cmd, args = {}, onProgress, quiet = 90000) {
       onProgress: (f) => { arm(); onProgress?.(f); },
     });
     arm();
+    if (cmd === "load" || cmd === "speak") busyStart();
+    const done = () => { if (cmd === "load" || cmd === "speak") busyEnd(); };
+    const p = pending.get(id), res = p.resolve, rej = p.reject;
+    p.resolve = (v) => { done(); res(v); }; p.reject = (e) => { done(); rej(e); };
     worker.postMessage({ id, cmd, args });
   });
 }
@@ -42,8 +46,17 @@ function endWorker() {
   for (const p of pending.values()) p.reject(new Error("The voice was stopped")); pending.clear();
 }
 
-// Crash guard. If the phone ever closes the app while the natural voice is working (it ran out of
-// memory), the next reel uses the classic voice, which needs far less.
+// Crash guard. The "busy" flag is up only while the natural voice is loading or speaking. If the app
+// closes with it up twice in a row (the phone ran out of memory), the next reel uses the classic voice,
+// which needs far less. Leaving the app (switching away, closing it) clears the flag: that isn't a crash.
+let inFlight = 0;
+function busyStart() { inFlight++; store.set("voiceBusy", "1"); }
+function busyEnd() { inFlight = Math.max(0, inFlight - 1); if (!inFlight) store.set("voiceBusy", "0"); }
+if (typeof document !== "undefined") {
+  const left = () => { if (document.visibilityState === "hidden") store.set("voiceBusy", "0"); };
+  document.addEventListener("visibilitychange", left);
+  addEventListener("pagehide", () => store.set("voiceBusy", "0"));
+}
 const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } } };
 const LEVELS = ["q8", "classic"];
 let downgraded = null;
@@ -52,11 +65,20 @@ function naturalLevel() {
   if (/larger than expected|Out of memory|no available backend/i.test(store.get("voiceError") || "") && store.get("voiceRetried") !== "v24") {
     store.set("voiceRetried", "v24"); store.set("voiceLevel", "q8"); store.set("voiceError", "");
   }
+  // v29: earlier versions could switch to the classic voice by mistake (a background warm-up left the
+  // "busy" flag up when you closed the app). Undo that once.
+  if (store.get("voiceLevel") === "classic" && !store.get("voiceError") && store.get("voiceRetried") !== "v29") {
+    store.set("voiceRetried", "v29"); store.set("voiceLevel", "q8"); store.set("voiceStrikes", "0");
+  }
   let level = LEVELS.includes(store.get("voiceLevel")) ? store.get("voiceLevel") : "q8";
-  if (store.get("voiceBusy") === "1") {                 // the last attempt never finished
-    level = LEVELS[Math.min(LEVELS.length - 1, LEVELS.indexOf(level) + 1)];
-    store.set("voiceLevel", level); store.set("voiceBusy", "0");
-    downgraded = level;
+  if (store.get("voiceBusy") === "1") {                 // the voice was loading or speaking when the app closed
+    store.set("voiceBusy", "0");
+    const strikes = Number(store.get("voiceStrikes") || 0) + 1;
+    store.set("voiceStrikes", String(strikes));
+    if (strikes >= 2) {                                  // twice in a row: most likely the phone ran out of memory
+      level = "classic"; store.set("voiceLevel", level); store.set("voiceStrikes", "0");
+      downgraded = level;
+    }
   }
   return level;
 }
@@ -64,10 +86,10 @@ function naturalLevel() {
 export function voiceNotice() {
   const d = downgraded; downgraded = null;
   if (!d) return "";
-  return "The app restarted while making the natural voice last time (your phone ran low on memory), so the classic voice is used for now. Close other apps and pick a natural voice again in Style to retry.";
+  return "The app closed twice while the natural voice was working (your phone may have run low on memory), so the classic voice is used for now. Close other apps and tap a natural voice in Style to try again.";
 }
 // Picking a narrator again resets the fallback.
-export function resetVoiceLevel() { store.set("voiceLevel", "q8"); store.set("voiceBusy", "0"); store.set("voiceError", ""); }
+export function resetVoiceLevel() { store.set("voiceLevel", "q8"); store.set("voiceBusy", "0"); store.set("voiceError", ""); store.set("voiceStrikes", "0"); }
 // The natural voice didn't work (error or timeout): use the classic voice from now on, and remember why.
 export function naturalFailed(e) {
   endWorker();
@@ -91,7 +113,6 @@ export async function loadVoice(onProgress) {
     const level = naturalLevel();
     if (level === "classic") engine = "fast";
     else {
-      store.set("voiceBusy", "1");                       // cleared by releaseVoice() when the voiceover is done
       try {
         await call("ping", {}, null, 20000);              // the worker itself starts
         await call("load", { dtype: level }, onProgress, 120000);
@@ -102,7 +123,7 @@ export async function loadVoice(onProgress) {
   await loadPiper(onProgress);
   return "fast";
 }
-export async function releaseVoice() { endWorker(); store.set("voiceBusy", "0"); }
+export async function releaseVoice() { endWorker(); inFlight = 0; store.set("voiceBusy", "0"); }
 
 export async function phonemize(texts) {
   if (engine === "natural") {
@@ -114,7 +135,11 @@ export async function phonemize(texts) {
   return piperPhonemize(texts);
 }
 export async function synthesize(phonemes, speed = 1.0) {
-  if (engine === "natural") return trimAndNormalize(await call("speak", { phonemes, voice: voiceId, speed }, null, 120000), KOKORO_RATE);
+  if (engine === "natural") {
+    const audio = await call("speak", { phonemes, voice: voiceId, speed }, null, 120000);
+    store.set("voiceStrikes", "0");                      // it worked: start counting again from zero
+    return trimAndNormalize(audio, KOKORO_RATE);
+  }
   return piperSynthesize(phonemes, speed);
 }
 
