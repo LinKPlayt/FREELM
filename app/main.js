@@ -909,8 +909,8 @@ async function renderStorage() {
     $("storage-items").innerHTML = STORAGE_ITEMS.map(([label, re, note], i) => {
       const n = keys.filter(([, r]) => re.test(new URL(r.url).pathname)).length;
       const art = label === "Saved illustrations", reuses = art ? savedArt().reduce((s, e) => s + Math.max(0, (e.uses || 1) - 1), 0) : 0;
-      const note = art ? (n ? `${n} drawn on this phone${reuses ? `, reused ${reuses} time${reuses === 1 ? "" : "s"}` : ""}` : "None yet: they're drawn as you make videos") : n ? "Saved on this phone" : "Not downloaded";
-      return `<div class="store-row"><div>${label}<small class="meta" style="display:block">${note}</small></div>${n ? `<button class="btn" data-free="${i}" style="flex:none">Delete</button>` : ""}</div>`;
+      const status = art ? (n ? `${n} drawn on this phone${reuses ? `, reused ${reuses} time${reuses === 1 ? "" : "s"}` : ""}` : "None yet: they're drawn as you make videos") : n ? "Saved on this phone" : "Not downloaded";
+      return `<div class="store-row"><div>${label}<small class="meta" style="display:block">${status}</small></div>${n ? `<button class="btn" data-free="${i}" style="flex:none">Delete</button>` : ""}</div>`;
     }).join("");
     // The newest saved illustrations, small.
     const artKeys = keys.filter(([name, r]) => name === "reelbot-user-art" && /\/user\/art\//.test(new URL(r.url).pathname)).slice(-12).reverse();
