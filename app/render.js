@@ -312,6 +312,22 @@ class Captions {
   }
 }
 
+// A label for the moment ("THE CATCH", "WHAT TO DO"): it pops in under the title, tilted like a sticker.
+function drawChip(ctx, text, into, left, accent, tone) {
+  const a = Math.min(1, into / 0.12) * Math.min(1, Math.max(0, left / 0.2));
+  if (a <= 0) return;
+  const s = into < 0.25 ? 0.6 + 0.4 * ease(into / 0.25) + 0.08 * Math.sin(Math.PI * Math.min(1, into / 0.25)) : 1;
+  ctx.save();
+  ctx.globalAlpha = a; ctx.translate(W / 2, 360); ctx.rotate(-0.04); ctx.scale(s, s);
+  ctx.font = "800 54px Montserrat"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  const w = ctx.measureText(text).width + 70, h = 92;
+  ctx.shadowColor = "rgba(0,0,0,0.45)"; ctx.shadowBlur = 24; ctx.shadowOffsetY = 8;
+  ctx.fillStyle = tone === "down" ? "rgb(255,92,92)" : tone === "tip" ? "rgb(74,222,128)" : rgba(accent);
+  ctx.beginPath(); ctx.roundRect(-w / 2, -h / 2, w, h, 20); ctx.fill();
+  ctx.shadowColor = "transparent"; ctx.fillStyle = "rgb(12,12,20)"; ctx.fillText(text, 0, 4);
+  ctx.restore();
+}
+
 // A big animated callout for the key number in a scene ("20%", "$1,000", "3–6 MONTHS").
 function drawStatPop(ctx, text, into, left, y, accent) {
   const appear = 0.15;
@@ -378,7 +394,10 @@ class Painter {
     // A quick punch-in as each scene starts (harder on the hook and on the payoff), like an edited video.
     const punch = ["outro", "recap", "section"].includes(sc.kind) ? 0 : idx === 0 || sc.payoff ? 0.1 : 0.04;
     const z = punch && into < 0.35 ? 1 + punch * (1 - ease(into / 0.35)) : 1;
-    ctx.setTransform(this.k * z, 0, 0, this.k * z, this.k * W * (1 - z) / 2, this.k * H * (1 - z) / 2);
+    // ...and a short shake when the payoff hits.
+    const shake = sc.payoff && into < 0.22 ? 14 * (1 - into / 0.22) : 0;
+    const sx = shake * Math.sin(into * 97), sy = shake * Math.cos(into * 83);
+    ctx.setTransform(this.k * z, 0, 0, this.k * z, this.k * (W * (1 - z) / 2 + sx), this.k * (H * (1 - z) / 2 + sy));
     this.bg.draw(ctx, (t - sc.start) / Math.max(0.001, sc.end - sc.start));
     ctx.setTransform(this.k, 0, 0, this.k, 0, 0);
     // A white flash on the payoff, so the moment the video promised feels like one.
@@ -386,6 +405,7 @@ class Painter {
     if (this.hasSnap && idx > 0 && into < 0.25) { ctx.globalAlpha = 1 - ease(into / 0.25); ctx.drawImage(this.snap, 0, 0); ctx.globalAlpha = 1; }
     ctx.drawImage(sc.kind === "outro" ? this.plain : this.header, 0, 0);
     if (sc.stat && !["outro", "chart", "stat"].includes(sc.kind)) drawStatPop(ctx, sc.stat, into, sc.end - t, this.popY, this.accent);
+    if (sc.chip) drawChip(ctx, sc.chip, into, sc.end - t, this.accent, sc.tone);
     if (sc.source) drawSource(ctx, sc.source, Math.min(1, into / 0.3) * Math.min(1, (sc.end - t) / 0.2));
     if (sc.kind !== "recap") this.captions.draw(ctx, t, sc.kind === "outro" ? 1180 : sc.kind === "section" ? 1520 : this.captionY);
     ctx.fillStyle = rgba(this.accent); ctx.fillRect(0, H - 12, W * (t / this.total), 12);

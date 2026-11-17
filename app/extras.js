@@ -197,12 +197,70 @@ function impact(out, at, gain) {
     out[s0 + i] += gain * (Math.sin(ph) * Math.exp(-t * 6) + (Math.random() * 2 - 1) * 0.25 * Math.exp(-t * 60));
   }
 }
+// A rising swell of filtered noise that leads into the payoff.
+function riser(out, end, gain, len = 1.1) {
+  const n = Math.floor(len * SR), s0 = Math.floor((end - len) * SR);
+  let lp = 0, prev = 0;
+  for (let i = 0; i < n; i++) {
+    const k = s0 + i; if (k < 0 || k >= out.length) continue;
+    const x = i / n, cutoff = 0.01 + 0.3 * x * x;
+    lp += cutoff * ((Math.random() * 2 - 1) - lp);
+    const hp = lp - prev; prev = lp;
+    out[k] += hp * gain * x * x * 2.2;
+  }
+}
+// Two bright, quick bells: a coin landing (for money figures).
+function coins(out, at, gain) {
+  for (const [f, d] of [[2093, 0], [2637, 0.07], [3136, 0.13]]) {
+    const n = Math.floor(0.35 * SR), s0 = Math.floor((at + d) * SR);
+    for (let i = 0; i < n && s0 + i < out.length; i++) { const t = i / SR; out[s0 + i] += gain * 0.5 * Math.sin(2 * Math.PI * f * t) * Math.exp(-t * 14); }
+  }
+}
+// A soft falling tone for a risk or a catch.
+function downer(out, at, gain) {
+  const n = Math.floor(0.45 * SR), s0 = Math.floor(at * SR); let ph = 0;
+  for (let i = 0; i < n && s0 + i < out.length; i++) {
+    const t = i / SR, f = 420 * Math.pow(0.35, t / 0.45);
+    ph += 2 * Math.PI * f / SR;
+    out[s0 + i] += gain * (Math.sin(ph) + 0.3 * Math.sin(2 * ph)) * Math.sin(Math.PI * Math.min(1, t / 0.45)) * 0.6;
+  }
+}
+// A warm bell (the takeaway).
+function bell(out, at, gain) {
+  for (const [f, a] of [[784, 1], [1568, 0.4], [2352, 0.15]]) {
+    const n = Math.floor(1.0 * SR), s0 = Math.floor(at * SR);
+    for (let i = 0; i < n && s0 + i < out.length; i++) { const t = i / SR; out[s0 + i] += gain * a * Math.sin(2 * Math.PI * f * t) * Math.exp(-t * 4) * Math.min(1, t / 0.005); }
+  }
+}
+// A bubbly "bloop" (the question for the comments).
+function bloop(out, at, gain) {
+  const n = Math.floor(0.18 * SR); let ph = 0;
+  for (const [d, f0] of [[0, 500], [0.11, 760]]) {
+    const s0 = Math.floor((at + d) * SR); ph = 0;
+    for (let i = 0; i < n && s0 + i < out.length; i++) {
+      const t = i / SR, f = f0 * (1 + 1.2 * t / 0.18); ph += 2 * Math.PI * f / SR;
+      out[s0 + i] += gain * Math.sin(ph) * Math.exp(-t * 22);
+    }
+  }
+}
+// A rising sparkle (the ending).
+function sparkle(out, at, gain) {
+  [1568, 1976, 2349, 3136].forEach((f, k) => {
+    const n = Math.floor(0.5 * SR), s0 = Math.floor((at + k * 0.06) * SR);
+    for (let i = 0; i < n && s0 + i < out.length; i++) { const t = i / SR; out[s0 + i] += gain * 0.35 * Math.sin(2 * Math.PI * f * t) * Math.exp(-t * 9); }
+  });
+}
 export function addSoundEffects(audio, scenes) {
   impact(audio, 0, 0.35);
   scenes.forEach((sc, i) => {
-    if (sc.payoff && i > 0) impact(audio, sc.start, 0.28);
-    if (i > 0) whoosh(audio, sc.start, sc.kind === "section" ? 0.5 : 0.32);
-    if (sc.kind === "stat" || sc.stat) pop(audio, sc.start + 0.15, 0.22);
+    if (sc.payoff && i > 0) { riser(audio, sc.start, 0.16); impact(audio, sc.start, 0.28); }
+    if (sc.tone === "down" && !sc.payoff) downer(audio, sc.start + 0.12, 0.12);
+    if (sc.tone === "tip" && !sc.payoff) bell(audio, sc.start + 0.08, 0.08);
+    if (sc.tone === "stance") impact(audio, sc.start, 0.16);
+    if (sc.tone === "question") bloop(audio, sc.start + 0.1, 0.2);
+    if (sc.kind === "outro") sparkle(audio, sc.start + 0.1, 0.14);
+    if (i > 0 && !sc.payoff) whoosh(audio, sc.start, sc.kind === "section" ? 0.5 : 0.24 + 0.12 * ((i * 7) % 5) / 4);
+    if (sc.kind === "stat" || sc.stat) (/^\$/.test(sc.stat || "") ? coins : pop)(audio, sc.start + 0.15, 0.22);
     if (sc.kind === "recap") chime(audio, sc.start + 0.1, 0.18);
   });
   let peak = 0; for (let i = 0; i < audio.length; i++) peak = Math.max(peak, Math.abs(audio[i]));

@@ -90,7 +90,7 @@ async function voiceScript(script, say, base = 1.0) {
     script.lines.splice(at, 0, extra);
     clips.splice(at, 0, await synthesize(extra.phonemes, speed * (extra.pace || 1)));
   }
-  const opt = script.lines.findIndex((l) => l.optional);
+  const opt = script.lines.findIndex((l) => l.question) > 0 ? script.lines.findIndex((l) => l.question) : script.lines.findIndex((l) => l.optional);
   if (opt > 0 && seconds(clips, script.lines) > MAX_S) { script.lines.splice(opt, 1); clips.splice(opt, 1); }   // too long: the comment question goes first
   if (seconds(clips, script.lines) > MAX_S) {                                     // too long: speak a little faster
     speed = Math.min(base * 1.18, base * (Math.ceil((seconds(clips, script.lines) / MAX_S) * 50) / 50 + 0.02));
@@ -100,7 +100,7 @@ async function voiceScript(script, say, base = 1.0) {
     // The story's skeleton stays: never the hook, the line right after it (what the topic is), or the
     // closing thought. Among the rest, the longest goes.
     // The comment question goes first: it's nice to have, not part of the story.
-    const optional = script.lines.findIndex((l) => l.optional);
+    const q = script.lines.findIndex((l) => l.question), optional = q > 0 ? q : script.lines.findIndex((l) => l.optional);
     if (optional > 0) { script.lines.splice(optional, 1); clips.splice(optional, 1); continue; }
     const content = script.lines.map((l, i) => (l.kind === "media" && !l.question ? i : -1)).filter((i) => i >= 0);
     const lastContent = content.at(-1);
@@ -254,13 +254,36 @@ export async function userMusic(total) {
 }
 export const USER_CACHE = "reelbot-user-v1", USER_MUSIC = "/user/music";
 
-async function assembleAudio(clips, mood, lines, musicVolume = 1) {
+async function assembleAudio(clips, mood, lines, musicVolume = 1, spans = []) {
   const total = Math.max(seconds(clips, lines), MIN_S);
   const voice = await masterVoice(clips, lines, total);
   let music = null, level = mood === "cinematic" ? 0.17 : 0.14;
   if (mood === "mine") { music = await userMusic(total).catch((e) => { console.warn("your music couldn't be read", e); return null; }); level = 0.13; }
   if (!music && mood && mood !== "none") music = generateMusic(total, mood === "mine" ? "lofi" : mood);
+  if (music) shapeMusic(music, lines, spans, total);
   return { audio: mix(voice, music, level * musicVolume), total };
+}
+
+// The music follows the story: it drops away for the second before the payoff (silence makes the
+// moment land), swells back as it hits, and fades out at the end instead of stopping dead.
+function shapeMusic(music, lines, spans, total) {
+  const env = (t) => {
+    let g = 1;
+    lines.forEach((l, i) => {
+      if (!l.payoff || !spans[i]) return;
+      const at = spans[i][0], d = t - at;
+      if (d > -1.0 && d < 0) g = Math.min(g, 1 - 0.8 * Math.min(1, (d + 1.0) / 0.35));      // dip before
+      else if (d >= 0 && d < 0.6) g = Math.min(g, 0.2 + 0.8 * (d / 0.6) + 0.15 * Math.sin(Math.PI * d / 0.6));   // swell back
+    });
+    const left = total - t;
+    if (left < 1.5) g *= Math.max(0, left / 1.5);
+    return g;
+  };
+  const step = Math.floor(SR / 100);
+  for (let i = 0; i < music.length; i += step) {
+    const g = env(i / SR);
+    for (let j = i; j < Math.min(music.length, i + step); j++) music[j] *= g;
+  }
 }
 
 // Rough spoken length of a script, for the review screen.
@@ -438,7 +461,7 @@ export async function produceReel(plan, opts, ui) {
   }
   await releaseVoice();      // free the voice model's memory before the video is encoded
   const { words, spans } = timings(script, clips);
-  const { audio, total } = await assembleAudio(clips, opts.music, script.lines, opts.musicVolume ?? 1);
+  const { audio, total } = await assembleAudio(clips, opts.music, script.lines, opts.musicVolume ?? 1, spans);
 
   ui.say("Preparing scenes…", 0.56);
   const scenes = [], credits = [];
@@ -448,6 +471,11 @@ export async function produceReel(plan, opts, ui) {
       label: (i === 0 ? script.title : line.query || script.title).replace(/\s*#Shorts$/, ""), seed: i };
     if (opts.showSources !== false && line.source) sc.source = line.source;
     if (line.payoff) sc.payoff = true;
+    // What the moment is, for its sound and its on-screen label.
+    const said = line.text || "";
+    sc.chip = line.question ? "YOUR TURN" : line.stance ? "BOTTOM LINE" : /^(But )?here's the catch/i.test(said) ? "THE CATCH"
+      : /^Here's that number|^By the numbers/i.test(said) ? "KEY NUMBER" : line.tip || /^So here's what to do/i.test(said) ? "WHAT TO DO" : /^Here's why it matters/i.test(said) ? "WHY IT MATTERS" : "";
+    sc.tone = line.question ? "question" : line.stance ? "stance" : sc.chip === "THE CATCH" || line.role === "risk" ? "down" : sc.chip === "WHAT TO DO" ? "tip" : "";
     if (line.kind === "outro") sc.kind = "outro";
     else if (line.kind === "chart" && line.chart) { sc.kind = "chart"; sc.chart = line.chart; }
     else if (line.kind === "section") { sc.kind = "section"; sc.num = line.num; sc.label = line.label; }
@@ -541,7 +569,7 @@ export function releasePlan(plan) {
 // Photos are found again when a draft is opened (your own photos aren't kept, to save space).
 export function draftFromPlan(plan, label) {
   const strip = (l) => ({ text: l.text, visual: l.visual, query: l.query, kind: l.kind, chart: l.chart || null, vmode: l.vmode, concrete: l.concrete,
-    source: l.source, hold: l.hold, items: l.items, num: l.num, label: l.label, section: l.section, tip: l.tip, claim: l.claim, pace: l.pace, payoff: l.payoff, question: l.question, optional: l.optional, role: l.role,
+    source: l.source, hold: l.hold, items: l.items, num: l.num, label: l.label, section: l.section, tip: l.tip, claim: l.claim, pace: l.pace, payoff: l.payoff, question: l.question, optional: l.optional, stance: l.stance, role: l.role,
     check: l.check ? { status: l.check.status, kind: l.check.kind, sources: l.check.sources, live: l.check.live,
       evidence: (l.check.evidence || []).slice(0, 2).map((e) => ({ text: e.text, source: e.source, section: e.section })) } : undefined,
     mine: l.asset && !l.asset.credit ? true : undefined });

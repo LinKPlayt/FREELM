@@ -116,6 +116,7 @@ export default async function ({ t, newPage }) {
     out.dramaTwice = HK.dramatize(d1).lines.length;
     const evS = mk(); evS.kind = "evergreen"; evS.lines[0].text = "One surprise bill can wreck your finances.";
     out.dramaHand = HK.dramatize(evS).lines[0].text;
+    out.natural = ["Stablecoins are typically non-interest bearing and therefore do not provide returns.", "Lenders decide who they are.", "He is the CEO, and it is not cheap.", 'He said "it is not" so.'].map(HK.naturalize);
     out.feel = ["$1,000", "crash.", "grow", "the", "never,"].map(HK.emphasisOf);
     // platform captions
     out.caps = S.platformCaptions({ title: "Test #Shorts", description: "Desc", script: "Line one.\nLine two.\nFollow.", niche: "investing", handle: "@me" });
@@ -179,9 +180,10 @@ export default async function ({ t, newPage }) {
   t.ok(/fell across the board/.test(r.mood[0]) && /barely moved/.test(r.mood[1]) && /mixed/.test(r.mood[2]), "market recaps say how the day went", JSON.stringify(r.mood));
   t.ok(/the catch/i.test(r.drama[0][0]) && /^Here's the catch: many/.test(r.drama[2][0]) && r.drama[2][1], "a hook that promises the catch is paid off by the catch line", JSON.stringify(r.drama.map((x) => x[0])));
   t.ok(r.drama[0][2] >= 0.3 && r.drama[1][2] >= 0.25, "a beat after the hook and before the payoff", JSON.stringify(r.drama.map((x) => x[2])));
-  t.ok(/^So here's what to do: never/.test(r.drama[3][0]), "the takeaway is spoken naturally", r.drama[3][0]);
-  t.ok(r.drama[4][3] && /comments/.test(r.drama[4][0]) && r.drama.length === 6, "a comment question sits right before the ending", JSON.stringify(r.drama.map((x) => x[0])));
-  t.ok(r.dramaShort === 5 && r.dramaComment === 5 && r.dramaTwice === 6, "no question on short reels or with an Ask-a-question ending; applied once", [r.dramaShort, r.dramaComment, r.dramaTwice].join());
+  t.ok(/^Bottom line: /.test(r.drama[3][0]) && /^So here's what to do: never/.test(r.drama[4][0]), "a clear bottom line, then the takeaway, spoken naturally", JSON.stringify(r.drama.map((x) => x[0])));
+  t.ok(r.drama[5][3] && /comments/.test(r.drama[5][0]) && r.drama.length === 7, "a comment question sits right before the ending", JSON.stringify(r.drama.map((x) => x[0])));
+  t.ok(r.dramaShort === 5 && r.dramaComment === 6 && r.dramaTwice === 7, "no question or bottom line on short reels, no question with an Ask-a-question ending; applied once", [r.dramaShort, r.dramaComment, r.dramaTwice].join());
+  t.ok(r.natural.join("|") === "Stablecoins are usually non-interest bearing and so don't provide returns.|Lenders decide who they are.|He's the CEO, and it isn't cheap.|He said \"it is not\" so.", "plain spoken English keeps the meaning (and quotes)", r.natural.join("|"));
   t.ok(r.dramaHand === "One surprise bill can wreck your finances.", "hand-written hooks are kept", r.dramaHand);
   t.ok(r.feel.join() === "1,-1,1,0,-1", "caption words that carry feeling are coloured", r.feel.join());
   t.ok(r.insert.join() === "1,2", "a spare definition goes after the hook; other spares go before the takeaway", JSON.stringify(r.insert));

@@ -109,6 +109,14 @@ After the storyteller, every script gets an emotion layer (`app/hook.js`). It ne
   catch:" or "Here's that number:" and lands with a punch-in, a white flash and a soft hit.
 - **Human pacing.** The hook is spoken a little faster, then a beat; another beat before the payoff.
 - **Captions with feeling.** Money and growth words in green, risk words in red; the spoken word grows.
+- **Plain spoken English.** Contractions and everyday words ("usually", not "typically"), and the
+  definition said the way a person would ("Simply put, …"). Quotes are never touched, and the original
+  sentence is kept for the fact check.
+- **A clear stance.** Common topics get a well-supported "Bottom line:" before the takeaway.
+- **Sound design.** A bass hit on the first frame; a riser, hit and camera shake into the payoff, with
+  the music dropping away just before it; coins for money figures; a falling tone for risks; a bell for
+  the takeaway; a bloop for the question; a sparkle on the ending. Music fades out at the end.
+- **Moment labels.** THE CATCH, KEY NUMBER, WHY IT MATTERS, BOTTOM LINE, WHAT TO DO and YOUR TURN pop in under the title.
 - **A question for the comments** before the ending (not on short reels, deep dives, or when the ending
   already asks one). It's the first line cut if the reel runs long.
 

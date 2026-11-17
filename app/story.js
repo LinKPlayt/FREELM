@@ -327,6 +327,8 @@ export function insertIndex(script, extra) {
   const last = script.lines[at - 1];
   // Keep a takeaway, tip or closing reminder last.
   if (at > 2 && last && last.kind === "media" && (last.tip || isAdvice((last.claim || last.text).replace(/^[^:]{3,22}:\s+/, "")) || /^(remember|the takeaway|bottom line|so\b|that's why|why it matters|here's why it matters)/i.test(last.text))) at--;
+  // ...and the "Bottom line" that leads into it.
+  if (at > 2 && script.lines[at - 1]?.stance) at--;
   return at;
 }
 

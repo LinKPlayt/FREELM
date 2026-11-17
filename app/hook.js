@@ -54,6 +54,56 @@ const NICHE_QUESTIONS = {
   "real estate": "Renting or buying right now? Tell me in the comments.",
 };
 
+// A clear, defensible position for common subjects: what a careful adviser would say. Shown as
+// "Bottom line:" before the takeaway, so the video says what it thinks, not just what's true.
+export const STANCES = [
+  [/stablecoin/i, "Stablecoins can be handy for moving money, but they're only as safe as whatever backs them."],
+  [/bitcoin/i, "Bitcoin can rise fast and fall fast, so treat it as a risky bet, not a savings account."],
+  [/ethereum/i, "Ethereum is a bet on a platform, not a sure thing, so treat it like any high-risk investment."],
+  [/credit (score|report|rating)|fico/i, "A good score isn't about being rich; it's about paying on time and borrowing lightly."],
+  [/emergency fund|rainy day/i, "Before you invest a dollar, build the safety net that keeps a bad month from turning into debt."],
+  [/index fund|etf|exchange-traded/i, "For most people, a low-cost index fund held for years beats trying to pick winners."],
+  [/^(inflation|inflation rate|consumer price index|cost of living)$/i, "A little inflation is normal; the danger is when your pay and your savings don't keep up."],
+  [/mortgage|home loan/i, "The right mortgage is one you could still pay if life got harder, not the biggest one you qualify for."],
+  [/student loan/i, "Student loans can pay off, but only borrow what your future paycheck can realistically handle."],
+  [/credit card/i, "Credit cards are a great tool if you pay in full, and an expensive one if you don't."],
+  [/federal reserve|interest rates?|fed funds|federal funds/i, "Rates change slowly, but they quietly decide what your debt costs and what your savings earn."],
+  [/recession/i, "Recessions end; the people who come through best go in with cash saved and little debt."],
+  [/\broth\b/i, "If you expect to earn more later, paying the tax now with a Roth is often worth it."],
+  [/401\s?\(?k|retire|pension/i, "When it comes to retirement, starting early matters more than starting big."],
+  [/budget/i, "A budget isn't a cage; it's a plan to spend on what you actually care about."],
+  [/dividend/i, "Dividends are nice, but the total return matters more than the yield on its own."],
+  [/compound interest/i, "Time does most of the work, so the earlier you start, the less you need to save."],
+  [/stock market|s&p|nasdaq|dow jones/i, "Day to day the market is noise; over decades it has rewarded patience."],
+  [/debt|loan/i, "Not all debt is bad, but high-interest debt is almost always worth paying off first."],
+  [/insur/i, "Insure against what would ruin you, not every small cost."],
+];
+
+// Plain spoken English: contractions and everyday words. The meaning never changes (the original
+// sentence stays in the line's `claim` for the fact check).
+const SWAPS = [
+  [/\bin order to\b/gi, "to"], [/\bprior to\b/gi, "before"], [/\bin the event that\b/gi, "if"], [/\bwith regard to\b/gi, "about"],
+  [/\bthe majority of\b/gi, "most"], [/\ba number of\b/gi, "several"], [/\btypically\b/gi, "usually"], [/\bprimarily\b/gi, "mainly"],
+  [/\bapproximately\b/gi, "about"], [/\bnumerous\b/gi, "many"], [/\bsufficient\b/gi, "enough"], [/\bcommonly\b/gi, "often"],
+  [/\bfrequently\b/gi, "often"], [/\bsubsequently\b/gi, "later"], [/\butili[sz]e\b/gi, "use"], [/\butili[sz]es\b/gi, "uses"],
+  [/\butili[sz]ed\b/gi, "used"], [/\bto purchase\b/gi, "to buy"], [/\bpurchased\b/gi, "bought"], [/\bindividuals\b/gi, "people"],
+  [/^Additionally, /, "Also, "], [/^Furthermore, /, "Plus, "], [/\band therefore\b/g, "and so"],
+  [/\bis a type of\b/g, "is a kind of"], [/\bare a type of\b/g, "are a kind of"],
+  [/\b(is|are|was|were|does|do|did|has|have|had|could|should|would) not\b/gi, (m, v) => v + "n't"],
+  [/\bcannot\b/gi, "can't"], [/\bwill not\b/gi, "won't"],
+  [/\b(it|that|there|what|here) is\b/gi, (m, w) => w + "'s"], [/\b(they|you|we) are\b/gi, (m, w) => w + "'re"],
+  [/\b(he|she) is\b/gi, (m, w) => w + "'s"], [/\byou will\b/gi, "you'll"],
+];
+export function naturalize(text) {
+  let t = String(text || "");
+  // Leave quotes alone (they're someone's exact words), and "it is" at the very end ("…as it is.").
+  if (/["“”]/.test(t)) return t;
+  for (const [re, to] of SWAPS) t = t.replace(re, to);
+  // A contraction can't end a sentence or clause ("…who they are." not "…who they're.").
+  return t.replace(/\b(it|that|there|what|here|he|she)'s(?=\s*(?:[.,;:!?]|$))/gi, "$1 is")
+    .replace(/\b(they|you|we)'re(?=\s*(?:[.,;:!?]|$))/gi, "$1 are").replace(/\byou'll(?=\s*(?:[.,;:!?]|$))/gi, "you will");
+}
+
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const clean = (t) => String(t || "").replace(/\s*#Shorts$/, "").replace(/\s+\(.*\)$/, "").replace(/\s*·\s*Part \d+$/i, "").trim();
 const isContent = (l) => l.kind === "media" && !l.tip;
@@ -112,6 +162,25 @@ export function dramatize(script, { length = "standard", ctaKind = "follow" } = 
     if (/^Why it matters:/i.test(l.text)) l.text = relead(l.text, "Here's why it matters:");
     else if (/^The catch:/i.test(l.text)) l.text = relead(l.text, "But here's the catch:");
     else if (/^The takeaway:/i.test(l.text)) { const b = body(l.text); l.text = "So here's what to do: " + (/^[A-Z][a-z]/.test(b) && !/^I\b/.test(b) ? b[0].toLowerCase() + b.slice(1) : b); l.payoff = l.payoff || !lines.some((x) => x.payoff); }
+  }
+  // 2b. Plain spoken English for every line of the story (lines you edit yourself aren't touched).
+  const topicName = clean(script.topicTitle || script.title);
+  for (const l of [...lines, ...(script.extras || [])]) {
+    if (l.kind !== "media" || l === hook) continue;
+    const t = naturalize(l.text);
+    if (t !== l.text) { l.claim = l.claim || l.text; l.text = t; l.analysis = null; }
+  }
+  // The definition is said the way a person would explain it.
+  const def = lines.find((l, i) => i > 0 && i <= 2 && l.kind === "media" && (l.role === "definition" || new RegExp("^(?:an?|the)?\\s*" + topicName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "s?\\s+(?:is|are)\\s+(?:an?|the)\\b", "i").test(l.text)));
+  if (def && def.text.split(/\s+/).length <= 24 && !/^Simply put/.test(def.text) && !/^[A-Z]{2}|^[A-Z][a-z]+ [A-Z]/.test(def.text) && !script.person) {
+    def.claim = def.claim || def.text; def.text = "Simply put, " + def.text[0].toLowerCase() + def.text.slice(1);
+  }
+  // 2c. A clear position before the takeaway ("Bottom line: …"), for subjects with a well-supported one.
+  const stance = !script.person && !deep && length !== "short" && STANCES.find(([re]) => re.test(topicName))?.[1];
+  if (stance && !lines.some((l) => /^(bottom line|remember)\b/i.test(l.text))) {
+    const tipAt = lines.findIndex((l, i) => i > 0 && l.kind === "media" && (l.tip || /^So here's what to do/.test(l.text)));
+    const at = tipAt > 0 ? tipAt : lines.findIndex((l) => l.kind === "outro");
+    if (at > 1) lines.splice(at, 0, { text: "Bottom line: " + stance, visual: "", kind: "media", chart: null, stance: true, optional: true });
   }
   // 3. Pacing: the hook is delivered with a little more energy, then a beat; a beat before the payoff.
   hook.pace = hook.pace || 1.05;
