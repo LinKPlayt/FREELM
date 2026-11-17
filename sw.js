@@ -1,6 +1,6 @@
 // Service worker: keeps the app and its big files (voice models, WebAssembly, fonts, research library)
 // on the phone so they download once. Live data (news, photos) always uses the network.
-const VERSION = "reelbot-v24";
+const VERSION = "reelbot-v25";
 // Big binary files (model weights, WebAssembly, fonts) live in a cache that survives app updates, so
 // an update doesn't download the voice again. Only binaries: small settings and code files (config.json,
 // .js) can change in place, so they're refreshed with every app update (a stale AI config.json, kept
@@ -46,8 +46,10 @@ self.addEventListener("fetch", (e) => {
   if (req.headers.has("range")) return;                       // video seeking: let the browser handle it
   if (STATIC.test(url.pathname)) return e.respondWith(cacheFirst(req, MODELS));
   if (DATA.test(url.pathname) || SMALL.test(url.pathname)) return e.respondWith(cacheFirst(req, VERSION));
-  // App shell: network first so updates arrive, cached copy when offline.
-  e.respondWith(fetch(req).then((res) => {
+  // App shell: network first so updates arrive, cached copy when offline. "no-cache" makes Safari check
+  // with the server instead of reusing its own 10-minute copy (which once kept an old voice worker running).
+  const fresh = req.mode === "navigate" ? fetch(req.url, { cache: "no-cache", credentials: "same-origin" }) : fetch(new Request(req, { cache: "no-cache" }));
+  e.respondWith(fresh.then((res) => {
     if (res.ok) { const copy = res.clone(); caches.open(VERSION).then((c) => c.put(req, copy)); }
     return res;
   }).catch(async () => caches.match(req, { ignoreSearch: true })));

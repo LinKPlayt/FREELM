@@ -6,13 +6,16 @@ import { KOKORO_RATE, KOKORO_VOICES } from "./voices.js";
 import { kokoroPhonemes } from "./kokoro-text.js";
 export { KOKORO_VOICES };
 // The natural voice runs in a worker (voice-worker.js); ending it frees its memory.
+// Bump WORKER_VERSION whenever voice-worker.js changes.
+const WORKER_VERSION = 25;
 let worker = null, nextId = 0;
 const pending = new Map();
 // Every call has a watchdog: if the worker goes quiet (no progress, no answer) for `quiet` ms, the call
 // fails instead of hanging, and the app switches to the classic voice.
 function call(cmd, args = {}, onProgress, quiet = 90000) {
   if (!worker) {
-    worker = new Worker(new URL("./voice-worker.js", import.meta.url), { type: "module" });
+    // Versioned address: a phone can never keep running an older copy of the worker after an update.
+    worker = new Worker(new URL(`./voice-worker.js?v=${WORKER_VERSION}`, import.meta.url), { type: "module" });
     worker.onmessage = ({ data }) => {
       const p = pending.get(data.id); if (!p) return;
       if (data.progress != null) return p.onProgress?.(data.progress);

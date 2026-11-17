@@ -9,11 +9,12 @@
 export const MODEL = "SmolLM2-135M-Instruct";
 export const MODEL_MB = 137;
 
+const WORKER_VERSION = 25;          // bump when llm-worker.js or joined-fetch.js changes
 let worker = null, ready = false, loading = null, nextId = 0;
 const pending = new Map();
 function call(cmd, args = {}, onProgress) {
   if (!worker) {
-    worker = new Worker(new URL("./llm-worker.js", import.meta.url), { type: "module" });
+    worker = new Worker(new URL(`./llm-worker.js?v=${WORKER_VERSION}`, import.meta.url), { type: "module" });   // versioned: never an old copy
     worker.onmessage = ({ data }) => {
       const p = pending.get(data.id); if (!p) return;
       if (data.progress != null) return p.onProgress?.(data.progress);

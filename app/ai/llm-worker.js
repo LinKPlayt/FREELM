@@ -1,7 +1,7 @@
 // Runs the Idea Lab's language model in its own worker. Removing or unloading it ends the worker,
 // which gives all of its memory back to the phone.
 import { env, pipeline } from "./vendor/transformers.min.js";
-import { joinedFetch } from "./joined-fetch.js";
+import { joinedFetch } from "./joined-fetch.js?v=25";
 
 const BASE = new URL("./", import.meta.url).href;
 env.allowRemoteModels = false;

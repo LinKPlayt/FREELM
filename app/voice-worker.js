@@ -3,6 +3,7 @@
 // as the classic voice, which works on iPhone; the larger runtime bundled with Transformers.js asked
 // for more memory at startup than iPhone Safari allows ("RangeError: Out of memory").
 // When the voiceover is done the app ends this worker, which gives all of its memory back.
+// (Version 25: the download no longer trusts the server's Content-Length, which is the compressed size.)
 import * as ort from "./vendor/ort/ort.wasm.min.mjs";
 
 ort.env.wasm.wasmPaths = new URL("./vendor/ort/", import.meta.url).href;
