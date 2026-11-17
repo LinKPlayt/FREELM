@@ -227,11 +227,11 @@ export default async function ({ t, newPage }) {
   t.section("Features: What's new, storage, make-time, Library covers");
   try {
     // a returning user who last saw version 29 (the window shows the newest three updates)
-    await page.evaluate(() => localStorage.setItem("seenVersion", "29"));
+    await page.evaluate(() => localStorage.setItem("seenVersion", "30"));
     await page.reload(); await until(page, () => window.__ready, null, 60000);
     t.ok(await page.locator("#news-sheet").count() === 1 && /What's new/.test(await page.innerText("#news-sheet")), "What's new appears after an update");
     const news = await page.innerText("#news-sheet");
-    t.ok(/hook and land/.test(news) && /Smoother making/.test(news) && !/Fixed a false/.test(news), "it lists only the updates since the last one seen", news.slice(0, 200));
+    t.ok(/takes a stand/.test(news) && /hook and land/.test(news) && !/Smoother making/.test(news), "it lists only the updates since the last one seen", news.slice(0, 200));
     await page.click('[data-news="close"]');
     t.ok(await page.locator("#news-sheet").count() === 0, "Got it closes it");
     await page.reload(); await until(page, () => window.__ready, null, 60000);
