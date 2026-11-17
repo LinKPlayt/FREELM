@@ -166,7 +166,7 @@ async function more(n) {
 }
 
 function ideaCard(idea, saved = false) {
-  return `<div class="card idea" data-idea="${idea.id}">
+  return `<div class="card idea" data-idea="${H.esc(idea.id)}">
     <div class="tags"><span class="tag">${H.esc(idea.angleLabel)}</span>${idea.ai ? `<span class="tag ai">AI</span>` : ""}</div>
     <h3>${H.esc(idea.title)}</h3>
     <p class="hook">${H.esc(idea.hook)}</p>

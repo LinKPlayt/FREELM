@@ -1,7 +1,6 @@
 // The narrator. Two voices, both running on the phone, served from this app (no speech service):
 //   "natural" (default): Kokoro-82M, a StyleTTS 2 model that sounds close to a real narrator (voice-worker.js)
 //   "fast": Piper (VITS), smaller and quicker but more robotic; also the fallback if the natural voice can't load
-import * as ort from "./vendor/ort/ort.wasm.min.mjs";
 import { KOKORO_RATE, KOKORO_VOICES } from "./voices.js";
 import { kokoroPhonemes } from "./kokoro-text.js";
 export { KOKORO_VOICES };
@@ -121,8 +120,16 @@ export async function synthesize(phonemes, speed = 1.0) {
 
 const VENDOR = new URL("./vendor/", import.meta.url).href;
 const VOICE = new URL("../assets/voices/en_US-joe-medium.onnx", import.meta.url).href;
-ort.env.wasm.wasmPaths = VENDOR + "ort/";
-ort.env.wasm.numThreads = 1;   // this smaller runtime build is single-threaded
+// The classic voice's runtime loads the first time the classic voice is used (not at startup).
+let ort = null;
+async function ortRuntime() {
+  if (!ort) {
+    ort = await import("./vendor/ort/ort.wasm.min.mjs");
+    ort.env.wasm.wasmPaths = VENDOR + "ort/";
+    ort.env.wasm.numThreads = 1;
+  }
+  return ort;
+}
 
 let session = null, config = null;
 const PIPER_RATE = 22050;
@@ -154,6 +161,7 @@ async function loadPiperOnce(onProgress) {
   if (session) return;
   config = await (await fetch(VOICE + ".json")).json();
   const model = await fetchWithProgress(VOICE, onProgress);
+  await ortRuntime();
   session = await ort.InferenceSession.create(model, { executionProviders: ["wasm"], graphOptimizationLevel: "all" });
 }
 

@@ -152,7 +152,7 @@ pointing to the next ("Follow for part 2: Roth 401(k)"), and all three go to the
 - **Fact check** (on by default). Before the review screen, every line of an explainer, your own
   topic or an Idea Lab idea is checked against the sources:
   - **✓ Verified · N sources**: a source sentence says the same thing, and every number in the line
-    appears in that source. Paraphrases are matched by meaning, using the on-phone model, and
+    appears in that source. Paraphrases are matched by meaning (at Deep and Maximum, using the on-phone model), and
     numbers must still match exactly.
   - **✓ Verified by calculation**: money maths ("at 10% a year, money doubles in about 7 years")
     is worked out, and a wrong figure is flagged.
@@ -309,6 +309,29 @@ YouTube (`python -m reelbot auth`, then `make --upload`; see `reelbot/youtube.py
 To try the phone app locally: `python -m http.server 8000`, then open `http://localhost:8000/`.
 
 ---
+
+## Tests
+
+Automated tests run the phone app in a real browser (phone-sized Chromium), served the way GitHub
+Pages serves it:
+
+```
+node tests/web/run.mjs            # logic + fuzz: ~20 s, offline
+node tests/web/run.mjs features   # every feature end to end (makes real videos; needs the internet)
+node tests/web/run.mjs all
+FUZZ_N=2000 FUZZ_SEED=7 node tests/web/run.mjs fuzz   # a longer fuzz run with another seed
+```
+
+- **Logic:** pronunciation, number and chart detection, fact checking and the maths check,
+  research text cleaning, the natural voice's text normalisation, captions files, caption timing
+  from the voice's pauses, the reel score, the limiter, and platform captions, all against answers
+  worked out by hand.
+- **Fuzz:** thousands of random and hostile inputs (emoji, other scripts, control characters, HTML,
+  huge numbers, very long text) into every text function and every text box. Nothing may throw, hang,
+  output NaN/undefined, or run injected HTML.
+- **Features:** settings, all niches × types, the review editor, fact-check badges, making a reel with
+  the natural voice, the Library and captions, deep dive and full story, Plan my week, drafts, voice
+  previews, the Idea Lab and on-device AI, the About checks, crash guards, and offline use.
 
 ## Project layout
 

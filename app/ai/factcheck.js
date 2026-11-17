@@ -19,6 +19,13 @@ const OPINION = /^(that|this|which|so|here's why|the lesson|the takeaway|bottom 
 // Money maths in a line, checked by calculation: "at 10 percent a year, money doubles every 7 years",
 // "starting at 25 instead of 35 can leave you with twice as much". Returns null when there's nothing to calculate.
 export function mathCheck(text) {
+  // One sentence at a time, at most 300 characters: the patterns below scan back and forth, which on
+  // long text without full stops took seconds (found by fuzzing) and would freeze the phone.
+  const sentences = String(text).split(/(?<=[.!?])\s+/).filter((x) => x.length <= 300);
+  for (const s of sentences) { const r = mathCheckSentence(s); if (r) return r; }
+  return null;
+}
+function mathCheckSentence(text) {
   const t = wordsToDigits(text).toLowerCase().replace(/(\d)\s*%/g, "$1 percent");
   let m = t.match(/(\d+(?:\.\d+)?) percent[^.]*?doubl\w*[^.]*?(?:every|in)\s+(?:about\s+|roughly\s+|around\s+)?(\d+(?:\.\d+)?) years/);
   let rateFirst = true;
@@ -158,7 +165,9 @@ export async function factCheck(lines, { topic, niche = null, depth = 2, online 
   }
   // The meaning model (23 MB, on the phone; downloaded once) catches paraphrases. Optional: if it can't
   // load in time, word matching and calculations still run.
-  if (depth >= 2) await Promise.race([loadSemantic(lib), new Promise((r) => setTimeout(r, 25000))]).catch(() => {});
+  // Only at Deep/Maximum: the model stays in the page's memory for the rest of the session (~200 MB),
+  // which is a lot on a phone; Standard checks words, numbers and maths without it.
+  if (depth >= 3) await Promise.race([loadSemantic(lib), new Promise((r) => setTimeout(r, 25000))]).catch(() => {});
   // Ranked facts about the topic, straight from the sources: replacements for lines strict accuracy removes.
   const facts = (brief?.facts || []).filter((f) => {
     const n = f.text.split(/\s+/).length;

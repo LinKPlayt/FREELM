@@ -136,19 +136,23 @@ function timings(script, clips) {
     const start = 0.04, end = Math.max(start + 0.1, dur - 0.04);
     // Where each cut is expected (by word lengths), then snap it to the nearest unused real pause.
     const pauses = pausesIn(clips[i], rate);
-    const bounds = [start];
-    const used = new Set();
+    // Each matched pause must come after the previous one (in time), and before the end of the line.
+    const bounds = [];
+    let lastEnd = start;
     for (const j of cuts) {
       const before = weights.slice(0, j + 1).reduce((a, b) => a + b, 0);
       const expected = start + (end - start) * before / total;
       let best = -1, bestDist = 0.6;                                     // only pauses within 0.6 s of the estimate
-      pauses.forEach(([a, b], k) => { const mid = (a + b) / 2, d = Math.abs(mid - expected); if (!used.has(k) && d < bestDist && mid > bounds.at(-1) + 0.1) { best = k; bestDist = d; } });
-      if (best >= 0) { used.add(best); bounds.push([j, pauses[best][0], pauses[best][1]]); }
+      pauses.forEach(([a, b], k) => {
+        const mid = (a + b) / 2, d = Math.abs(mid - expected);
+        if (d < bestDist && a > lastEnd + 0.1 && b < end - 0.05) { best = k; bestDist = d; }
+      });
+      if (best >= 0) { bounds.push([j, pauses[best][0], pauses[best][1]]); lastEnd = pauses[best][1]; }
     }
     // Build phrases: [firstToken, lastToken, from, to]
     const phrases = []; let from = 0, at = start;
-    for (const b of bounds.slice(1)) { phrases.push([from, b[0], at, b[1]]); from = b[0] + 1; at = b[2]; }
-    phrases.push([from, tokens.length - 1, at, end]);
+    for (const b of bounds) { phrases.push([from, b[0], at, b[1]]); from = b[0] + 1; at = b[2]; }
+    phrases.push([from, tokens.length - 1, at, Math.max(at, end)]);
     for (const [a, b, s0, s1] of phrases) {
       const w = weights.slice(a, b + 1), sum = w.reduce((x, y) => x + y, 0) || 1;
       let cursor = t + s0;
@@ -507,3 +511,6 @@ export async function planFromDraft(draft, ui) {
   for (const l of script.extras) if (l.kind === "media") l.asset = finder.find(l.query || draft.generic[0]).catch(() => null);
   return { script, finder, generic: draft.generic, edited: draft.edited };
 }
+
+// For the automated tests (tests/web): internal helpers, no app behaviour depends on this.
+export const _test = { timings, pausesIn, limitAndLevel, gapAfter };

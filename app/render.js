@@ -1,7 +1,6 @@
 // Draws every frame on a canvas and encodes the MP4 on the device.
 //   Preferred: WebCodecs (H.264 + AAC) muxed with mp4-muxer: exact frames, usually faster than real time.
 //   Fallback:  MediaRecorder, which records the canvas in real time.
-import { Muxer, ArrayBufferTarget } from "./vendor/mp4-muxer.mjs";
 import { SR } from "./music.js";
 import { writeMov, pcm16Stereo } from "./mov.js";
 import { StatBg, IllusBg, SectionBg, RecapBg, drawSource } from "./graphics.js";
@@ -438,6 +437,8 @@ async function encodeWebCodecs(job, target, vcfg, acfg, onProgress) {
   target.width = vcfg.width; target.height = vcfg.height;
   const painter = new Painter(job, target);
   const isAac = acfg.codec !== "opus";
+  // The MP4 muxer is only needed on this fallback path, so it loads here rather than at startup.
+  const { Muxer, ArrayBufferTarget } = await import("./vendor/mp4-muxer.mjs");
   const muxer = new Muxer({ target: new ArrayBufferTarget(), fastStart: "in-memory",
     // Encoders may start audio at a non-zero time (priming); shift each track so it starts at zero.
     firstTimestampBehavior: "offset",
