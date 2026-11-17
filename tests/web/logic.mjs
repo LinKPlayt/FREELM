@@ -101,6 +101,22 @@ export default async function ({ t, newPage }) {
     out.mood = [ST.marketMood([{ day_pct: -2 }, { day_pct: -1.1 }]).opening, ST.marketMood([{ day_pct: 0.01 }, { day_pct: -0.02 }]).opening, ST.marketMood([{ day_pct: 0.8 }, { day_pct: -0.4 }]).opening];
     const ins = { topicTitle: "Budget", lines: [{ text: "Hook", kind: "media" }, { text: "A budget is a plan.", kind: "media" }, { text: "Track it.", kind: "media", tip: true }, { text: "Follow.", kind: "outro" }] };
     out.insert = [ST.insertIndex(ins, { text: "A budget is a plan for spending money." }), ST.insertIndex(ins, { text: "Most people overspend by 20%." })];
+    // the emotion layer
+    const HK = await import("./app/hook.js");
+    const mk = () => ({ kind: "custom", topicTitle: "Stablecoin", title: "Stablecoin", niche: "crypto", lines: [
+      { text: "Stablecoin, explained in thirty seconds.", kind: "media" },
+      { text: "A stablecoin is a cryptocurrency pegged to a reference asset.", kind: "media", role: "definition" },
+      { text: "The catch: many stablecoins have failed to keep their value.", kind: "media", role: "risk" },
+      { text: "The takeaway: Never put in more than you could afford to lose.", kind: "media", tip: true },
+      { text: "Follow.", kind: "outro" }], extras: [] });
+    const d1 = HK.dramatize(mk(), { length: "standard" });
+    out.drama = d1.lines.map((l) => [l.text, !!l.payoff, l.hold || 0, !!l.question]);
+    out.dramaShort = HK.dramatize(mk(), { length: "short" }).lines.length;
+    out.dramaComment = HK.dramatize(mk(), { length: "standard", ctaKind: "comment" }).lines.length;
+    out.dramaTwice = HK.dramatize(d1).lines.length;
+    const evS = mk(); evS.kind = "evergreen"; evS.lines[0].text = "One surprise bill can wreck your finances.";
+    out.dramaHand = HK.dramatize(evS).lines[0].text;
+    out.feel = ["$1,000", "crash.", "grow", "the", "never,"].map(HK.emphasisOf);
     // platform captions
     out.caps = S.platformCaptions({ title: "Test #Shorts", description: "Desc", script: "Line one.\nLine two.\nFollow.", niche: "investing", handle: "@me" });
     out.capsOld = S.platformCaptions({ script: "Only line.\nFollow." });
@@ -161,6 +177,13 @@ export default async function ({ t, newPage }) {
   t.ok(r.heads[0][0] === "The Fed's chairman sees an AI revolution coming." && !/Dow Jones, S&P/.test(r.heads[1][0]) && r.heads[2][1] === true, "headlines lose labels, outlet names and ticker lists; non-news is spotted", JSON.stringify(r.heads));
   t.ok(r.thread.theme === "interest rates" && r.thread.order.join() === "0,2,1" && /^The thread today/.test(r.thread.text), "related headlines are grouped and their common thread explained", JSON.stringify(r.thread));
   t.ok(/fell across the board/.test(r.mood[0]) && /barely moved/.test(r.mood[1]) && /mixed/.test(r.mood[2]), "market recaps say how the day went", JSON.stringify(r.mood));
+  t.ok(/the catch/i.test(r.drama[0][0]) && /^Here's the catch: many/.test(r.drama[2][0]) && r.drama[2][1], "a hook that promises the catch is paid off by the catch line", JSON.stringify(r.drama.map((x) => x[0])));
+  t.ok(r.drama[0][2] >= 0.3 && r.drama[1][2] >= 0.25, "a beat after the hook and before the payoff", JSON.stringify(r.drama.map((x) => x[2])));
+  t.ok(/^So here's what to do: never/.test(r.drama[3][0]), "the takeaway is spoken naturally", r.drama[3][0]);
+  t.ok(r.drama[4][3] && /comments/.test(r.drama[4][0]) && r.drama.length === 6, "a comment question sits right before the ending", JSON.stringify(r.drama.map((x) => x[0])));
+  t.ok(r.dramaShort === 5 && r.dramaComment === 5 && r.dramaTwice === 6, "no question on short reels or with an Ask-a-question ending; applied once", [r.dramaShort, r.dramaComment, r.dramaTwice].join());
+  t.ok(r.dramaHand === "One surprise bill can wreck your finances.", "hand-written hooks are kept", r.dramaHand);
+  t.ok(r.feel.join() === "1,-1,1,0,-1", "caption words that carry feeling are coloured", r.feel.join());
   t.ok(r.insert.join() === "1,2", "a spare definition goes after the hook; other spares go before the takeaway", JSON.stringify(r.insert));
   t.ok(r.caps.youtube && r.caps.tiktok && r.caps.instagram && !/undefined/.test(JSON.stringify(r.caps)), "platform captions are complete", "");
   t.ok(!/undefined/.test(JSON.stringify(r.capsOld)) && r.capsOld.youtube.length > 5, "captions work for old reels with missing fields", JSON.stringify(r.capsOld).slice(0, 120));

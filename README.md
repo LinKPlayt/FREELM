@@ -98,6 +98,20 @@ Every script, whatever the type, goes through the same storyteller before you se
   tiny moves).
 - **Always a takeaway.** If the research has no practical advice, a safe general tip for the topic closes the video.
 
+### Hooks, tension and payoff
+
+After the storyteller, every script gets an emotion layer (`app/hook.js`). It never adds facts:
+
+- **A hook that gives a reason to stay**, built from the script: the stakes for the viewer, a catch,
+  or a number to wait for. Hand-written hooks are kept; only generic "X, explained" openings are replaced.
+  *Another hook* offers these first.
+- **Promise and payoff.** If the hook promises the catch or a number, that line opens with "Here's the
+  catch:" or "Here's that number:" and lands with a punch-in, a white flash and a soft hit.
+- **Human pacing.** The hook is spoken a little faster, then a beat; another beat before the payoff.
+- **Captions with feeling.** Money and growth words in green, risk words in red; the spoken word grows.
+- **A question for the comments** before the ending (not on short reels, deep dives, or when the ending
+  already asks one). It's the first line cut if the reel runs long.
+
 ### Deep dives and better results
 
 - **Deep dive (60–90 s).** Pick *Deep dive* under Length for explainers, your own topics and

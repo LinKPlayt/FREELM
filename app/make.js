@@ -6,6 +6,7 @@ import { loadVoice, phonemize, synthesize, voiceRate, setVoice, releaseVoice, vo
 import { generateMusic, mix, resample, SR } from "./music.js";
 import { loadFonts, renderReel } from "./render.js";
 import { analyzeLine, iconFor } from "./visuals.js";
+import { dramatize } from "./hook.js";
 import { deepen, addSoundEffects, makeSrt, makeCover } from "./extras.js";
 import { polish, insertIndex } from "./story.js";
 import { StatBg, IllusBg } from "./graphics.js";
@@ -77,7 +78,7 @@ async function voiceScript(script, say, base = 1.0) {
     const out = [];
     for (let i = 0; i < lines.length; i++) {
       say(`Recording the voiceover (${i + 1} of ${lines.length})…`, i / lines.length);
-      out.push(await synthesize(lines[i].phonemes, speed));
+      out.push(await synthesize(lines[i].phonemes, speed * (lines[i].pace || 1)));
       await sleep(0);   // let the screen update between sentences
     }
     return out;
@@ -87,8 +88,10 @@ async function voiceScript(script, say, base = 1.0) {
     const extra = script.extras.shift();
     const at = insertIndex(script, extra);                             // where it makes sense in the story
     script.lines.splice(at, 0, extra);
-    clips.splice(at, 0, await synthesize(extra.phonemes, speed));
+    clips.splice(at, 0, await synthesize(extra.phonemes, speed * (extra.pace || 1)));
   }
+  const opt = script.lines.findIndex((l) => l.optional);
+  if (opt > 0 && seconds(clips, script.lines) > MAX_S) { script.lines.splice(opt, 1); clips.splice(opt, 1); }   // too long: the comment question goes first
   if (seconds(clips, script.lines) > MAX_S) {                                     // too long: speak a little faster
     speed = Math.min(base * 1.18, base * (Math.ceil((seconds(clips, script.lines) / MAX_S) * 50) / 50 + 0.02));
     clips = await speak(script.lines);
@@ -96,7 +99,10 @@ async function voiceScript(script, say, base = 1.0) {
   while (seconds(clips, script.lines) > MAX_S && script.lines.length > 4) {       // still too long: drop a middle line
     // The story's skeleton stays: never the hook, the line right after it (what the topic is), or the
     // closing thought. Among the rest, the longest goes.
-    const content = script.lines.map((l, i) => (l.kind === "media" ? i : -1)).filter((i) => i >= 0);
+    // The comment question goes first: it's nice to have, not part of the story.
+    const optional = script.lines.findIndex((l) => l.optional);
+    if (optional > 0) { script.lines.splice(optional, 1); clips.splice(optional, 1); continue; }
+    const content = script.lines.map((l, i) => (l.kind === "media" && !l.question ? i : -1)).filter((i) => i >= 0);
     const lastContent = content.at(-1);
     let pool = content.filter((i) => i > 1 && i !== lastContent && !script.lines[i].tip);
     if (!pool.length) pool = content.filter((i) => i > 0 && i !== lastContent);
@@ -276,6 +282,7 @@ export async function planReel(opts, ui) {
   if (isDeep(opts.length)) { say("Researching more detail for the deep dive…", 0.15); await deepen(script, { ...opts, depth: opts.depth || 2 }); }
   const fact = await checkFacts(script, opts, say);
   polish(script);                    // the storyteller's last pass: no repeats, one definition, in order
+  dramatize(script, opts);           // the emotion layer: a hook with a promise, its payoff, pacing, a question
   return { ...(await attachPhotos(script, generic, opts, say)), fact };
 }
 
@@ -338,6 +345,7 @@ export async function planFromIdea(idea, opts, ui) {
   if (isDeep(opts.length)) { say("Researching more detail for the deep dive…", 0.1); await deepen(script, { ...opts, depth: opts.depth || 2 }); }
   const fact = await checkFacts(script, opts, say);
   polish(script);                    // the storyteller's last pass: no repeats, one definition, in order
+  dramatize(script, opts);           // the emotion layer: a hook with a promise, its payoff, pacing, a question
   return { ...(await attachPhotos(script, generic, opts, say)), fact };
 }
 
@@ -439,6 +447,7 @@ export async function produceReel(plan, opts, ui) {
     const sc = { start: i === 0 ? 0 : spans[i][0] - GAP / 2, end: i === script.lines.length - 1 ? total : spans[i + 1][0] - GAP / 2, kind: "fallback",
       label: (i === 0 ? script.title : line.query || script.title).replace(/\s*#Shorts$/, ""), seed: i };
     if (opts.showSources !== false && line.source) sc.source = line.source;
+    if (line.payoff) sc.payoff = true;
     if (line.kind === "outro") sc.kind = "outro";
     else if (line.kind === "chart" && line.chart) { sc.kind = "chart"; sc.chart = line.chart; }
     else if (line.kind === "section") { sc.kind = "section"; sc.num = line.num; sc.label = line.label; }
@@ -532,7 +541,7 @@ export function releasePlan(plan) {
 // Photos are found again when a draft is opened (your own photos aren't kept, to save space).
 export function draftFromPlan(plan, label) {
   const strip = (l) => ({ text: l.text, visual: l.visual, query: l.query, kind: l.kind, chart: l.chart || null, vmode: l.vmode, concrete: l.concrete,
-    source: l.source, hold: l.hold, items: l.items, num: l.num, label: l.label, section: l.section, tip: l.tip, claim: l.claim,
+    source: l.source, hold: l.hold, items: l.items, num: l.num, label: l.label, section: l.section, tip: l.tip, claim: l.claim, pace: l.pace, payoff: l.payoff, question: l.question, optional: l.optional, role: l.role,
     check: l.check ? { status: l.check.status, kind: l.check.kind, sources: l.check.sources, live: l.check.live,
       evidence: (l.check.evidence || []).slice(0, 2).map((e) => ({ text: e.text, source: e.source, section: e.section })) } : undefined,
     mine: l.asset && !l.asset.credit ? true : undefined });

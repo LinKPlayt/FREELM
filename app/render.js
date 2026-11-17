@@ -1,6 +1,7 @@
 // Draws every frame on a canvas and encodes the MP4 on the device.
 //   Preferred: WebCodecs (H.264 + AAC) muxed with mp4-muxer: exact frames, usually faster than real time.
 //   Fallback:  MediaRecorder, which records the canvas in real time.
+import { emphasisOf } from "./hook.js";
 import { SR } from "./music.js";
 import { writeMov, pcm16Stereo } from "./mov.js";
 import { StatBg, IllusBg, SectionBg, RecapBg, drawSource } from "./graphics.js";
@@ -236,6 +237,8 @@ export function chunkWords(words, maxWords = 3, maxChars = 16) {
 class Captions {
   constructor(words, accent, style = "bold") {
     this.words = words; this.accent = accent; this.style = style; this.chunks = chunkWords(words);
+    // Words that carry the meaning get a colour of their own: money and growth in green, risk in red.
+    this.feel = words.map((w) => emphasisOf(w.text));
     this.times = this.chunks.map((ch, k) => {
       const start = words[ch[0]].start, lastEnd = words[ch[ch.length - 1]].end;
       const end = k + 1 < this.chunks.length ? words[this.chunks[k + 1][0]].start : lastEnd + 0.3;
@@ -283,20 +286,26 @@ class Captions {
     }
     let x = -lay.total / 2;
     lay.texts.forEach((txt, j) => {
-      const on = idxs[j] === active;
+      const on = idxs[j] === active, feel = this.feel[idxs[j]];
+      const tone = feel > 0 ? "rgb(74,222,128)" : feel < 0 ? "rgb(255,92,92)" : "#fff";
+      // The spoken word grows a little as it's said.
+      const grow = on ? 1 + 0.09 * Math.min(1, (t - this.words[idxs[j]].start) / 0.08) : 1;
+      ctx.save();
+      if (grow !== 1) { const cx = x + lay.widths[j] / 2; ctx.translate(cx, 0); ctx.scale(grow, grow); ctx.translate(-cx, 0); }
       if (this.style === "bold") {
         ctx.lineWidth = 18; ctx.strokeStyle = "#000"; ctx.strokeText(txt, x, 0);
-        ctx.fillStyle = on ? rgba(this.accent) : "#fff";
+        ctx.fillStyle = on ? rgba(this.accent) : tone;
       } else if (this.style === "boxed") {
         if (on) {
           const ph = lay.size * 1.16;
           ctx.fillStyle = rgba(this.accent); ctx.beginPath(); ctx.roundRect(x - 12, -ph / 2 + lay.size * 0.03, lay.widths[j] + 24, ph, 14); ctx.fill();
         }
-        ctx.fillStyle = on ? "rgb(14,14,22)" : "#fff";
+        ctx.fillStyle = on ? "rgb(14,14,22)" : tone;
       } else {
-        ctx.fillStyle = on ? rgba(this.accent) : "#fff";
+        ctx.fillStyle = on ? rgba(this.accent) : tone;
       }
       ctx.fillText(txt, x, lay.size * (this.style === "clean" ? 0.04 : 0.02));
+      ctx.restore();
       x += lay.widths[j] + gap;
     });
     ctx.restore();
@@ -365,9 +374,15 @@ class Painter {
       }
       this.bg = this.makeBg(sc); this.idx = idx;
     }
-    ctx.setTransform(this.k, 0, 0, this.k, 0, 0);
-    this.bg.draw(ctx, (t - sc.start) / Math.max(0.001, sc.end - sc.start));
     const into = t - sc.start;
+    // A quick punch-in as each scene starts (harder on the hook and on the payoff), like an edited video.
+    const punch = ["outro", "recap", "section"].includes(sc.kind) ? 0 : idx === 0 || sc.payoff ? 0.1 : 0.04;
+    const z = punch && into < 0.35 ? 1 + punch * (1 - ease(into / 0.35)) : 1;
+    ctx.setTransform(this.k * z, 0, 0, this.k * z, this.k * W * (1 - z) / 2, this.k * H * (1 - z) / 2);
+    this.bg.draw(ctx, (t - sc.start) / Math.max(0.001, sc.end - sc.start));
+    ctx.setTransform(this.k, 0, 0, this.k, 0, 0);
+    // A white flash on the payoff, so the moment the video promised feels like one.
+    if (sc.payoff && into < 0.18) { ctx.fillStyle = `rgba(255,255,255,${0.35 * (1 - into / 0.18)})`; ctx.fillRect(0, 0, W, H); }
     if (this.hasSnap && idx > 0 && into < 0.25) { ctx.globalAlpha = 1 - ease(into / 0.25); ctx.drawImage(this.snap, 0, 0); ctx.globalAlpha = 1; }
     ctx.drawImage(sc.kind === "outro" ? this.plain : this.header, 0, 0);
     if (sc.stat && !["outro", "chart", "stat"].includes(sc.kind)) drawStatPop(ctx, sc.stat, into, sc.end - t, this.popY, this.accent);

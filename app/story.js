@@ -323,10 +323,10 @@ export function insertIndex(script, extra) {
   const topic = (script.topicTitle || script.title || "").replace(/\s*#Shorts$/, "");
   if (topic && isDefinition(extra.text, topic)) return 1;
   let at = script.lines.length - 1;
-  while (at > 1 && ["recap", "outro"].includes(script.lines[at - 1].kind)) at--;
+  while (at > 1 && (["recap", "outro"].includes(script.lines[at - 1].kind) || script.lines[at - 1].question)) at--;
   const last = script.lines[at - 1];
   // Keep a takeaway, tip or closing reminder last.
-  if (at > 2 && last && last.kind === "media" && (last.tip || isAdvice((last.claim || last.text).replace(/^[^:]{3,22}:\s+/, "")) || /^(remember|the takeaway|bottom line|so\b|that's why|why it matters)/i.test(last.text))) at--;
+  if (at > 2 && last && last.kind === "media" && (last.tip || isAdvice((last.claim || last.text).replace(/^[^:]{3,22}:\s+/, "")) || /^(remember|the takeaway|bottom line|so\b|that's why|why it matters|here's why it matters)/i.test(last.text))) at--;
   return at;
 }
 

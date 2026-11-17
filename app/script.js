@@ -138,9 +138,9 @@ export function buildNews(headlines, markets, opts) {
   const label = { crypto: "crypto", investing: "market", economy: "economy", "real estate": "housing", "side hustles": "money" }[opts.niche] || "money";
   const n = picks.length;
   const hook = pick([
-    `Here are ${n} ${label} headlines you need to know today.`,
-    `${n} ${label} stories you missed today, in under a minute.`,
-    `Your ${label} news, fast. Here's what happened today.`,
+    `${n} ${label} stories from today that could touch your money.`,
+    `${n} ${label} headlines you need to know today, and what links them.`,
+    `You missed ${n} big ${label} stories today. Here they are, fast.`,
   ]);
   const lines = [line(hook, visualFor(picks.map((p) => p.title).join(" "), g))];
   picks.forEach((item, i) => lines.push({ ...line(`${ORDINALS[i]}: ${item.said}`, visualFor(item.title, g)), source: item.source || null }));
@@ -243,7 +243,7 @@ export function buildCustom(found, opts) {
   lines.push(line(opts.cta, "", "outro"));
   const extras = story.leftovers.slice(0, 3).map((p, i) => asLine(p, i + 5));
   return {
-    kind: "custom", topicTitle: title, topicId: "custom-" + slug(title).slice(0, 40), title, niche: opts.niche, lines, extras,
+    kind: "custom", person, topicTitle: title, topicId: "custom-" + slug(title).slice(0, 40), title, niche: opts.niche, lines, extras,
     // The text it was written from, so the fact check can confirm each line against its real source.
     sourceText: (found.items || found.sentences.map((text) => ({ text, source: found.title }))).map((x) => ({ text: x.text, source: (x.source || found.title).replace(/^Wikipedia · /, "").split(" — ")[0], section: (x.source || "").split(" — ")[1] || null })),
     tags: [title, opts.niche, "explained"], sources: [found.url],

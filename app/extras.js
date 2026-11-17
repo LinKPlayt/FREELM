@@ -1,3 +1,4 @@
+import { smartHooks } from "./hook.js";
 // Features for more detailed videos and better results:
 //   deep dives (chapters + recap), sound effects, captions files, cover images, hook options and the reel coach.
 import { analyzeLine } from "./visuals.js";
@@ -186,8 +187,20 @@ function chime(out, at, gain) {
     for (let i = 0; i < n && s0 + i < out.length; i++) { const t = i / SR; out[s0 + i] += gain * 0.6 * Math.sin(2 * Math.PI * f * t) * Math.exp(-t * 5); }
   }
 }
+// A deep, soft hit (a falling sine with a short noise burst) for the first frame and the payoff.
+function impact(out, at, gain) {
+  const n = Math.floor(0.6 * SR), s0 = Math.max(0, Math.floor(at * SR));
+  let ph = 0;
+  for (let i = 0; i < n && s0 + i < out.length; i++) {
+    const t = i / SR, f = 38 + 90 * Math.exp(-t * 18);
+    ph += 2 * Math.PI * f / SR;
+    out[s0 + i] += gain * (Math.sin(ph) * Math.exp(-t * 6) + (Math.random() * 2 - 1) * 0.25 * Math.exp(-t * 60));
+  }
+}
 export function addSoundEffects(audio, scenes) {
+  impact(audio, 0, 0.35);
   scenes.forEach((sc, i) => {
+    if (sc.payoff && i > 0) impact(audio, sc.start, 0.28);
     if (i > 0) whoosh(audio, sc.start, sc.kind === "section" ? 0.5 : 0.32);
     if (sc.kind === "stat" || sc.stat) pop(audio, sc.start + 0.15, 0.22);
     if (sc.kind === "recap") chime(audio, sc.start + 0.1, 0.18);
@@ -285,7 +298,7 @@ export function hookOptions(script) {
   const t = /^[A-Z][a-z]+(\s[a-z]+)*$/.test(topic) ? topic.charAt(0).toLowerCase() + topic.slice(1) : topic;
   const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
   const numberLine = script.lines.find((l) => l.kind === "media" && analyzeLine(l.text).stat && l.text.split(/\s+/).length <= 22);
-  const opts = [];
+  const opts = smartHooks(script).map((o) => o.text);
   // "Instead, Tether only had…" can't open a video: drop the linking word.
   if (numberLine) opts.push(`Did you know? ${cap(numberLine.text.replace(/^(Instead|However|But|Also|In fact|Moreover|Still|Yet|So|And|Meanwhile|Today|Now),?\s+/i, ""))}`);
   opts.push(`Most people get ${t} completely wrong. Here's the truth.`);
@@ -293,7 +306,7 @@ export function hookOptions(script) {
   opts.push(`Why does nobody explain ${t} like this?`);
   opts.push(`${cap(t)}, explained in ${script.format === "full" ? "under 3 minutes" : script.deep ? "90 seconds" : "under a minute"}.`);
   opts.push(`Stop scrolling. This is the simplest way to understand ${t}.`);
-  return opts;
+  return [...new Set(opts)];
 }
 
 /* ---------------------------------------------------------------- reel coach */
@@ -307,7 +320,7 @@ export function coach(lines, { estimate, range, visuals = [] }) {
   const add = (ok, points, tip) => checks.push({ ok, points, tip });
   const hookWords = hook.split(/\s+/).filter(Boolean).length;
   add(hookWords > 0 && hookWords <= 14, 18, `Shorten the hook to 14 words or fewer (now ${hookWords}). The first 2 seconds decide if people stay.`);
-  add(/\?|\byou\b|\byour\b|\d|\b(never|stop|secret|mistake|wrong|truth)\b/i.test(hook), 12, "Make the hook personal or surprising: ask a question, say 'you', or lead with a number.");
+  add(/\?|\byou\b|\byour\b|\d|\b(never|stop|secret|mistake|wrong|truth|catch|most people|nobody)\b/i.test(hook), 12, "Make the hook personal or surprising: ask a question, say 'you', or lead with a number.");
   add(estimate >= range[0] - 2 && estimate <= range[1] + 2, 14, `Aim for ${range[0]}–${range[1]} seconds (now about ${Math.round(estimate)}).`);
   const long = media.filter((l) => l.text.split(/\s+/).length > 26);
   add(!long.length, 10, `Split long lines: ${long.length} line${long.length === 1 ? " is" : "s are"} over 26 words, which is hard to follow on screen.`);

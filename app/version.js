@@ -1,9 +1,18 @@
 // The app's version and its update notes, shown once in a "What's new" window after each update.
 // When you deploy: bump APP_VERSION, add an entry at the top of UPDATES, and set the same number in
 // sw.js (VERSION = "reelbot-v<APP_VERSION>"). A test checks the two match.
-export const APP_VERSION = 31;
+export const APP_VERSION = 32;
 
 export const UPDATES = [
+  { version: 32, title: "Videos that hook and land", items: [
+    "Smarter hooks built from your video: the stakes (“Your credit score quietly decides what you pay to borrow”), a catch, or a number to wait for.",
+    "When the hook promises something, the video keeps the promise: “Here's the catch:” or “Here's that number:” lands with a punch-in, a flash and a soft hit.",
+    "The narrator opens with more energy, then pauses for a beat after the hook and before the big moment.",
+    "Captions colour the words that matter: money and growth in green, risks in red, and the spoken word grows as it's said.",
+    "Every scene starts with a quick punch-in, like an edited video.",
+    "Videos end with a question for the comments (“Would you put your own money into this?”); it's the first thing cut if the reel runs long.",
+    "Spoken lead-ins: “Here's why it matters”, “But here's the catch”, “So here's what to do”.",
+  ] },
   { version: 31, title: "Scripts that tell a story", items: [
     "Every script now follows a clear path: what it is, how it works, a key number, why it matters, then what you can do.",
     "One clear definition per video, in plain English, with no jargon, trivia or half-finished sentences.",
