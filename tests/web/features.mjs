@@ -237,7 +237,7 @@ export default async function ({ t, newPage }) {
     await page.reload(); await until(page, () => window.__ready, null, 60000);
     t.ok(await page.locator("#news-sheet").count() === 0, "it stays closed after a restart");
     await page.click('nav [data-tab="about"]'); await until(page, () => /uses/.test(document.getElementById("storage-total").textContent), null, 20000);
-    t.ok(await page.locator("#storage-items .store-row").count() === 4 && /Natural voice[\s\S]*Classic voice[\s\S]*Ideas AI[\s\S]*Full-text/.test(await page.innerText("#storage-items")), "Storage card lists the voices, AI and research library", await page.innerText("#storage-items"));
+    t.ok(await page.locator("#storage-items .store-row").count() === 5 && /Natural voice[\s\S]*Classic voice[\s\S]*Ideas AI[\s\S]*Full-text[\s\S]*Saved illustrations/.test(await page.innerText("#storage-items")), "Storage card lists the voices, AI, research library and saved illustrations", await page.innerText("#storage-items"));
     await page.click("#whats-new"); t.ok(await page.locator("#news-sheet").count() === 1, "What's new can be reopened from About"); await page.click('[data-news="close"]');
     await page.click('nav [data-tab="create"]').catch(() => {});
     await page.click('#modes .chip >> text="Explainer"'); await page.click("#go"); await page.waitForSelector("#review:not(.hidden)", { timeout: 180000 });
