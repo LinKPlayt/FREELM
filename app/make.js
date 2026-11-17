@@ -37,7 +37,7 @@ function pickTopic(data, niche, topicId, hist) {
 }
 
 async function writeScript(opts, data, say) {
-  const hist = history(), done = new Set(hist.map((h) => h.id));
+  const hist = [...history(), ...(opts.exclude || []).map((id) => ({ id, kind: "evergreen" }))], done = new Set(hist.map((h) => h.id));
   const generic = data.generic_visuals[opts.niche] || data.generic_visuals["personal finance"];
   const o = { niche: opts.niche, cta: opts.cta, generic };
   let order = [opts.topicId || opts.offline ? "evergreen" : opts.mode];   // news and markets need the internet
@@ -102,16 +102,58 @@ async function voiceScript(script, say, base = 1.0) {
   return clips;
 }
 
+// Silent gaps inside a clip (where the narrator pauses), as [start, end] in seconds.
+function pausesIn(clip, rate) {
+  const hop = Math.round(rate * 0.01), frames = [];
+  let peak = 0;
+  for (let i = 0; i + hop <= clip.length; i += hop) {
+    let e = 0; for (let j = i; j < i + hop; j++) e += clip[j] * clip[j];
+    const rms = Math.sqrt(e / hop); frames.push(rms); peak = Math.max(peak, rms);
+  }
+  const quiet = peak * 0.06, out = [];
+  let start = -1;
+  frames.forEach((v, k) => {
+    if (v < quiet) { if (start < 0) start = k; }
+    else if (start >= 0) { if (k - start >= 9 && start > 5) out.push([start / 100, k / 100]); start = -1; }   // ≥ 90 ms, not the lead-in
+  });
+  return out;
+}
+
+// Word timings for the captions. Each line is split into phrases at its punctuation, and each phrase
+// is lined up with a real pause in the recorded voice (the narrator pauses at commas and full stops),
+// so the highlighted word stays with the voice. Within a phrase, words share the time by length.
 function timings(script, clips) {
   const words = [], spans = []; let t = 0;
+  const rate = voiceRate();
   script.lines.forEach((line, i) => {
-    const dur = clips[i].length / voiceRate();
+    const dur = clips[i].length / rate;
     spans.push([t, t + dur]);
     const tokens = line.text.split(/\s+/).filter(Boolean);
-    const weights = tokens.map((tok) => speakable(tok).length + 2.5 + (/[.,!?;:]$/.test(tok) ? 4 : 0));
-    const sum = weights.reduce((a, b) => a + b, 0) || 1;
-    let cursor = t + 0.04;
-    tokens.forEach((tok, j) => { const d = (dur - 0.08) * weights[j] / sum; words.push({ text: tok, start: cursor, end: cursor + d }); cursor += d; });
+    const weights = tokens.map((tok) => speakable(tok).length + 2.5 + (/[.,!?;:]$/.test(tok) ? 3 : 0));
+    // Phrase boundaries: after tokens that end in punctuation (not the last one).
+    const cuts = tokens.map((tok, j) => (j < tokens.length - 1 && /[.,!?;:—]["”']?$/.test(tok) ? j : -1)).filter((j) => j >= 0);
+    const total = weights.reduce((a, b) => a + b, 0) || 1;
+    const start = 0.04, end = Math.max(start + 0.1, dur - 0.04);
+    // Where each cut is expected (by word lengths), then snap it to the nearest unused real pause.
+    const pauses = pausesIn(clips[i], rate);
+    const bounds = [start];
+    const used = new Set();
+    for (const j of cuts) {
+      const before = weights.slice(0, j + 1).reduce((a, b) => a + b, 0);
+      const expected = start + (end - start) * before / total;
+      let best = -1, bestDist = 0.6;                                     // only pauses within 0.6 s of the estimate
+      pauses.forEach(([a, b], k) => { const mid = (a + b) / 2, d = Math.abs(mid - expected); if (!used.has(k) && d < bestDist && mid > bounds.at(-1) + 0.1) { best = k; bestDist = d; } });
+      if (best >= 0) { used.add(best); bounds.push([j, pauses[best][0], pauses[best][1]]); }
+    }
+    // Build phrases: [firstToken, lastToken, from, to]
+    const phrases = []; let from = 0, at = start;
+    for (const b of bounds.slice(1)) { phrases.push([from, b[0], at, b[1]]); from = b[0] + 1; at = b[2]; }
+    phrases.push([from, tokens.length - 1, at, end]);
+    for (const [a, b, s0, s1] of phrases) {
+      const w = weights.slice(a, b + 1), sum = w.reduce((x, y) => x + y, 0) || 1;
+      let cursor = t + s0;
+      for (let j = a; j <= b; j++) { const d = (s1 - s0) * weights[j] / sum; words.push({ text: tokens[j], start: cursor, end: cursor + d }); cursor += d; }
+    }
     t += dur + gapAfter(line);
   });
   return { words, spans };
@@ -208,7 +250,7 @@ export async function planReel(opts, ui) {
 // Finds a photo for every scene (skipped in offline mode: scenes then use animated backgrounds).
 async function attachPhotos(script, generic, opts, say) {
   const finder = new MediaFinder(opts.offline ? [] : generic), usedQueries = new Set();
-  if (opts.offline) finder.find = finder.findImage = async () => null;
+  if (opts.offline || opts.noPhotos) finder.find = finder.findImage = async () => null;   // drafts find photos when opened
   const media = [...script.lines, ...script.extras].filter((l) => l.kind === "media");
   for (const line of media) {
     // Search for what THIS line talks about; fall back to the topic's own visuals.
@@ -322,6 +364,10 @@ export async function produceReel(plan, opts, ui) {
   const stage = (lo, hi) => (text, f = 0) => ui.say(text, lo + (hi - lo) * Math.min(1, Math.max(0, f)));
 
   const say = stage(0, 0.25);
+  // Pacing: a beat after the hook and before the ending, like a human narrator.
+  if (script.lines[0] && !script.lines[0].hold) script.lines[0].hold = 0.22;
+  const outroAt = script.lines.findIndex((l) => l.kind === "outro");
+  if (outroAt > 1 && !script.lines[outroAt - 1].hold) script.lines[outroAt - 1].hold = 0.15;
   setVoice({ engine: opts.voiceEngine || "natural", voice: opts.voice });
   const msg = () => `Getting the voice ready (one-time download, about ${voiceDownloadMB()} MB; then it's on your phone)…`;
   say(msg());
@@ -371,8 +417,10 @@ export async function produceReel(plan, opts, ui) {
   }
 
   if (opts.sfx !== false) addSoundEffects(audio, scenes);
+  let logo = null;
+  if (opts.logo) { try { logo = await createImageBitmap(await (await fetch(opts.logo)).blob()); } catch { logo = null; } }
   const job = { title: script.title, brand: opts.brand, accent: opts.accent || "#FFD60A", scenes, words, audio,
-    captionStyle: opts.captionStyle || "bold", captionPos: opts.captionPos || "low", handle: opts.handle || "" };
+    captionStyle: opts.captionStyle || "bold", captionPos: opts.captionPos || "low", handle: opts.handle || "", logo };
   const result = await renderReel(job, ui.canvas, ui.audioCtx, (f) => ui.say("Rendering your reel on this device…", 0.6 + 0.4 * f), opts.forceEncoder);
   ui.say("Making the cover and captions…", 0.99);
   const accentRgb = (() => { const n = parseInt((opts.accent || "#FFD60A").slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; })();

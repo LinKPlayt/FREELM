@@ -193,6 +193,11 @@
         <div class="chips" id="speeds"></div>
         <label class="field">Music volume</label>
         <div class="chips" id="music-vol"></div>
+        <label class="field">Ending (call to action)</label>
+        <div class="chips" id="ctas"></div>
+        <label class="field">Your logo <span style="text-transform:none;font-weight:500">(optional, top-left corner)</span></label>
+        <div class="row" style="padding:4px 0"><div id="logo-preview"></div>
+          <div class="btns" style="margin:0;flex:none"><label class="btn" style="cursor:pointer">Choose image<input id="logo-file" type="file" accept="image/*" hidden></label><button class="btn hidden" id="logo-remove">Remove</button></div></div>
         <label class="field">Pronunciations <span style="text-transform:none;font-weight:500">(optional, one per line)</span></label>
         <textarea id="say-as" rows="2" placeholder="Roth = rawth&#10;ETF = E T F" autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
         <label class="field">Length</label>
@@ -216,6 +221,7 @@
           <label class="switch"><input id="offline" type="checkbox"><span></span></label></div>
       </div>
       <button class="primary" id="go">Make my reel</button>
+      <button class="btn" id="plan-week" style="width:100%;margin-top:8px">Plan my week (5 drafts)</button>
       <p class="meta" style="text-align:center;margin-top:10px" id="first-run">The first reel downloads the narrator's voice once (about 92 MB for the natural voices, 63 MB for Classic). Wi-Fi recommended.</p>
     </div>
   </section>

@@ -189,7 +189,7 @@ function wrap(c, text, maxWidth) {
   return lines;
 }
 
-function overlay(title, brand, accent, handle = "") {
+function overlay(title, brand, accent, handle = "", logo = null) {
   const ov = canvas(W, H), c = ov.getContext("2d");
   let g = c.createLinearGradient(0, 0, 0, 560); g.addColorStop(0, "rgba(0,0,0,0.69)"); g.addColorStop(1, "rgba(0,0,0,0)");
   c.fillStyle = g; c.fillRect(0, 0, W, 560);
@@ -201,6 +201,11 @@ function overlay(title, brand, accent, handle = "") {
     const tw = c.measureText(brand.toUpperCase()).width, px = W / 2, py = 150;
     c.fillStyle = rgba(accent); c.beginPath(); c.roundRect(px - tw / 2 - 28, py - 32, tw + 56, 64, 32); c.fill();
     c.fillStyle = "rgb(12,12,20)"; c.fillText(brand.toUpperCase(), px, py + 2);
+  }
+  if (logo) {                                       // your logo, top-left, fitted in a 120 px square
+    const s = Math.min(120 / logo.width, 120 / logo.height), w = logo.width * s, h = logo.height * s;
+    c.save(); c.globalAlpha = 0.92; c.shadowColor = "rgba(0,0,0,0.6)"; c.shadowBlur = 14;
+    c.drawImage(logo, 56 + (120 - w) / 2, 90 + (120 - h) / 2, w, h); c.restore();
   }
   if (handle) {
     c.font = "800 34px Montserrat"; c.textAlign = "center";
@@ -328,8 +333,8 @@ class Painter {
     this.job = job;
     this.accent = hexToRgb(job.accent || "#FFD60A");
     this.total = job.scenes[job.scenes.length - 1].end;
-    this.header = overlay(job.title, job.brand, this.accent, job.handle);
-    this.plain = overlay("", "", this.accent);
+    this.header = overlay(job.title, job.brand, this.accent, job.handle, job.logo);
+    this.plain = overlay("", "", this.accent, "", job.logo);
     this.captions = new Captions(job.words, this.accent, job.captionStyle);
     this.captionY = job.captionPos === "middle" ? 1000 : 1440;
     this.popY = job.captionPos === "middle" ? 1430 : 1150;

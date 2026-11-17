@@ -61,6 +61,17 @@ function cleanHandle(v) {
   return h ? "@" + h : "";
 }
 const CTA = "Follow for a new money tip every day.";
+// The ending: what you ask viewers to do. Comments, saves and shares are what the apps reward most.
+const CTA_LABELS = { follow: "Follow", comment: "Ask a question", save: "Save this", share: "Share this" };
+function ctaText(kind, handle) {
+  const follow = handle ? `Follow ${handle} for more.` : "Follow for more.";
+  return {
+    follow: handle ? `Follow ${handle} for a new money tip every day.` : CTA,
+    comment: `Would you try this? Tell me in the comments. ${follow}`,
+    save: `Save this so you have it when you need it. ${follow}`,
+    share: `Send this to someone who needs to hear it. ${follow}`,
+  }[kind] || CTA;
+}
 const state = { niche: "personal finance", mode: "auto", data: null, urls: new Map(), reels: new Map(), busy: false,
   accent: "#FFD60A", speed: "normal", plan: null };
 const params = new URLSearchParams(location.search);
@@ -239,7 +250,7 @@ function options() {
     niche: state.niche, mode: state.mode, topicId: state.mode === "evergreen" ? $("topic").value : "",
     customTopic: $("custom").value, brand: $("brand").value.trim() || "Money Minute", repo: repo(),
     handle: cleanHandle($("handle").value),
-    cta: cleanHandle($("handle").value) ? `Follow ${cleanHandle($("handle").value)} for a new money tip every day.` : CTA,
+    cta: ctaText(state.cta, cleanHandle($("handle").value)), logo: store.get("logo") || "",
     music: state.mood, accent: state.accent, voiceSpeed: SPEEDS[state.speed] || 1, length: state.length,
     voiceEngine: voiceOpts(state.voice).engine, voice: voiceOpts(state.voice).voice, musicVolume: MUSIC_VOLUMES[state.musicVol] ?? 1,
     captionStyle: state.capStyle, captionPos: state.capPos, pops: $("pops").checked, offline: $("offline").checked,
@@ -352,6 +363,31 @@ async function produceSeries() {
     showError(e, made.length ? `The series stopped after part ${made.length}` : "The series couldn't be made");
   }
   wake?.release?.().catch(() => {}); closeAudio();
+  state.busy = false;
+}
+
+// Plan my week: five scripts on different topics in this niche, saved as drafts (no video yet).
+// Photos are found when a draft is opened, so this is quick and light.
+async function planWeek() {
+  if (state.busy) return;
+  state.busy = true;
+  screen("job"); $("job-title").textContent = "Planning your week…"; $("preview").classList.add("hidden");
+  const made = [], used = [];
+  try {
+    const base = options();
+    for (let i = 0; i < 5; i++) {
+      const opts = { ...base, mode: base.mode === "custom" ? "auto" : base.mode, noPhotos: true, exclude: used };
+      const plan = await planReel(opts, { say: (t, f) => say(`Script ${i + 1} of 5: ${t}`, (i + (f || 0)) / 5) });
+      used.push(plan.script.topicId);
+      if (made.some((d) => d.label === plan.script.title)) { releasePlan(plan); continue; }
+      const d = draftFromPlan(plan, plan.script.title); releasePlan(plan);
+      if (!saveDraft(d)) break;
+      made.push(d);
+    }
+    screen("form");
+    $("result").innerHTML = `<h2>Your week is planned</h2><p>${made.length} drafts saved in the Library, each fact-checked and ready to review. Open one when you're ready to make it.</p><ol class="steps">${made.map((d) => `<li>${esc(d.label)}</li>`).join("")}</ol>`;
+    $("result").classList.remove("hidden");
+  } catch (e) { screen("form"); showError(e, made.length ? `Planned ${made.length}, then stopped` : "Couldn't plan the week"); }
   state.busy = false;
 }
 
@@ -789,6 +825,22 @@ async function init() {
   showVoiceNote = voiceNote;
   prefChips("voices", VOICE_LABELS, "voice", "af_heart", () => { resetVoiceLevel(); voiceNote(); }); voiceNote();
   prefChips("music-vol", { low: "Low", medium: "Medium", high: "High" }, "musicVol", "medium");
+  prefChips("ctas", CTA_LABELS, "cta", "follow");
+  // Logo: resized on the phone to at most 240 px and kept on the phone.
+  const showLogo = () => { const l = store.get("logo"); $("logo-preview").innerHTML = l ? `<img src="${l}" alt="" style="max-height:48px;max-width:96px;border-radius:8px">` : ""; $("logo-remove").classList.toggle("hidden", !l); };
+  $("logo-file").addEventListener("change", async (e) => {
+    const f = e.target.files?.[0]; if (!f) return;
+    try {
+      const bmp = await createImageBitmap(f), s = Math.min(1, 240 / Math.max(bmp.width, bmp.height));
+      const c = Object.assign(document.createElement("canvas"), { width: Math.round(bmp.width * s), height: Math.round(bmp.height * s) });
+      c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+      store.set("logo", c.toDataURL("image/png")); showLogo(); toast("Logo added. It appears in the top-left corner of your reels.");
+    } catch (err) { toast("Couldn't read that image: " + (err.message || err)); }
+    e.target.value = "";
+  });
+  $("logo-remove").addEventListener("click", () => { localStorage.removeItem("logo"); showLogo(); });
+  showLogo();
+  $("plan-week").addEventListener("click", planWeek);
   $("say-as").value = store.get("sayAs") || "";
   setPronunciations($("say-as").value);
   $("say-as").addEventListener("input", () => { store.set("sayAs", $("say-as").value); setPronunciations($("say-as").value); });

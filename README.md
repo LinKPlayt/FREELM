@@ -124,6 +124,19 @@ Each scene's picture is chosen from the line being spoken, not from a fixed list
   natural voice can't start on a phone, the app falls back to it and tells you.
 - **Pronunciations.** If the narrator says a word wrong, add it under Style (`Roth = rawth`).
 
+### Plan my week
+
+**Plan my week (5 drafts)** under the Make button writes five scripts on different topics in your
+niche, each researched and fact-checked, and saves them as drafts in the Library. It takes a few
+seconds because photos are found when you open a draft. Open one, review it, and make the video.
+
+### Captions that follow the voice
+
+The highlighted caption word is timed from the recorded voice itself: each line is split into
+phrases at its punctuation, and each phrase is matched to a real pause in the narration, so the
+captions stay with the voice (the same timings go into the .srt file). There's also a short beat
+after the hook and before the ending, like a human narrator.
+
 ### Series
 
 **Make a 3-part series** on the review screen makes this video and two more on related topics
@@ -173,6 +186,8 @@ The Style card shows a **live preview** that updates as you change settings.
 | Voice speed | Slow, normal or fast |
 | Music volume | Low, medium or high (the music always dips under the voice) |
 | Pronunciations | Teach the narrator a word, one per line: `Roth = rawth`, `ETF = E T F` |
+| Ending | **Follow**, **Ask a question** ("Would you try this? Tell me in the comments"), **Save this** or **Share this**. Comments, saves and shares are what the apps reward most |
+| Your logo | Upload an image once; it appears in the top-left corner of every reel (kept on the phone) |
 | Length | **Short** 20–30 s, **Standard** 30–45 s, **Long** 40–60 s, **Deep dive** 60–90 s, **Full story** 2–3 min |
 | Number pops | Key figures in a line ("20%", "$1,000", "3–6 months", including ones written as words) pop up big on screen |
 | Your @handle | Shown at the bottom of every scene and on the end card, and spoken in the call to action ("Follow @yourchannel…") |
