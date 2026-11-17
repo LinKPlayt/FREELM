@@ -77,6 +77,30 @@ export default async function ({ t, newPage }) {
     // the app version and the service worker's cache version must match (or updates won't be noticed)
     const V2 = await import("./app/version.js"), swText = await (await fetch("./sw.js")).text();
     out.versions = [V2.APP_VERSION, Number((swText.match(/reelbot-v(\d+)/) || [])[1]), V2.UPDATES[0].version, V2.UPDATES.every((u) => u.title && u.items.length)];
+    // the storyteller
+    const ST = await import("./app/story.js");
+    const src = [
+      "In economics, inflation is an increase in the average price of goods and services in terms of money.",
+      "This increase is measured using a price index, typically a consumer price index.",
+      "Inflation is a general rise in the price level of an economy over time.",
+      "The term inflation comes from the Latin word for blowing up.",
+      "Lenders and savers lose purchasing power when inflation rises faster than interest rates.",
+      "In 2022, inflation in the United States reached 9.1 percent, the highest in 40 years.",
+      "However, it later fell.",
+      "Some of these episodes are considered hyperinflation periods.",
+    ];
+    out.story = ST.composeStory("Inflation", "economy", src.map((text) => ({ text, source: "Wikipedia · Inflation" })));
+    const sc = { topicTitle: "Index fund", title: "Index Funds", lines: [{ text: "Hook?", kind: "media" }, { text: "Index funds are cheap.", kind: "media" },
+      { text: "An index fund is a fund that tracks a market index.", kind: "media", source: "Wikipedia · Index fund" }, { text: "Index funds are cheap and simple.", kind: "media" },
+      { text: "An index fund is a type of mutual fund.", kind: "media", source: "Wikipedia · Index fund" }, { text: "Follow.", kind: "outro" }], extras: [] };
+    out.polish = [ST.polish(sc), sc.lines.map((l) => l.text)];
+    const longS = "Drop shipping is a form of retail business in which the seller accepts customer orders without keeping stock on hand, which then ships the goods directly to the customer from a supplier somewhere far away.";
+    out.simple = [longS, ST.simplify(longS)];
+    out.heads = ["Analysis: The Fed's chairman sees an AI revolution coming | CNBC", "US Stock Futures Decline Ahead of Nvidia Earnings as Investors Await Signals: Dow Jones, S&P, Nasdaq", "Here's what happened in crypto today"].map((h) => [ST.cleanHeadline(h), ST.junkHeadline(ST.cleanHeadline(h))]);
+    out.thread = ST.headlineThread(["Fed signals rate hike", "Gold slips as inflation worries grow", "Fed official backs small hikes"]);
+    out.mood = [ST.marketMood([{ day_pct: -2 }, { day_pct: -1.1 }]).opening, ST.marketMood([{ day_pct: 0.01 }, { day_pct: -0.02 }]).opening, ST.marketMood([{ day_pct: 0.8 }, { day_pct: -0.4 }]).opening];
+    const ins = { topicTitle: "Budget", lines: [{ text: "Hook", kind: "media" }, { text: "A budget is a plan.", kind: "media" }, { text: "Track it.", kind: "media", tip: true }, { text: "Follow.", kind: "outro" }] };
+    out.insert = [ST.insertIndex(ins, { text: "A budget is a plan for spending money." }), ST.insertIndex(ins, { text: "Most people overspend by 20%." })];
     // platform captions
     out.caps = S.platformCaptions({ title: "Test #Shorts", description: "Desc", script: "Line one.\nLine two.\nFollow.", niche: "investing", handle: "@me" });
     out.capsOld = S.platformCaptions({ script: "Only line.\nFollow." });
@@ -123,6 +147,21 @@ export default async function ({ t, newPage }) {
   t.ok(r.ins.count === 2 && /Ask a question: 12\.0k/.test(insText) && /Heart/.test(insText) && /Niche/.test(insText), "results summary picks what gets the most views", JSON.stringify(r.ins).slice(0, 300));
   t.ok(r.resC && !r.resC.stats.views && !("likes" in r.resC.stats), "bad numbers in results are ignored (text, negatives)", JSON.stringify(r.resC));
   t.ok(r.versions[0] === r.versions[1] && r.versions[0] === r.versions[2] && r.versions[3], "app version, service worker version and the newest update note agree", JSON.stringify(r.versions));
+  t.section("Logic: the storyteller");
+  const st = r.story.lines;
+  t.ok(st[0]?.role === "definition" && st.at(-1)?.role === "takeaway", "a story opens with what it is and ends with a takeaway", st.map((l) => l.role).join(" → "));
+  t.ok(st.filter((l) => l.role === "definition").length === 1, "only one definition", st.map((l) => l.text).join(" | "));
+  t.ok(!st.some((l) => /Latin word|However|these episodes/.test(l.text)), "trivia and sentences that lean on missing context are left out", st.map((l) => l.text).join(" | "));
+  t.ok(st[1]?.text.startsWith("This increase") && /9\.1 percent/.test(st.map((l) => l.text).join(" ")), "the next sentence follows its definition, and the figure is used", st.map((l) => l.text).join(" | "));
+  t.ok(st.some((l) => /^Why it matters: lenders/.test(l.text)), "why-it-matters lines get a spoken lead-in", st.map((l) => l.text).join(" | "));
+  const pl = r.polish[1];
+  t.ok(pl.length === 4 && pl[1] === "An index fund is a fund that tracks a market index." && !pl.includes("Index funds are cheap and simple.") && !pl.includes("An index fund is a type of mutual fund."), "polish: definition moved up, repeat and second definition removed", JSON.stringify(r.polish));
+  const added = r.simple[1].toLowerCase().match(/[a-z]+/g).filter((w) => !r.simple[0].toLowerCase().includes(w));
+  t.ok(r.simple[1].split(" ").length < r.simple[0].split(" ").length && !added.length, "shortening only removes words (facts stay checkable)", r.simple[1]);
+  t.ok(r.heads[0][0] === "The Fed's chairman sees an AI revolution coming." && !/Dow Jones, S&P/.test(r.heads[1][0]) && r.heads[2][1] === true, "headlines lose labels, outlet names and ticker lists; non-news is spotted", JSON.stringify(r.heads));
+  t.ok(r.thread.theme === "interest rates" && r.thread.order.join() === "0,2,1" && /^The thread today/.test(r.thread.text), "related headlines are grouped and their common thread explained", JSON.stringify(r.thread));
+  t.ok(/fell across the board/.test(r.mood[0]) && /barely moved/.test(r.mood[1]) && /mixed/.test(r.mood[2]), "market recaps say how the day went", JSON.stringify(r.mood));
+  t.ok(r.insert.join() === "1,2", "a spare definition goes after the hook; other spares go before the takeaway", JSON.stringify(r.insert));
   t.ok(r.caps.youtube && r.caps.tiktok && r.caps.instagram && !/undefined/.test(JSON.stringify(r.caps)), "platform captions are complete", "");
   t.ok(!/undefined/.test(JSON.stringify(r.capsOld)) && r.capsOld.youtube.length > 5, "captions work for old reels with missing fields", JSON.stringify(r.capsOld).slice(0, 120));
   await page.context().close();

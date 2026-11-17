@@ -9,6 +9,7 @@ export default async function ({ t, newPage }) {
     const S = await import("./app/script.js"), V = await import("./app/visuals.js"), F = await import("./app/ai/factcheck.js");
     const R = await import("./app/research.js"), RA = await import("./app/ai/research.js"), X = await import("./app/extras.js");
     const K = await import("./app/kokoro-text.js"), MK = await import("./app/make.js");
+    const ST = await import("./app/story.js");
     let seed = SEED;
     const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
     const pick = (a) => a[Math.floor(rnd() * a.length)];
@@ -58,6 +59,11 @@ export default async function ({ t, newPage }) {
       await run("kokoroPhonemes", (s) => K.kokoroPhonemes(s, i % 2 ? "a" : "b", echo), x);
       await run("shortenHeadline", S.shortenHeadline, x || "x");
       await run("visualMatch", S.visualMatch, x);
+      await run("simplify", ST.simplify, x);
+      await run("fits", (s) => ST.fits(s, "Inflation"), x);
+      await run("roleOf", (s) => ST.roleOf(s, x.slice(0, 12) || "Topic"), x);
+      await run("cleanHeadline", ST.cleanHeadline, x);
+      await run("composeStory", (s) => ST.composeStory(s.slice(0, 15) || "Topic", "investing", s.split(/(?<=[.!?])\s+/).concat([s])).lines, x);
     }
     // structured inputs
     for (let i = 0; i < Math.ceil(N * 0.375); i++) {
@@ -69,6 +75,7 @@ export default async function ({ t, newPage }) {
       await run("coach", (l) => X.coach(l, { estimate: rnd() * 200, range: [30, 45], visuals: l.map(() => ({ type: pick(["photo", "stat", "illus"]) })) }), lines);
       const hookIn = { title: randText() || "T", topicTitle: rnd() < 0.5 ? randText() : "", lines };
       await run("hookOptions", (x) => X.hookOptions(x), hookIn);
+      await run("polish", (x) => { const sc = { title: x.title, topicTitle: x.topicTitle, lines: x.lines.map((l) => ({ ...l })), extras: [] }; ST.polish(sc); return sc.lines.map((l) => l.text); }, hookIn);
       await run("platformCaptions", S.platformCaptions, { title: rnd() < 0.2 ? undefined : randText(), description: rnd() < 0.3 ? undefined : randText(), script: lines.map((l) => l.text).join("\n"), niche: pick(["investing", "crypto", "nope", undefined]), handle: rnd() < 0.5 ? "@" + randText().slice(0, 10) : "", credits: rnd() < 0.5 ? [randText()] : undefined, sources: [] });
       // caption timings from random audio clips (silence, noise, NaN-free)
       const rate = 24000, clips = lines.map(() => { const len = Math.floor(rnd() * rate * 3); const c = new Float32Array(len); const kind = rnd(); for (let k = 0; k < len; k++) c[k] = kind < 0.2 ? 0 : (Math.sin(k / 9) * (Math.floor(k / 4000) % 2 ? 0.5 : 0.001)); return c; });

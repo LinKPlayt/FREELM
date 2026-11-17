@@ -1,9 +1,18 @@
 // The app's version and its update notes, shown once in a "What's new" window after each update.
 // When you deploy: bump APP_VERSION, add an entry at the top of UPDATES, and set the same number in
 // sw.js (VERSION = "reelbot-v<APP_VERSION>"). A test checks the two match.
-export const APP_VERSION = 30;
+export const APP_VERSION = 31;
 
 export const UPDATES = [
+  { version: 31, title: "Scripts that tell a story", items: [
+    "Every script now follows a clear path: what it is, how it works, a key number, why it matters, then what you can do.",
+    "One clear definition per video, in plain English, with no jargon, trivia or half-finished sentences.",
+    "Videos about people cover who they are and what they're known for, in date order, and never mix in facts about someone else.",
+    "Lines no longer start with “It” or “This” when the sentence they pointed to isn't there.",
+    "Country-specific details (for example, Australia's student loans) are left out unless your topic is about that country.",
+    "News reels link the headlines with one thread (“The thread today: interest rates”), and market recaps open and close to match the day's mood.",
+    "Short lead-ins like “Why it matters:” and “The takeaway:” make each point easy to follow.",
+  ] },
   { version: 30, title: "Smoother making, lighter Library", items: [
     "A step-by-step checklist while your video is made, with a time estimate that learns from your phone.",
     "The Make button now tells you how long the video will take.",

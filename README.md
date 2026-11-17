@@ -80,6 +80,24 @@ Each scene's picture is chosen from the line being spoken, not from a fixed list
 - **Your call on every scene.** The review screen shows each scene's visual and lets you switch it
   between **Auto**, **Photo**, **Chart** (when the line has a number) and **Picture**.
 
+### Scripts that tell a story
+
+Every script, whatever the type, goes through the same storyteller before you see it:
+
+- **A clear order.** What it is → how it works → a key number → why it matters (or the catch) →
+  what you can do. Short lead-ins ("Why it matters:", "By the numbers:", "The takeaway:") link the points.
+- **One plain definition.** The topic is defined once, near the start, by the sentence where it is
+  the subject ("A credit score is…", not "A business credit score is…").
+- **Only lines that make sense alone.** Sentences that start with "It", "This" or "these" are used only
+  right after the sentence they point to. Jargon, trivia, lists, cut-off fragments, "however" contrasts
+  and country-specific details (unless the topic is about that country) are left out, and repeats are cut.
+- **People.** Who they are, what they're known for, then key events in date order. Facts about anyone
+  else are never swapped in by the fact check.
+- **News and markets.** Up to three distinct headlines, ordered so related ones sit together, with one
+  line naming the thread that links them. Market recaps open and close to match the day ("flat" for
+  tiny moves).
+- **Always a takeaway.** If the research has no practical advice, a safe general tip for the topic closes the video.
+
 ### Deep dives and better results
 
 - **Deep dive (60–90 s).** Pick *Deep dive* under Length for explainers, your own topics and

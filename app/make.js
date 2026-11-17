@@ -7,6 +7,7 @@ import { generateMusic, mix, resample, SR } from "./music.js";
 import { loadFonts, renderReel } from "./render.js";
 import { analyzeLine, iconFor } from "./visuals.js";
 import { deepen, addSoundEffects, makeSrt, makeCover } from "./extras.js";
+import { polish, insertIndex } from "./story.js";
 import { StatBg, IllusBg } from "./graphics.js";
 
 const GAP = 0.28, TAIL = 0.8;
@@ -84,8 +85,7 @@ async function voiceScript(script, say, base = 1.0) {
   let clips = await speak(script.lines);
   while (seconds(clips, script.lines) < MIN_S && script.extras.length) {          // too short: add researched extras
     const extra = script.extras.shift();
-    let at = script.lines.length - 1;                                  // before the recap / ending
-    while (at > 1 && ["recap", "outro"].includes(script.lines[at - 1].kind)) at--;
+    const at = insertIndex(script, extra);                             // where it makes sense in the story
     script.lines.splice(at, 0, extra);
     clips.splice(at, 0, await synthesize(extra.phonemes, speed));
   }
@@ -93,9 +93,15 @@ async function voiceScript(script, say, base = 1.0) {
     speed = Math.min(base * 1.18, base * (Math.ceil((seconds(clips, script.lines) / MAX_S) * 50) / 50 + 0.02));
     clips = await speak(script.lines);
   }
-  while (seconds(clips, script.lines) > MAX_S && script.lines.length > 4) {       // still too long: drop the longest middle line
-    let drop = 1;
-    for (let i = 1; i < script.lines.length - 1; i++) if (script.lines[i].kind === "media" && (script.lines[drop].kind !== "media" || clips[i].length > clips[drop].length)) drop = i;
+  while (seconds(clips, script.lines) > MAX_S && script.lines.length > 4) {       // still too long: drop a middle line
+    // The story's skeleton stays: never the hook, the line right after it (what the topic is), or the
+    // closing thought. Among the rest, the longest goes.
+    const content = script.lines.map((l, i) => (l.kind === "media" ? i : -1)).filter((i) => i >= 0);
+    const lastContent = content.at(-1);
+    let pool = content.filter((i) => i > 1 && i !== lastContent && !script.lines[i].tip);
+    if (!pool.length) pool = content.filter((i) => i > 0 && i !== lastContent);
+    if (!pool.length) break;
+    const drop = pool.reduce((a, b) => (clips[b].length > clips[a].length ? b : a));
     script.lines.splice(drop, 1); clips.splice(drop, 1);
   }
   if (seconds(clips, script.lines) < MIN_S && speed > base * 0.92) { speed = base * 0.92; clips = await speak(script.lines); }
@@ -269,6 +275,7 @@ export async function planReel(opts, ui) {
     : await writeScript(opts, data, (t) => say(t, 0.1));
   if (isDeep(opts.length)) { say("Researching more detail for the deep dive…", 0.15); await deepen(script, { ...opts, depth: opts.depth || 2 }); }
   const fact = await checkFacts(script, opts, say);
+  polish(script);                    // the storyteller's last pass: no repeats, one definition, in order
   return { ...(await attachPhotos(script, generic, opts, say)), fact };
 }
 
@@ -330,6 +337,7 @@ export async function planFromIdea(idea, opts, ui) {
   const say = (text, f = 0) => ui.say(text, Math.min(1, Math.max(0, f)));
   if (isDeep(opts.length)) { say("Researching more detail for the deep dive…", 0.1); await deepen(script, { ...opts, depth: opts.depth || 2 }); }
   const fact = await checkFacts(script, opts, say);
+  polish(script);                    // the storyteller's last pass: no repeats, one definition, in order
   return { ...(await attachPhotos(script, generic, opts, say)), fact };
 }
 
@@ -342,7 +350,7 @@ async function checkFacts(script, opts, say) {
     const { factCheck, enforceAccuracy, summarize } = await import("./ai/factcheck.js");
     const depth = opts.depth || 2;
     const r = await factCheck(script.lines, { topic: (script.topicTitle || script.title).replace(/\s*#Shorts$/, ""), niche: script.niche, depth,
-      online: !opts.offline && depth >= 3, onStep: (t) => say(t, 0.18), extras: script.extras.filter((l) => l.kind === "media") });
+      online: !opts.offline && depth >= 3, onStep: (t) => say(t, 0.18), extras: script.extras.filter((l) => l.kind === "media"), sourceText: script.sourceText || [] });
     let fixed = null;
     if (opts.strict) fixed = enforceAccuracy(script, r.ctx);
     return { ctx: r.ctx, summary: summarize(script.lines), fixed };
@@ -368,8 +376,15 @@ async function customScript(opts, generic, say) {
       // The defining first sentence always leads, trimmed to its core when it's too long to say.
       const first = brief.main.sentences[0] || "", n = first.split(/\s+/).length;
       const definition = n <= 34 ? first : research.trimDefinition(first);
+      // The topic's own article in reading order (opening, then its sections), so each sentence can follow
+      // the one before it; then facts from related articles, each credited to its real source, as backup.
+      const mainSrc = "Wikipedia · " + brief.main.title;
+      const items = [{ text: definition, source: mainSrc }, ...brief.main.sentences.slice(1).map((text) => ({ text, source: mainSrc })),
+        ...(brief.sections || []).flatMap((sec) => sec.sentences.map((text) => ({ text, source: `${mainSrc} — ${sec.heading}` }))),
+        ...brief.facts.filter((f) => f.source !== brief.main.title).map((f) => ({ text: f.text, source: "Wikipedia · " + f.source + (f.section ? " — " + f.section : ""), other: true }))]
+        .filter((x, i, a) => x.text && a.findIndex((y) => y.text === x.text) === i);
       const sentences = [...new Set([definition, ...brief.summary, ...own, ...brief.facts.map((f) => f.text)].filter(Boolean))];
-      if (sentences.length >= 3) found = { title: brief.main.title, sentences, url: "https://en.wikipedia.org/wiki/" + encodeURIComponent(brief.main.title.replaceAll(" ", "_")) };
+      if (sentences.length >= 3) found = { title: brief.main.title, sentences, items, url: "https://en.wikipedia.org/wiki/" + encodeURIComponent(brief.main.title.replaceAll(" ", "_")) };
     }
   } catch (e) { console.warn("local research failed", e); }
   if (!found && opts.offline) throw new Error(`"${topic}" isn't in the on-phone library. Try a broader topic, or turn off Offline mode.`);
@@ -517,14 +532,14 @@ export function releasePlan(plan) {
 // Photos are found again when a draft is opened (your own photos aren't kept, to save space).
 export function draftFromPlan(plan, label) {
   const strip = (l) => ({ text: l.text, visual: l.visual, query: l.query, kind: l.kind, chart: l.chart || null, vmode: l.vmode, concrete: l.concrete,
-    source: l.source, hold: l.hold, items: l.items, num: l.num, label: l.label, section: l.section, tip: l.tip,
+    source: l.source, hold: l.hold, items: l.items, num: l.num, label: l.label, section: l.section, tip: l.tip, claim: l.claim,
     check: l.check ? { status: l.check.status, kind: l.check.kind, sources: l.check.sources, live: l.check.live,
       evidence: (l.check.evidence || []).slice(0, 2).map((e) => ({ text: e.text, source: e.source, section: e.section })) } : undefined,
     mine: l.asset && !l.asset.credit ? true : undefined });
   const { script } = plan;
   return {
     id: "draft-" + Date.now(), saved: Date.now(), label: label || script.title, edited: plan.edited, generic: plan.generic,
-    script: { ...script, lines: script.lines.map(strip), extras: script.extras.map(strip) },
+    script: { ...script, lines: script.lines.map(strip), extras: script.extras.map(strip), sourceText: undefined, research: undefined },   // drafts stay small
   };
 }
 export async function planFromDraft(draft, ui) {

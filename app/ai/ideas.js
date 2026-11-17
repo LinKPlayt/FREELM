@@ -6,6 +6,7 @@
 // title patterns are used.
 import { deepResearch, seedTopics, terms, wikiUrl } from "./research.js";
 import { complete, llmReady } from "./llm.js";
+import { fits, simplify, sameIdea, adviceFor, isAdvice } from "../story.js";
 
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 // Wikipedia titles capitalise their first letter ("Index fund"). Mid-sentence, common nouns read
@@ -177,10 +178,24 @@ export function scriptFromIdea(idea, opts) {
   const line = (text, visual = "", kind = "media") => ({ text, visual, kind, chart: null });
   const g = opts.generic;
   const visual = (text, i) => opts.visualFor(text, g) || (i % 2 ? idea.topic : g[i % g.length]);
-  const pts = idea.points.map((p) => p.replace(/\s+/g, " ").trim());
-  const src = (i) => idea.pointSources?.[i] ? "Wikipedia · " + idea.pointSources[i] : null;
+  // Points that fit a general audience, shortened for speech, without repeats.
+  const kept = [];
+  idea.points.forEach((p, i) => {
+    const raw = p.replace(/\s+/g, " ").trim();
+    if (!fits(raw, idea.topic)) return;
+    const text = simplify(raw);
+    if (kept.some((k) => sameIdea(k.text, text))) return;
+    kept.push({ text, i });
+  });
+  if (kept.length < 2) idea.points.forEach((p, i) => { if (!kept.some((k) => k.i === i)) kept.push({ text: p.replace(/\s+/g, " ").trim(), i }); });
+  kept.sort((a, b) => a.i - b.i);
+  const pts = kept.map((k) => k.text);
+  const tip = adviceFor(idea.topic, opts.niche)[0];
+  const src = (i) => idea.pointSources?.[kept[i].i] ? "Wikipedia · " + idea.pointSources[kept[i].i] : null;
   const lines = [line(idea.hook, opts.visualFor(idea.topic + " " + idea.hook, g) || idea.topic),
-    ...pts.map((p, i) => ({ ...line(p, visual(p, i + 1)), source: src(i) })), line(opts.cta, "", "outro")];
+    ...pts.map((p, i) => ({ ...line(p, visual(p, i + 1)), source: src(i) })),
+    ...(tip && !pts.some(isAdvice) ? [{ ...line(`The takeaway: ${tip}`, visual(tip, 9)), tip: true }] : []),
+    line(opts.cta, "", "outro")];
   const extras = (idea.brief?.facts || []).map((f) => f.text).filter((t) => !pts.includes(t)).slice(0, 3).map((t, i) => line(t, visual(t, i + 5)));
   return {
     kind: "idea", topicTitle: idea.topic, topicId: "idea-" + idea.topic.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40), title: idea.title,

@@ -653,6 +653,7 @@ $("scenes").addEventListener("input", (e) => {
   const line = state.plan.script.lines[+i];
   line.text = e.target.value.replace(/\s+/g, " ").trim();
   line.analysis = null;                                  // re-read numbers and concepts from the new text
+  line.claim = null;                                     // your wording is now what gets fact-checked
   state.plan.edited = true; updateEstimate();
   // Re-check an edited fact against the evidence already gathered (instant, on the phone).
   if (line.check) line.check = { ...line.check, stale: true };

@@ -1,3 +1,4 @@
+import { composeStory, cleanHeadline, headlineThread, marketMood, isDefinition, junkHeadline } from "./story.js";
 // Script writer: turns research into a short spoken script (hook -> points -> call to action).
 // A JavaScript port of reelbot/script.py so reels can be written on the phone.
 
@@ -81,15 +82,8 @@ export function visualFor(text, generic) {
   return visualMatch(text) || pick(generic);
 }
 
-export function shortenHeadline(title, maxWords = 18) {
-  title = title.replace(/\s*[|:]\s*(CNBC|MarketWatch|Reuters|Bloomberg|Yahoo Finance).*$/i, "");
-  title = title.replace(/\s*[:(]\s*\(?(?:NYSE|NASDAQ)?:?\s*[A-Z]{2,5}(?:,\s*[A-Z]{2,5})*\)?\s*$/, "");
-  title = title.replace(/[‘’]/g, "'").replace(/[“”]/g, '"');
-  const words = title.split(/\s+/);
-  if (words.length > maxWords) title = words.slice(0, maxWords).join(" ").replace(/[,;:-]+$/, "") + "...";
-  title = title.replace(/[ .]+$/, "");
-  return title + (/(\?|!|\.\.\.)$/.test(title) ? "" : ".");
-}
+// (Kept for callers: a headline as a sayable sentence. See story.js.)
+export const shortenHeadline = (title, maxWords = 18) => cleanHeadline(title, maxWords);
 
 const pct = (v) => `${Math.abs(v).toFixed(1)}%`;
 const fmt = (v, d) => v.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -113,31 +107,33 @@ export function buildEvergreen(topic, opts, definition) {
   lines.push(line(opts.cta, "", "outro"));
   const extras = (topic.extras || []).map((e, i) => line(e, vis[(i + 2) % vis.length]));
   const sources = [];
-  if (definition) {
+  // The Wikipedia definition is a spare line, and only when the script doesn't already say what the topic is.
+  const name = topic.wiki || topic.title;
+  const explained = topic.points.some((p) => isDefinition(p, name) || /\b(means|is when|is a|is an|are|stands for)\b/i.test(p.split(/\s+/).slice(0, 9).join(" ")));
+  // ...and only a short, plain one: encyclopedia definitions are often a mouthful.
+  if (definition && !explained && definition.split(/\s+/).length <= 22) {
     extras.push({ ...line(definition, vis[vis.length - 1]), source: "Wikipedia · " + topic.wiki });
     sources.push("https://en.wikipedia.org/wiki/" + topic.wiki.replaceAll(" ", "_"));
   }
   return { kind: "evergreen", topicId: topic.id, title: topic.title, topicTitle: topic.wiki || topic.title, niche: opts.niche, lines, extras, tags: [...(topic.tags || [])], sources };
 }
 
-function whyItMatters(text) {
-  const rules = [
-    [/rate cut|cuts rates|lower rates/, "Why it matters: lower rates can make borrowing cheaper, but savings yields often fall too."],
-    [/rate hike|raises rates|higher rates|hawkish/, "Why it matters: higher rates make loans and credit cards pricier, but savers can earn more."],
-    [/inflation|prices/, "Why it matters: when prices rise faster than your pay, your savings lose buying power."],
-    [/mortgage|housing|home prices/, "Why it matters: small changes in mortgage rates can swing a monthly payment by hundreds."],
-    [/layoff|jobs|unemploy|hiring/, "Why it matters: a shaky job market is the best reason to keep an emergency fund."],
-    [/tariff|trade war/, "Why it matters: tariffs can push up prices on everyday goods."],
-    [/bitcoin|crypto/, "Why it matters: crypto can swing hard both ways, so size your positions carefully."],
-    [/earnings|stock|shares|market/, "Why it matters: headlines move markets daily, but long term investors win by staying the course."],
-  ];
-  for (const [re, s] of rules) if (re.test(text)) return s;
-  return "Why it matters: stay informed, but don't make big money moves on one headline.";
-}
-
 export function buildNews(headlines, markets, opts) {
-  const picks = headlines.slice(0, 3);
-  if (picks.length < 2) return null;
+  // Up to three headlines that aren't the same story, told so related ones sit together, then what
+  // they have in common and why it matters to the viewer.
+  const distinct = [];
+  for (const h of headlines) {
+    const t = cleanHeadline(h.title);
+    if (t.split(/\s+/).length < 4 || junkHeadline(t)) continue;
+    const key = (x) => new Set(x.toLowerCase().match(/[a-z]{4,}/g) || []);
+    const a = key(t);
+    if (distinct.some((d) => { const b = key(d.said); let n = 0; for (const w of a) if (b.has(w)) n++; return n / Math.max(1, Math.min(a.size, b.size)) > 0.6; })) continue;
+    distinct.push({ ...h, said: t });
+    if (distinct.length >= 4) break;
+  }
+  if (distinct.length < 2) return null;
+  const thread = headlineThread(distinct.slice(0, 3).map((p) => `${p.said} ${p.summary || ""}`), opts.niche === "crypto" ? "crypto" : opts.niche === "real estate" ? "housing" : "");
+  const picks = thread.order.map((i) => distinct[i]);
   const g = opts.generic;
   const label = { crypto: "crypto", investing: "market", economy: "economy", "real estate": "housing", "side hustles": "money" }[opts.niche] || "money";
   const n = picks.length;
@@ -147,8 +143,8 @@ export function buildNews(headlines, markets, opts) {
     `Your ${label} news, fast. Here's what happened today.`,
   ]);
   const lines = [line(hook, visualFor(picks.map((p) => p.title).join(" "), g))];
-  picks.forEach((item, i) => lines.push({ ...line(`${ORDINALS[i]}: ${shortenHeadline(item.title)}`, visualFor(item.title, g)), source: item.source || null }));
-  const why = whyItMatters(picks.map((p) => `${p.title} ${p.summary || ""}`).join(" ").toLowerCase());
+  picks.forEach((item, i) => lines.push({ ...line(`${ORDINALS[i]}: ${item.said}`, visualFor(item.title, g)), source: item.source || null }));
+  const why = thread.text;
   lines.push(line(why, visualFor(why, g)));
   lines.push(line(opts.cta, "", "outro"));
 
@@ -160,7 +156,7 @@ export function buildNews(headlines, markets, opts) {
   const sent = (picks[0].summary || "").split(/(?<=[.!?])\s+/)[0] || "";
   const wc = sent.split(/\s+/).filter(Boolean).length;
   if (wc >= 6 && wc <= 24) extras.push(line(sent, visualFor(sent, g)));
-  if (headlines.length > 3) extras.push(line(`And one more: ${shortenHeadline(headlines[3].title)}`, visualFor(headlines[3].title, g)));
+  if (distinct.length > 3) extras.push(line(`And one more: ${distinct[3].said}`, visualFor(distinct[3].title, g)));
 
   const date = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" });
   const cap = label.replace(/\b\w/g, (c) => c.toUpperCase());
@@ -175,28 +171,33 @@ export function buildMarket(markets, headlines, opts) {
   if (markets.length < 2) return null;
   const g = opts.generic;
   const day = new Date().toLocaleDateString("en-US", { weekday: "long" });
+  // The opening says how the day went overall, and the closing thought answers it.
+  const mood = marketMood(markets.slice(0, 3));
   const lines = [line(pick([
-    `Here's your ${day} market check in under a minute.`,
-    `What did the markets do? Here's your quick ${day} recap.`,
-  ]), "new york stock exchange")];
+    `Here's your ${day} market check. ${mood.opening}`,
+    `What did the markets do this ${day}? ${mood.opening}`,
+  ]).trim(), "new york stock exchange")];
   for (const s of markets.slice(0, 3)) {
-    const d = s.day_pct >= 0 ? "up" : "down", m = s.month_pct >= 0 ? "up" : "down";
+    const m = s.month_pct >= 0 ? "up" : "down";
+    // A move that rounds to 0.0% is "flat", not "up 0.0%".
+    const day = Math.abs(s.day_pct) < 0.05 ? "flat on the day" : `${s.day_pct >= 0 ? "up" : "down"} ${pct(s.day_pct)} on the day`;
     const text = s.is_yield
-      ? `${subject(s)} sits at ${price(s)}, ${d} ${Math.abs(s.day_pct).toFixed(1)}% on the day.`
-      : `${subject(s)} is at ${price(s)}, ${d} ${pct(s.day_pct)} on the day and ${m} ${pct(s.month_pct)} this month.`;
+      ? `${subject(s)} sits at ${price(s)}, ${day}.`
+      : `${subject(s)} is at ${price(s)}, ${day} and ${m} ${pct(s.month_pct)} this month.`;
     lines.push(line(text, "", "chart", s));
   }
   const extras = [];
+  headlines = headlines.filter((h) => !junkHeadline(cleanHeadline(h.title)));
   if (headlines.length) {
     lines.push(line(`In the news: ${shortenHeadline(headlines[0].title)}`, visualFor(headlines[0].title, g)));
     if (headlines.length > 1) extras.push(line(`Also: ${shortenHeadline(headlines[1].title)}`, visualFor(headlines[1].title, g)));
   }
-  lines.push(line("Remember: daily moves are noise. Long term habits build wealth.", "coins stack growth"));
+  lines.push(line(mood.closing, "coins stack growth"));
   lines.push(line(opts.cta, "", "outro"));
   const lead = markets[0];
   return {
     kind: "market", topicId: `market-${slug(opts.niche)}-${today()}`,
-    title: `Market Check: ${lead.name} ${lead.day_pct >= 0 ? "Up" : "Down"} ${pct(lead.day_pct)}`,
+    title: `Market Check: ${lead.name} ${Math.abs(lead.day_pct) < 0.05 ? "Flat" : `${lead.day_pct >= 0 ? "Up" : "Down"} ${pct(lead.day_pct)}`}`,
     niche: opts.niche, lines, extras, tags: ["stock market", "market recap", lead.name],
     sources: headlines.slice(0, 2).map((h) => h.link).filter(Boolean),
   };
@@ -206,8 +207,13 @@ export function buildMarket(markets, headlines, opts) {
 export function buildCustom(found, opts) {
   const title = found.title.replace(/\s+\(.*\)$/, "");
   // A common noun appears in lower case in the article's own first sentence ("A mortgage loan is…").
-  const common = title !== title.toLowerCase() && (found.sentences[0] || "").includes(" " + title.toLowerCase());
-  const person = /\b(?:is|was) an? [\w\s,-]*?\b(?:investor|businessman|businesswoman|entrepreneur|economist|politician|philanthropist|executive|banker|financier|author|writer|businessperson|billionaire|trader|founder)\b/i.test(found.sentences[0] || "");
+  const common = title !== title.toLowerCase() && ((found.sentences[0] || "").includes(" " + title.toLowerCase()) || /^[A-Z][a-z]+(?:[ -][a-z]+)+$/.test(title));
+  // A person: a role word in the opening sentence, or a name followed by "He/She…" sentences.
+  const s0 = found.sentences[0] || "";
+  const person = /\b(?:is|was) an? [\w\s,'-]*?\b(?:investor|businessman|businesswoman|businessperson|entrepreneur|economist|politician|philanthropist|executive|banker|financier|author|writer|billionaire|trader|founder|industrialist|magnate|futurist|inventor|engineer|official|official|manager|mogul|tycoon|ceo)\b/i.test(s0)
+    || (/^[A-Z][a-z]+(?: [A-Z][a-z.']+){1,3} (?:is|was) an? /.test(s0) && found.sentences.slice(1, 5).some((x) => /^(He|She) /.test(x)));
+  // Institutions and events take "the" in a sentence ("What is the Federal Reserve?").
+  const the = /^(Federal Reserve|European Central Bank|Bank of |International Monetary Fund|World Bank|Great Depression|Great Recession|Dot-com bubble|Gold standard|Internal Revenue Service|Securities and Exchange Commission|Dow Jones|Nasdaq|S&P 500|New York Stock Exchange|Wall Street crash|Bretton Woods|Consumer price index|Federal funds rate|Rule of 72|FIRE movement|Gig economy|Stock market|Housing bubble|Subprime)/i.test(title) ? "the " : "";
   const hook = pick(person ? [
     `Who is ${title}? Here's the quick version.`,
     `${title}, explained in thirty seconds.`,
@@ -219,8 +225,8 @@ export function buildCustom(found, opts) {
     `Here's what ${title.toLowerCase()} really means, in plain English.`,
   ] : [
     `${title}, explained in thirty seconds.`,
-    `What is ${title}? Here's the quick version.`,
-    `Everyone talks about ${title}. Here's what it actually means.`,
+    `What is ${the}${title}? Here's the quick version.`,
+    `Everyone talks about ${the}${title}. Here's what it actually ${/s$/.test(title) && !the ? "means" : "does"}.`.replace("actually does", the ? "actually does" : "actually means"),
   ]);
   const g = opts.generic;
   const match = (text) => { const low = text.toLowerCase(); for (const [re, v] of HEADLINE_VISUALS) if (re.test(low)) return v; return null; };
@@ -228,14 +234,18 @@ export function buildCustom(found, opts) {
   // subjects. Names of people, companies and places are searched as-is: that finds the right photo.
   const titleVisual = match(title) || title;
   const visual = (text, i) => match(text) || (i % 2 ? titleVisual : g[i % g.length]);
-  const [first, ...rest] = found.sentences;
-  const points = [first, ...rest.slice(0, 3)];
+  // The storyteller picks and orders the sentences: what it is, how it works, a number, why it
+  // matters, and a practical takeaway.
   const src = "Wikipedia · " + found.title;
-  const lines = [line(hook, titleVisual), ...points.map((p, i) => ({ ...line(p, visual(p, i + 1)), source: src }))];
+  const story = composeStory(title, opts.niche, found.items || found.sentences.map((text) => ({ text, source: src })), { max: person ? 4 : 5, takeaway: !person, person });
+  const asLine = (p, i) => ({ ...line(p.text, visual(p.claim || p.text, i + 1)), source: p.source || undefined, claim: p.claim || undefined, tip: p.tip || undefined });
+  const lines = [line(hook, titleVisual), ...story.lines.map(asLine)];
   lines.push(line(opts.cta, "", "outro"));
-  const extras = rest.slice(3, 6).map((p, i) => ({ ...line(p, visual(p, i + 5)), source: src }));
+  const extras = story.leftovers.slice(0, 3).map((p, i) => asLine(p, i + 5));
   return {
     kind: "custom", topicTitle: title, topicId: "custom-" + slug(title).slice(0, 40), title, niche: opts.niche, lines, extras,
+    // The text it was written from, so the fact check can confirm each line against its real source.
+    sourceText: (found.items || found.sentences.map((text) => ({ text, source: found.title }))).map((x) => ({ text: x.text, source: (x.source || found.title).replace(/^Wikipedia · /, "").split(" — ")[0], section: (x.source || "").split(" — ")[1] || null })),
     tags: [title, opts.niche, "explained"], sources: [found.url],
   };
 }

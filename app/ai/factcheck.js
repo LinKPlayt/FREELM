@@ -6,6 +6,7 @@
 import { library, deepResearch, search, terms, articleBody, offTopic } from "./research.js";
 import { wordsToDigits } from "../script.js";
 import { fetchT, dropParentheticals } from "../research.js";
+import { sameIdea, isDefinition, fits, simplify } from "../story.js";
 import { loadSemantic, semanticReady, embedTexts, cosine } from "./semantic.js";
 
 const SKIP = new Set(["outro", "section", "recap"]);
@@ -14,6 +15,7 @@ const WARNING = /\b(is lying|is a scam|is a red flag|red flags?|be careful|watch
 const YOU = /\byou(r)? (should|can|could|need|might|may|'ll|will|want)\b/i;
 const MULT = { thousand: 1e3, million: 1e6, billion: 1e9, trillion: 1e12 };
 // Takeaways and opinions ("time in the market matters more than almost anything") aren't checkable facts.
+const RULE_OF_THUMB = /^(a common rule|a good rule|a simple rule|rule of thumb|as a rule of thumb|the rule of thumb|a rough guide|many experts suggest|most experts suggest)\b/i;
 const OPINION = /^(that|this|which|so|here's why|the lesson|the takeaway|bottom line)\b.*\b(means|matters|is why|shows)\b|\b(matters more|the most important|the best way|the key is|is everything|is worth it)\b/i;
 
 // Money maths in a line, checked by calculation: "at 10 percent a year, money doubles every 7 years",
@@ -71,7 +73,7 @@ export function claimKind(line, i) {
   if (i === 0 && !/[%$]|\bpercent\b|\b(1[5-9]|20)\d\d\b/.test(wordsToDigits(line.text))) return "hook";
   if (line.tip || ((ADVICE.test(line.text) || YOU.test(line.text)) && !nums)) return "tip";
   if (WARNING.test(line.text) && !nums) return "tip";
-  if (OPINION.test(line.text) && !nums) return "takeaway";
+  if ((OPINION.test(line.text) && !nums) || RULE_OF_THUMB.test(line.text)) return "takeaway";
   return "fact";
 }
 
@@ -138,7 +140,7 @@ async function liveEvidence(text) {
 // Checks a whole script. Returns { lines: [check per line], summary }. Each check is stored on its line (line.check).
 // ctx: { topic, niche, depth (1-4), online (bool), onStep }. The evidence gathered is kept on the result
 // so single edited lines can be re-checked instantly with recheckLine().
-export async function factCheck(lines, { topic, niche = null, depth = 2, online = false, onStep, extras = [] } = {}) {
+export async function factCheck(lines, { topic, niche = null, depth = 2, online = false, onStep, extras = [], sourceText = [] } = {}) {
   const lib = await library();
   onStep?.("Fact-checking every line against the research library…");
   const evidence = [];
@@ -151,6 +153,8 @@ export async function factCheck(lines, { topic, niche = null, depth = 2, online 
     for (const s of doc.sentences) add(s, doc.title);
     if (withBody) for (const sec of await articleBody(lib, doc)) for (const s of sec.sentences) add(s, doc.title, sec.heading);
   };
+  // 0. The text the script was written from (e.g. the topic's live Wikipedia article).
+  for (const e of sourceText) add(e.text, e.source, e.section || null);
   // 1. Everything the topic research read.
   const brief = topic ? await deepResearch(topic, { niche, depth }).catch(() => null) : null;
   if (brief) {
@@ -169,7 +173,12 @@ export async function factCheck(lines, { topic, niche = null, depth = 2, online 
   // which is a lot on a phone; Standard checks words, numbers and maths without it.
   if (depth >= 3) await Promise.race([loadSemantic(lib), new Promise((r) => setTimeout(r, 25000))]).catch(() => {});
   // Ranked facts about the topic, straight from the sources: replacements for lines strict accuracy removes.
-  const facts = (brief?.facts || []).filter((f) => {
+  // Only facts about this topic: from its own article, or naming it at the start. (When the library has
+  // no article on the topic, its closest match is a different subject: "Elon Musk" found "Keith Rabois".)
+  const base = (t) => t.toLowerCase().replace(/\s+\(.*\)$/, "").replace(/[^a-z0-9]/g, "").replace(/(es|s)$/, "");
+  const sameTopic = brief && base(brief.main.title) === base(topic);
+  const named = (t) => { const k = t.toLowerCase().indexOf(topic.toLowerCase().replace(/\s+\(.*\)$/, "")); return k >= 0 && k <= 4; };
+  const facts = (brief?.facts || []).filter((f) => (sameTopic && f.source === brief.main.title) || named(f.text)).filter((f) => {
     const n = f.text.split(/\s+/).length;
     return n >= 7 && n <= 30 && !/^(It|This|These|They|He|She|Its|And|Or|But|Also|Such)\b/.test(f.text) && /[.!?]$/.test(f.text);
   }).map((f) => ({ text: f.text, source: f.source, section: f.section }));
@@ -219,7 +228,9 @@ async function semanticCheck(line, ctx) {
 }
 
 // Checks (or re-checks after an edit) one line with the evidence already gathered.
-export async function checkLine(line, i, ctx, kind = claimKind(line, i)) {
+export async function checkLine(shown, i, ctx, kind = claimKind(shown, i)) {
+  // A line with a spoken lead-in ("Why it matters: …") is checked on the fact itself.
+  const line = shown.claim ? { ...shown, text: shown.claim } : shown;
   let r;
   if (kind !== "fact") r = { status: kind, sources: [], evidence: [] };
   else {
@@ -235,7 +246,7 @@ export async function checkLine(line, i, ctx, kind = claimKind(line, i)) {
     }
   }
   r.kind = kind;
-  line.check = r;
+  shown.check = r;
   return r;
 }
 
@@ -253,25 +264,35 @@ export function summarize(lines) {
 // their place with verified facts from the spares when there are any. Returns how many were replaced/removed.
 export function enforceAccuracy(script, ctx) {
   let removed = 0, replaced = 0;
-  const inScript = new Set(script.lines.map((l) => norm(l.text)));
+  const topic = (script.topicTitle || script.title || "").replace(/\s*#Shorts$/, "");
+  const said = () => script.lines.filter((l) => l.kind === "media").map((l) => l.claim || l.text);
   // Spares first (they were written for this script), then facts taken word for word from the research.
+  // (A hand-written explainer is a finished story: random research facts aren't swapped into it.)
   const spares = [...(script.extras || []).filter((l) => l.kind === "media"),
-    ...(ctx.facts || []).filter((f) => !inScript.has(norm(f.text))).map((f) => ({ text: f.text, visual: "", kind: "media", chart: null,
+    ...(script.kind === "evergreen" ? [] : ctx.facts || []).filter((f) => fits(f.text, topic)).map((f) => ({ text: simplify(f.text), visual: "", kind: "media", chart: null,
       source: "Wikipedia · " + f.source + (f.section ? " — " + f.section : ""), fromResearch: true }))];
   const out = [];
+  const hasDefinition = () => out.concat(script.lines).some((l, i) => l.kind === "media" && i > 0 && (isDefinition(l.claim || l.text, topic) || /\b(means|is when)\b/i.test(l.text)));
   for (const [i, l] of script.lines.entries()) {
     const c = l.check;
-    if (!c || c.kind !== "fact" || c.status === "verified" || i === 0) { out.push(l); continue; }
-    if (c.status === "partial") { out.push(l); continue; }               // shown as "partly verified" in review
+    if (!c || c.kind !== "fact" || c.status === "verified" || c.status === "partial" || i === 0) { out.push(l); continue; }
+    // A replacement must be verified, say something new, and fit where the old line was (never a second definition).
     let swap = null;
-    while (spares.length && !swap) {
-      const cand = spares.shift();
-      if (inScript.has(norm(cand.text))) continue;
+    for (let k = 0; k < spares.length && !swap; k++) {
+      const cand = spares[k];
+      if (said().concat(out.map((o) => o.claim || o.text)).some((x) => sameIdea(x, cand.text, 0.55))) continue;
+      if (topic && isDefinition(cand.text, topic) && hasDefinition()) continue;
+      if (/^(It|This|These|They|He|She|Its|Such|However|Instead|Also)\b/.test(cand.text)) continue;
       const r = checkAgainst(cand, ctx.evidence);
-      if (r.status === "verified") { cand.check = { ...r, kind: "fact" }; swap = cand; }
+      if (r.status === "verified") { cand.check = { ...r, kind: "fact" }; swap = cand; spares.splice(k, 1); }
     }
-    if (swap) { out.push(swap); replaced++; inScript.add(norm(swap.text)); script.extras = script.extras.filter((x) => x !== swap); }
-    else removed++;
+    if (swap) { out.push(swap); replaced++; script.extras = script.extras.filter((x) => x !== swap); continue; }
+    // No good replacement. A line with a figure nobody can confirm goes; a plain-words explanation
+    // stays (marked "Not verified" on the review screen), because removing it would break the story.
+    // Hand-written lines are the story's backbone: they stay (flagged on the review screen) unless a
+    // source contradicts them. Researched lines with a figure nobody can confirm go.
+    const figures = numbersIn(l.claim || l.text).filter((n) => n > 1).length;
+    if (c.status === "conflict" || (figures && l.source)) removed++; else out.push(l);
   }
   // Spare lines (used to fill a short video) must be verified too, or be tips/takeaways.
   script.extras = (script.extras || []).filter((l) => l.kind !== "media" || !l.check || l.check.kind !== "fact" || l.check.status === "verified");
