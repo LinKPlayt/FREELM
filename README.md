@@ -325,6 +325,21 @@ To try the phone app locally: `python -m http.server 8000`, then open `http://lo
 
 ---
 
+## Updates
+
+After each update the app shows a **What's new** window once, listing the changes since the last
+version you saw; **Got it** closes it for good (About → What's new reopens it). New users skip it.
+
+To publish an update: bump `APP_VERSION` and add a note at the top of `UPDATES` in
+[app/version.js](app/version.js), and set the same number in `sw.js` (`reelbot-v<APP_VERSION>`).
+A test checks they match.
+
+Also in About: **Storage on this phone** shows how much the app keeps on the phone and lets you delete
+the downloaded voices, the Ideas AI or the full-text research library to free space (they download
+again when needed). While a video is made, a checklist shows each step with a time estimate that
+learns from your phone, and the Make button says how long it will take. The Library shows each reel's
+cover and only loads a video when you press play, which saves memory.
+
 ## Tests
 
 Automated tests run the phone app in a real browser (phone-sized Chromium), served the way GitHub

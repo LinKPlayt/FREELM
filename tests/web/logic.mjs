@@ -74,6 +74,9 @@ export default async function ({ t, newPage }) {
     out.ins = Rz.insights({ voice: { af_heart: "Heart", classic: "Classic" }, cta: { comment: "Ask a question", follow: "Follow" } });
     out.resC = Rz.getResult("c");
     localStorage.removeItem("results");
+    // the app version and the service worker's cache version must match (or updates won't be noticed)
+    const V2 = await import("./app/version.js"), swText = await (await fetch("./sw.js")).text();
+    out.versions = [V2.APP_VERSION, Number((swText.match(/reelbot-v(\d+)/) || [])[1]), V2.UPDATES[0].version, V2.UPDATES.every((u) => u.title && u.items.length)];
     // platform captions
     out.caps = S.platformCaptions({ title: "Test #Shorts", description: "Desc", script: "Line one.\nLine two.\nFollow.", niche: "investing", handle: "@me" });
     out.capsOld = S.platformCaptions({ script: "Only line.\nFollow." });
@@ -119,6 +122,7 @@ export default async function ({ t, newPage }) {
   const insText = JSON.stringify(r.ins.rows);
   t.ok(r.ins.count === 2 && /Ask a question: 12\.0k/.test(insText) && /Heart/.test(insText) && /Niche/.test(insText), "results summary picks what gets the most views", JSON.stringify(r.ins).slice(0, 300));
   t.ok(r.resC && !r.resC.stats.views && !("likes" in r.resC.stats), "bad numbers in results are ignored (text, negatives)", JSON.stringify(r.resC));
+  t.ok(r.versions[0] === r.versions[1] && r.versions[0] === r.versions[2] && r.versions[3], "app version, service worker version and the newest update note agree", JSON.stringify(r.versions));
   t.ok(r.caps.youtube && r.caps.tiktok && r.caps.instagram && !/undefined/.test(JSON.stringify(r.caps)), "platform captions are complete", "");
   t.ok(!/undefined/.test(JSON.stringify(r.capsOld)) && r.capsOld.youtube.length > 5, "captions work for old reels with missing fields", JSON.stringify(r.capsOld).slice(0, 120));
   await page.context().close();

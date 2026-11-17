@@ -118,6 +118,11 @@
   .results-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
   .results-grid label { font-size: 12px; color: var(--muted); } .results-grid input { width: 100%; font-size: 16px; background: var(--surface-2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 8px; }
   .insight { padding: 6px 0; border-top: 1px solid var(--line); } .insight b { color: var(--accent); }
+  .job-steps { list-style: none; padding: 0; margin: 10px 0 4px; font-size: 14px; }
+  .job-steps li { padding: 3px 0; color: var(--muted); } .job-steps li.done { color: var(--good); } .job-steps li.now { color: var(--text); font-weight: 700; }
+  .job-steps li::before { content: "○ "; } .job-steps li.done::before { content: "✓ "; } .job-steps li.now::before { content: "● "; }
+  .news h3 { margin: 12px 0 4px; font-size: 16px; } .news ul { margin: 0; padding-left: 18px; } .news li { margin: 4px 0; }
+  .store-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
   .copy-sheet { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: flex-end; justify-content: center; z-index: 60; padding: 16px; }
   .copy-box { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 16px; width: 100%; max-width: 520px; margin-bottom: env(safe-area-inset-bottom); }
   .copy-box h3 { margin: 0 0 6px; } .copy-box textarea { width: 100%; font: inherit; font-size: 16px; line-height: 1.4; background: var(--surface-2); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 10px; -webkit-user-select: text; user-select: text; }
@@ -134,6 +139,8 @@
       <h2 id="job-title">Working…</h2>
       <div class="progress"><div id="bar"></div></div>
       <div class="meta" id="job-step"></div>
+      <ol class="job-steps hidden" id="job-steps"></ol>
+      <div class="meta" id="job-eta"></div>
       <canvas id="preview" width="1080" height="1920"></canvas>
       <p class="meta" style="text-align:center;margin-top:10px">Keep this screen open until it finishes.</p>
     </div>
@@ -269,6 +276,15 @@
 
   <!-- ABOUT -->
   <section id="tab-about" class="tab">
+    <div class="card">
+      <div class="row" style="padding:0"><div><b>What's new</b><small id="version-line"></small></div>
+        <button class="btn" id="whats-new" style="flex:none">Show</button></div>
+    </div>
+    <div class="card">
+      <h2>Storage on this phone</h2>
+      <p class="meta" id="storage-total">Checking…</p>
+      <div id="storage-items"></div>
+    </div>
     <div class="card">
       <h2>Save and post</h2>
       <ol class="steps">

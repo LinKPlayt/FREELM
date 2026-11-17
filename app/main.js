@@ -8,6 +8,7 @@ const factModule = () => import("./ai/factcheck.js");
 import { listReels, saveReel, deleteReel, clearReels, listDrafts, saveDraft, deleteDraft } from "./store.js";
 import { platformCaptions, setPronunciations, visualMatch } from "./script.js";
 import { FIELDS, getResult, saveResult, insights } from "./results.js";
+import { APP_VERSION, UPDATES } from "./version.js";
 import { USER_CACHE, USER_MUSIC } from "./make.js";
 import { encoderInfo, renderReel, loadFonts, previewFrame } from "./render.js";
 import { SR } from "./music.js";
@@ -143,6 +144,7 @@ function repo() {   // https://owner.github.io/repo/ -> owner/repo
 }
 
 function show(tab) {
+  if (tab === "about") renderStorage();
   document.querySelectorAll("section.tab").forEach((s) => s.classList.toggle("active", s.id === "tab-" + tab));
   document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
   if (tab === "library") renderLibrary();
@@ -176,11 +178,13 @@ $("swatches").addEventListener("click", (e) => {
 
 /* ---------- reels ---------- */
 function urlFor(reel) { if (!state.urls.has(reel.id)) state.urls.set(reel.id, URL.createObjectURL(reel.blob)); return state.urls.get(reel.id); }
+// The cover image as the video's poster: the Library shows covers and decodes a video only when played.
+function posterFor(reel) { const k = "poster-" + reel.id; if (!state.urls.has(k)) state.urls.set(k, URL.createObjectURL(reel.cover)); return state.urls.get(k); }
 function reelCard(r, inline = false) {
   state.reels.set(r.id, r);
   const mb = ((r.blob?.size || 0) / 1e6).toFixed(1);
   return `<div class="${inline ? "" : "card"}" data-reel="${esc(r.id)}">
-    <video src="${urlFor(r)}#t=0.5" controls playsinline preload="metadata"></video>
+    <video src="${urlFor(r)}#t=0.5" controls playsinline preload="${r.cover ? "none" : "metadata"}"${r.cover ? ` poster="${posterFor(r)}"` : ""}></video>
     <div class="reel-title">${esc((r.title || "Untitled reel").replace(" #Shorts", ""))}</div>
     <div class="meta">${Math.round(r.duration || 0)}s · ${esc(r.kind || "reel")} · ${mb} MB</div>
     <div class="btns">
@@ -198,10 +202,15 @@ function reelCard(r, inline = false) {
       ${inline ? "" : `<button class="btn danger wide" data-act="delete">Delete</button>`}
     </div></div>`;
 }
+function resultsSummary(res) {
+  if (!Number(res.views)) return "Add results (views, likes…)";
+  const eng = ((Number(res.likes) || 0) + (Number(res.comments) || 0) + (Number(res.saves) || 0)) / Number(res.views) * 100;
+  return `Results: ${Number(res.views).toLocaleString()} views${eng ? ` · ${eng.toFixed(1)}% engagement` : ""}`;
+}
 // How a reel did, typed in by you (from TikTok, Instagram or YouTube), for the "What works" summary.
 function resultsForm(r) {
   const res = getResult(r.id)?.stats || {};
-  return `<details class="results"${res.views ? "" : ""}><summary>${res.views ? `Results: ${Number(res.views).toLocaleString()} views` : "Add results (views, likes…)"}</summary>
+  return `<details class="results"><summary>${resultsSummary(res)}</summary>
     <div class="results-grid">${FIELDS.map(([k, label]) => `<div><label>${label}</label><input type="number" inputmode="numeric" min="0" data-result="${k}" value="${res[k] || ""}"></div>`).join("")}</div></details>`;
 }
 function renderInsights() {
@@ -235,7 +244,7 @@ $("reels").addEventListener("change", (e) => {
   const card = input.closest("[data-reel]"), r = state.reels.get(card?.dataset.reel); if (!r) return;
   const stats = Object.fromEntries([...card.querySelectorAll("[data-result]")].map((i) => [i.dataset.result, i.value]));
   if (saveResult(r, stats)) {
-    card.querySelector(".results summary").textContent = Number(stats.views) ? `Results: ${Number(stats.views).toLocaleString()} views` : "Add results (views, likes…)";
+    card.querySelector(".results summary").textContent = resultsSummary(stats);
     renderInsights();
   } else toast("Couldn't save the results (storage full?)");
 });
@@ -312,7 +321,35 @@ function screen(name) {   // form | job | review
   if (name !== "form") $("result").classList.add("hidden");
   window.scrollTo(0, 0);
 }
-const say = (text, f) => { $("job-step").textContent = text; if (f != null) $("bar").style.width = Math.round(f * 100) + "%"; };
+const say = (text, f) => { $("job-step").textContent = text; if (f != null) { $("bar").style.width = Math.round(f * 100) + "%"; jobProgress(f); } };
+
+// While a video is made: a checklist of the steps, and how long is left (from this phone's past reels).
+const JOB_STEPS = [[0, "Get the voice ready"], [0.25, "Record the voiceover"], [0.555, "Music and scenes"], [0.6, "Make the video"], [0.99, "Cover and captions"]];
+let job = null;
+function jobStart(expectedSeconds) {
+  job = { t0: performance.now(), expected: expectedSeconds };
+  $("job-steps").innerHTML = JOB_STEPS.map(([, name]) => `<li>${name}</li>`).join(""); $("job-steps").classList.remove("hidden");
+  $("job-eta").textContent = expectedSeconds ? `About ${fmtDuration(expectedSeconds)} on this phone.` : "";
+}
+function jobEnd() { job = null; $("job-steps").classList.add("hidden"); $("job-eta").textContent = ""; }
+function jobProgress(f) {
+  if (!job) return;
+  const now = JOB_STEPS.reduce((k, [at], i) => (f >= at ? i : k), 0);
+  [...$("job-steps").children].forEach((li, i) => { li.className = i < now ? "done" : i === now ? "now" : ""; });
+  const elapsed = (performance.now() - job.t0) / 1000;
+  if (f > 0.08 && elapsed > 4) {
+    const byProgress = elapsed / f - elapsed;
+    const left = job.expected ? Math.max(0, 0.5 * byProgress + 0.5 * (job.expected - elapsed)) : byProgress;
+    $("job-eta").textContent = left > 3 ? `About ${fmtDuration(left)} left.` : "Almost done…";
+  }
+}
+const fmtDuration = (s) => (s < 60 ? `${Math.max(5, Math.round(s / 5) * 5)} seconds` : `${Math.round(s / 30) / 2} min`.replace(".5 min", "½ min"));
+// Seconds of making per second of video, averaged over this phone's recent reels.
+function makeRate() { try { const r = JSON.parse(localStorage.getItem("makeRates") || "[]"); return r.length ? r.reduce((a, b) => a + b, 0) / r.length : 0; } catch { return 0; } }
+function learnMakeRate(makeSeconds, videoSeconds) {
+  if (!(videoSeconds > 5) || !(makeSeconds > 1)) return;
+  try { const r = JSON.parse(localStorage.getItem("makeRates") || "[]"); r.push(makeSeconds / videoSeconds); localStorage.setItem("makeRates", JSON.stringify(r.slice(-6))); } catch { /* private mode */ }
+}
 function showError(e, what) {
   console.warn(e);   // shown to the user below; not an app error
   $("result").innerHTML = `<h2>${esc(what)}</h2><p style="color:var(--bad)">${esc(e.message || e)}</p><p>Check your connection and try again. If it keeps failing, close other apps to free up memory.</p>`;
@@ -340,7 +377,9 @@ async function start() {
 async function produce() {
   unlockAudio();   // first thing, while we're still inside the tap
   state.busy = true;
-  screen("job"); $("job-title").textContent = "Making your reel…"; $("preview").classList.remove("hidden"); say("Starting…", 0);
+  screen("job"); $("job-title").textContent = "Making your reel…"; $("preview").classList.remove("hidden");
+  jobStart(makeRate() * (state.plan ? estimateSeconds(state.plan.script.lines, SPEEDS[state.speed] || 1) : 0));
+  say("Starting…", 0);
   let wake = null; try { wake = await navigator.wakeLock?.request("screen"); } catch { /* not supported */ }
   const t0 = performance.now();
   try {
@@ -357,6 +396,7 @@ async function produce() {
     $("result").innerHTML = `<h2>Your reel is ready</h2><p>Made in ${Math.round((performance.now() - t0) / 1000)}s on this device (${esc(reel.how)}).${kept ? "" : " It couldn't be kept in the Library, so save it now."}</p>${soundNote}` + reelCard(reel, true);
     $("result").classList.remove("hidden");
     store.set("made", "1"); $("first-run").classList.add("hidden");
+    learnMakeRate((performance.now() - t0) / 1000, reel.duration);
     store.set("voiceReady-" + voiceOpts(state.voice).engine, "1");
     window.__lastReel = reel;
   } catch (e) {
@@ -364,7 +404,7 @@ async function produce() {
     if (state.plan) showReview();
     showError(e, "The video couldn't be made");
   }
-  wake?.release?.().catch(() => {}); closeAudio();
+  wake?.release?.().catch(() => {}); closeAudio(); jobEnd();
   state.busy = false;
 }
 // A 3-part series: this script is part 1; parts 2 and 3 cover related topics from the same research.
@@ -595,6 +635,8 @@ function showReview() {
     else if (v.type === "stat" || v.type === "illus") drawGenerated(cv, v);
   });
   updateEstimate();
+  const rate = makeRate(), secs = estimateSeconds(script.lines, SPEEDS[state.speed] || 1);
+  $("produce").textContent = rate ? `Make the video (about ${fmtDuration(rate * secs)})` : "Make the video";
   screen("review");
   warmVoice();
 }
@@ -818,6 +860,58 @@ async function aiCheck() {
   btn.disabled = false; btn.textContent = "Run AI & voice check";
 }
 
+/* ---------- What's new (once after each update) ---------- */
+function showWhatsNew(sinceVersion) {
+  const items = UPDATES.filter((u) => u.version > sinceVersion).slice(0, 3);
+  if (!items.length) return;
+  document.getElementById("news-sheet")?.remove();
+  const sheet = document.createElement("div");
+  sheet.id = "news-sheet"; sheet.className = "copy-sheet"; sheet.setAttribute("role", "dialog"); sheet.setAttribute("aria-label", "What's new");
+  sheet.innerHTML = `<div class="copy-box news"><h2 style="margin:0">What's new</h2><p class="meta" style="margin:2px 0 0">Version ${APP_VERSION}</p>
+    ${items.map((u) => `<h3>${esc(u.title)}</h3><ul>${u.items.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`).join("")}
+    <div class="btns"><button class="btn main wide" data-news="close">Got it</button></div></div>`;
+  const close = () => { store.set("seenVersion", String(APP_VERSION)); sheet.remove(); };
+  sheet.addEventListener("click", (e) => { if (e.target === sheet || e.target.closest('[data-news="close"]')) close(); });
+  document.body.appendChild(sheet);
+}
+function checkWhatsNew() {
+  const seen = Number(store.get("seenVersion") || 0);
+  // Someone who has used the app before sees what changed; a brand-new user just starts.
+  const returning = ["made", "voice", "aiOn", "drafts", "mood"].some((k) => store.get(k) != null);
+  if (!seen && !returning) return store.set("seenVersion", String(APP_VERSION));
+  if (seen < APP_VERSION) showWhatsNew(seen || APP_VERSION - 3);
+}
+
+/* ---------- Storage on this phone ---------- */
+const STORAGE_ITEMS = [
+  ["Natural voice", /\/kokoro-82m\//, "The voice downloads again (92 MB) the next time you use a natural voice."],
+  ["Classic voice", /\/assets\/voices\//, "The classic voice downloads again (63 MB) when it's next needed."],
+  ["Ideas AI", /\/SmolLM2-135M-Instruct\//, "Download it again from the Ideas tab when you want it."],
+  ["Full-text research library", /\/ai\/data\/depth\//, "Deep research downloads article text again as needed."],
+];
+async function renderStorage() {
+  const fmt = (b) => (b > 1e9 ? (b / 1e9).toFixed(1) + " GB" : Math.round(b / 1e6) + " MB");
+  try {
+    const est = await navigator.storage?.estimate?.();
+    $("storage-total").textContent = est ? `The app uses ${fmt(est.usage || 0)} on this phone${est.quota ? ` (of ${fmt(est.quota)} allowed)` : ""}. Videos stay in the Library until you delete them.` : "";
+    const keys = [];
+    for (const name of await caches.keys()) for (const req of await (await caches.open(name)).keys()) keys.push([name, req]);
+    $("storage-items").innerHTML = STORAGE_ITEMS.map(([label, re, note], i) => {
+      const n = keys.filter(([, r]) => re.test(new URL(r.url).pathname)).length;
+      return `<div class="store-row"><div>${label}<small class="meta" style="display:block">${n ? "Saved on this phone" : "Not downloaded"}</small></div>${n ? `<button class="btn" data-free="${i}" style="flex:none">Delete</button>` : ""}</div>`;
+    }).join("");
+    $("storage-items").onclick = async (e) => {
+      const b = e.target.closest("[data-free]"); if (!b) return;
+      const [label, re, note] = STORAGE_ITEMS[+b.dataset.free];
+      if (!confirm(`Delete the ${label.toLowerCase()} from this phone? ${note}`)) return;
+      for (const [name, req] of keys) if (re.test(new URL(req.url).pathname)) await (await caches.open(name)).delete(req);
+      if (label === "Ideas AI") { store.set("aiOn", "0"); await import("./ai/llm.js").then((m) => m.unloadLLM()).catch(() => {}); }
+      if (label.endsWith("voice")) store.set(`voiceReady-${label === "Natural voice" ? "natural" : "fast"}`, "0");
+      toast(`${label} deleted.`); renderStorage();
+    };
+  } catch (e) { $("storage-total").textContent = "Couldn't read storage on this browser."; }
+}
+
 /* ---------- Idea Lab (loaded the first time the tab opens) ---------- */
 async function openIdeas() {
   if (state.ideasUI || state.ideasLoading) return;
@@ -941,6 +1035,9 @@ async function init() {
   renderTopics();
   $("go").addEventListener("click", start);
   $("sound-test").addEventListener("click", soundTest);
+  $("version-line").textContent = `Version ${APP_VERSION} · ${UPDATES[0].title}`;
+  $("whats-new").addEventListener("click", () => showWhatsNew(APP_VERSION - 3));
+  checkWhatsNew();
   $("ai-check").addEventListener("click", aiCheck);
   $("wipe").addEventListener("click", async () => { if (confirm("Delete every reel stored on this phone?")) { await clearReels(); renderLibrary(); toast("Deleted"); } });
   const info = await encoderInfo();

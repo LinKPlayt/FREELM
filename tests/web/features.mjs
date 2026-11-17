@@ -64,6 +64,8 @@ export default async function ({ t, newPage }) {
   try {
     await page.evaluate(() => { window.__lastReel = null; window.__lastError = null; });
     await page.click("#produce");
+    await until(page, () => document.querySelectorAll("#job-steps li.done").length >= 1, null, 300000).catch(() => {});
+    t.ok(await page.locator("#job-steps li").count() === 5 && await page.locator("#job-steps li.done").count() >= 1, "a step checklist shows while the video is made");
     await until(page, () => window.__lastReel || window.__lastError);
     const reel = await page.evaluate(() => { const x = window.__lastReel; return { err: window.__lastError, sound: x?.sound, dur: x?.duration, srt: (x?.srt || "").split("-->").length - 1, cover: x?.cover?.size, script: x?.script }; });
     t.ok(!reel.err && reel.sound === true && reel.dur > 25, `reel made with sound (${Math.round(reel.dur || 0)} s)`, reel.err);
@@ -222,6 +224,30 @@ export default async function ({ t, newPage }) {
     t.ok(await page.evaluate(() => localStorage.getItem("voiceLevel")) === "q8", "a mistaken switch to the classic voice is undone after the update");
   } catch (e) { t.ok(false, "section crashed: Features: no false low-memory alarms", String(e.message || e).split("\n")[0]); await page.goto(page.url()).catch(() => {}); }
 
+  t.section("Features: What's new, storage, make-time, Library covers");
+  try {
+    // a returning user who last saw version 26
+    await page.evaluate(() => localStorage.setItem("seenVersion", "26"));
+    await page.reload(); await until(page, () => window.__ready, null, 60000);
+    t.ok(await page.locator("#news-sheet").count() === 1 && /What's new/.test(await page.innerText("#news-sheet")), "What's new appears after an update");
+    const news = await page.innerText("#news-sheet");
+    t.ok(/Smoother making/.test(news) && /Fixed a false/.test(news) && !/Better endings/.test(news), "it lists only the updates since the last one seen", news.slice(0, 200));
+    await page.click('[data-news="close"]');
+    t.ok(await page.locator("#news-sheet").count() === 0, "Got it closes it");
+    await page.reload(); await until(page, () => window.__ready, null, 60000);
+    t.ok(await page.locator("#news-sheet").count() === 0, "it stays closed after a restart");
+    await page.click('nav [data-tab="about"]'); await until(page, () => /uses/.test(document.getElementById("storage-total").textContent), null, 20000);
+    t.ok(await page.locator("#storage-items .store-row").count() === 4 && /Natural voice[\s\S]*Classic voice[\s\S]*Ideas AI[\s\S]*Full-text/.test(await page.innerText("#storage-items")), "Storage card lists the voices, AI and research library", await page.innerText("#storage-items"));
+    await page.click("#whats-new"); t.ok(await page.locator("#news-sheet").count() === 1, "What's new can be reopened from About"); await page.click('[data-news="close"]');
+    await page.click('nav [data-tab="create"]').catch(() => {});
+    await page.click('#modes .chip >> text="Explainer"'); await page.click("#go"); await page.waitForSelector("#review:not(.hidden)", { timeout: 180000 });
+    t.ok(/about \d/.test(await page.textContent("#produce")), "the Make button says how long it will take", await page.textContent("#produce"));
+    await page.click("#cancel-review");
+    await page.click('nav [data-tab="library"]'); await page.waitForSelector("#reels [data-reel] video");
+    const vids = await page.$$eval("#reels video", (vs) => vs.map((v) => [v.getAttribute("preload"), !!v.getAttribute("poster")]));
+    t.ok(vids.length && vids.every(([pre, poster]) => pre === "none" && poster), "Library shows covers and loads videos only when played", JSON.stringify(vids));
+  } catch (e) { t.ok(false, "section crashed: Features: What's new, storage, make-time, Library covers", String(e.message || e).split("\n")[0]); await page.goto(page.url()).catch(() => {}); }
+
   t.section("Features: Library management");
   try {
     await page.click('nav [data-tab="library"]'); await page.waitForSelector("#reels [data-reel]");
@@ -238,6 +264,17 @@ export default async function ({ t, newPage }) {
     await off.context().setOffline(true);
     await off.reload(); await until(off, () => window.__ready, null, 60000);
     t.ok(await off.evaluate(() => !!document.getElementById("go")), "the app opens with no internet");
+    await off.context().setOffline(false);
+    await off.click('#voices .chip >> text="Heart"'); await off.click("#voice-preview");
+    await until(off, () => document.getElementById("voice-preview").textContent.includes("Hear it"), null, 300000);
+    await off.click('nav [data-tab="about"]'); await until(off, () => /uses/.test(document.getElementById("storage-total").textContent), null, 20000);
+    const row = () => off.locator("#storage-items .store-row").first().innerText();
+    t.ok(/Saved on this phone/.test(await row()), "Storage shows the natural voice is saved", await row());
+    await off.locator('#storage-items [data-free="0"]').click();
+    await until(off, () => /Not downloaded/.test(document.querySelector("#storage-items .store-row")?.textContent || ""), null, 20000).catch(() => {});
+    t.ok(/Not downloaded/.test(await row()), "Delete frees the natural voice download", await row());
+    await off.click('nav [data-tab="create"]').catch(() => {});
+    await off.context().setOffline(true);
     await off.click("#offline + span"); await off.click('#modes .chip >> text="Explainer"'); await off.click("#go");
     await off.waitForSelector("#review:not(.hidden), #result:not(.hidden)", { timeout: 120000 });
     t.ok(await off.isVisible("#review"), "Offline mode writes a script with no internet");

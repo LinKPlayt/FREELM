@@ -1,6 +1,6 @@
 // Service worker: keeps the app and its big files (voice models, WebAssembly, fonts, research library)
 // on the phone so they download once. Live data (news, photos) always uses the network.
-const VERSION = "reelbot-v29";
+const VERSION = "reelbot-v30";
 // Big binary files (model weights, WebAssembly, fonts) live in a cache that survives app updates, so
 // an update doesn't download the voice again. Only binaries: small settings and code files (config.json,
 // .js) can change in place, so they're refreshed with every app update (a stale AI config.json, kept
