@@ -157,6 +157,47 @@ export default async function ({ t, newPage }) {
     t.ok(await page.evaluate(() => localStorage.getItem("voiceLevel")) === "q8", "tapping a natural voice retries it");
   } catch (e) { t.ok(false, "section crashed: Features: crash guards", String(e.message || e).split("\n")[0]); await page.goto(page.url()).catch(() => {}); }
 
+  t.section("Features: your music, cover style, results, remix");
+  try {
+    // a 4-second stereo tone as "your music"
+    const rate = 44100, n = rate * 4, wav = Buffer.alloc(44 + n * 4);
+    wav.write("RIFF", 0); wav.writeUInt32LE(36 + n * 4, 4); wav.write("WAVEfmt ", 8); wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(2, 22);
+    wav.writeUInt32LE(rate, 24); wav.writeUInt32LE(rate * 4, 28); wav.writeUInt16LE(4, 32); wav.writeUInt16LE(16, 34); wav.write("data", 36); wav.writeUInt32LE(n * 4, 40);
+    for (let i = 0; i < n; i++) { const v = Math.round(Math.sin(2 * Math.PI * 330 * i / rate) * 12000); wav.writeInt16LE(v, 44 + i * 4); wav.writeInt16LE(v, 46 + i * 4); }
+    await page.click('nav [data-tab="create"]').catch(() => {});
+    await page.setInputFiles("#music-file", { name: "my-track.wav", mimeType: "audio/wav", buffer: wav });
+    await until(page, () => /my-track/.test(document.getElementById("music-note").textContent), null, 15000);
+    t.ok(await page.evaluate(() => document.querySelector("#moods .on")?.textContent) === "My music", "uploading a track selects My music");
+    await page.click('#covers .chip >> text="Big number"');
+    await page.click('#niches .chip >> text="Personal Finance"'); await page.click('#modes .chip >> text="Explainer"');
+    await page.evaluate(() => { window.__lastReel = null; window.__lastError = null; });
+    if (await page.isChecked("#review-on")) await page.click("#review-on + span");
+    await page.click("#go");
+    await until(page, () => window.__lastReel || window.__lastError);
+    await page.click("#review-on + span");
+    const r2 = await page.evaluate(() => ({ err: window.__lastError, sound: window.__lastReel?.sound, settings: window.__lastReel?.settings, cover: window.__lastReel?.cover?.size, id: window.__lastReel?.id }));
+    t.ok(!r2.err && r2.sound === true && r2.settings?.music === "mine", "a reel is made with your music", JSON.stringify(r2));
+    t.ok(r2.cover > 10000, "a cover is made in the chosen style");
+    await page.click('nav [data-tab="library"]'); await page.waitForSelector("#reels [data-reel]");
+    const card = page.locator(`#reels [data-reel="${r2.id}"]`);
+    await card.locator(".results summary").click();
+    await card.locator('[data-result="views"]').fill("15400"); await card.locator('[data-result="likes"]').fill("1200"); await card.locator('[data-result="views"]').dispatchEvent("change");
+    const other = page.locator("#reels [data-reel]").nth(1);
+    if (await other.count()) { await other.locator(".results summary").click(); await other.locator('[data-result="views"]').fill("4100"); await other.locator('[data-result="views"]').dispatchEvent("change"); }
+    t.ok(/What works for you/.test(await page.innerText("#insights")) && /average views/.test(await page.innerText("#insights")), "results show a What works summary", (await page.innerText("#insights")).slice(0, 200));
+    await page.click('nav [data-tab="create"]').catch(() => {}); await page.click('nav [data-tab="library"]');
+    t.ok(/15,400 views/.test(await page.innerText(`#reels [data-reel="${r2.id}"] .results summary`)), "results are kept");
+    const caps = await page.evaluate(async (id) => { const S = await import("./app/script.js"); const { listReels } = await import("./app/store.js"); const r = (await listReels()).find((x) => x.id === id); return S.platformCaptions(r).tiktok; }, r2.id);
+    t.ok(/#\w+/.test(caps), "captions include topic hashtags", caps.split("\n").find((l) => l.startsWith("#")));
+    await page.locator(`#reels [data-reel="${r2.id}"] [data-act="remix"]`).click();
+    await page.waitForSelector("#review:not(.hidden)", { timeout: 180000 });
+    const remixLines = await page.$$eval(".scene textarea", (els) => els.map((e) => e.value));
+    t.ok(remixLines.length >= 4 && remixLines.every((x) => x.trim()), "Remix opens the reel's script for editing", String(remixLines.length));
+    await page.click("#cancel-review");
+    await page.click('nav [data-tab="create"]').catch(() => {}); await page.click("#music-remove"); await page.click('#covers .chip >> text="Bold title"');
+    t.ok(await page.evaluate(async () => !(await (await caches.open("reelbot-user-v1")).match("/user/music"))), "Remove deletes your music");
+  } catch (e) { t.ok(false, "section crashed: Features: your music, cover style, results, remix", String(e.message || e).split("\n")[0]); await page.goto(page.url()).catch(() => {}); }
+
   t.section("Features: Library management");
   try {
     await page.click('nav [data-tab="library"]'); await page.waitForSelector("#reels [data-reel]");

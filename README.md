@@ -124,6 +124,19 @@ Each scene's picture is chosen from the line being spoken, not from a fixed list
   natural voice can't start on a phone, the app falls back to it and tells you.
 - **Pronunciations.** If the narrator says a word wrong, add it under Style (`Roth = rawth`).
 
+### Results and what works for you
+
+Under each reel in the Library, **Add results** lets you type in its views, likes, comments and saves
+from TikTok, Instagram or YouTube. With two or more reels logged, **What works for you** shows which
+niche, length, type of video, narrator, ending, music and caption style get you the most views, so you
+can make more of what wins. The numbers stay on the phone, even after old reels are deleted.
+
+### Remix
+
+**Remix** on any reel in the Library turns its script back into an editable draft: change lines, the
+hook, the narrator or the style, and make it again. Captions now also carry hashtags for the reel's
+own topic (for example #IndexFund), not just its niche.
+
 ### Plan my week
 
 **Plan my week (5 drafts)** under the Make button writes five scripts on different topics in your
@@ -187,6 +200,8 @@ The Style card shows a **live preview** that updates as you change settings.
 | Music volume | Low, medium or high (the music always dips under the voice) |
 | Pronunciations | Teach the narrator a word, one per line: `Roth = rawth`, `ETF = E T F` |
 | Ending | **Follow**, **Ask a question** ("Would you try this? Tell me in the comments"), **Save this** or **Share this**. Comments, saves and shares are what the apps reward most |
+| Cover image style | **Bold title**, **Big number** (the reel's key figure, huge) or **Question** (the hook as a question) |
+| My music | Upload a track you have the rights to use; it loops under the voice, dips when the narrator speaks, and stays on the phone |
 | Your logo | Upload an image once; it appears in the top-left corner of every reel (kept on the phone) |
 | Length | **Short** 20–30 s, **Standard** 30–45 s, **Long** 40–60 s, **Deep dive** 60–90 s, **Full story** 2–3 min |
 | Number pops | Key figures in a line ("20%", "$1,000", "3–6 months", including ones written as words) pop up big on screen |

@@ -6,7 +6,9 @@ import { hookOptions, coach } from "./extras.js";
 import { KOKORO_VOICES, setVoice, loadVoice, phonemize, synthesize, voiceRate, releaseVoice, voiceNotice, resetVoiceLevel, naturalFailed, lastVoiceError } from "./tts.js";
 const factModule = () => import("./ai/factcheck.js");
 import { listReels, saveReel, deleteReel, clearReels, listDrafts, saveDraft, deleteDraft } from "./store.js";
-import { platformCaptions, setPronunciations } from "./script.js";
+import { platformCaptions, setPronunciations, visualMatch } from "./script.js";
+import { FIELDS, getResult, saveResult, insights } from "./results.js";
+import { USER_CACHE, USER_MUSIC } from "./make.js";
 import { encoderInfo, renderReel, loadFonts, previewFrame } from "./render.js";
 import { SR } from "./music.js";
 
@@ -22,7 +24,8 @@ const VOICE_LABELS = { ...Object.fromEntries(Object.entries(KOKORO_VOICES).map((
 const voiceOpts = (id) => (id === "classic" ? { engine: "fast" } : { engine: "natural", voice: id });
 const CAPTION_STYLES = { bold: "Bold", boxed: "Boxed", clean: "Clean" };
 const CAPTION_POS = { low: "Low", middle: "Middle" };
-const MOODS = { lofi: "Lo-fi", upbeat: "Upbeat", cinematic: "Cinematic", calm: "Calm", none: "None" };
+const MOODS = { lofi: "Lo-fi", upbeat: "Upbeat", cinematic: "Cinematic", calm: "Calm", mine: "My music", none: "None" };
+const COVER_STYLES = { bold: "Bold title", number: "Big number", question: "Question" };
 const LENGTH_LABELS = { short: "Short 20–30s", standard: "Standard 30–45s", long: "Long 40–60s", deep: "Deep dive 60–90s", full: "Full story 2–3 min" };
 const DEPTH_LABELS = { 1: "Quick", 2: "Standard", 3: "Deep", 4: "Maximum" };
 const DEPTH_NOTES = { 1: "Reads about 6 article summaries. Fastest.", 2: "Reads about 8 articles and the full text of the top 3.",
@@ -189,10 +192,27 @@ function reelCard(r, inline = false) {
       <button class="btn" data-act="cap-youtube">YouTube</button><button class="btn" data-act="cap-tiktok">TikTok</button><button class="btn" data-act="cap-instagram">Instagram</button>
     </div>
     ${r.srt || r.cover ? `<div class="btns">${r.cover ? `<button class="btn" data-act="cover">Cover image</button>` : ""}${r.srt ? `<button class="btn" data-act="srt">Captions (.srt)</button>` : ""}</div>` : ""}
+    <div class="btns"><button class="btn wide" data-act="remix">Remix: edit this script and make it again</button></div>
+    ${inline ? "" : resultsForm(r)}
     <div class="btns" style="margin-top:0">
       ${inline ? "" : `<button class="btn danger wide" data-act="delete">Delete</button>`}
     </div></div>`;
 }
+// How a reel did, typed in by you (from TikTok, Instagram or YouTube), for the "What works" summary.
+function resultsForm(r) {
+  const res = getResult(r.id)?.stats || {};
+  return `<details class="results"${res.views ? "" : ""}><summary>${res.views ? `Results: ${Number(res.views).toLocaleString()} views` : "Add results (views, likes…)"}</summary>
+    <div class="results-grid">${FIELDS.map(([k, label]) => `<div><label>${label}</label><input type="number" inputmode="numeric" min="0" data-result="${k}" value="${res[k] || ""}"></div>`).join("")}</div></details>`;
+}
+function renderInsights() {
+  const ins = insights({ voice: VOICE_LABELS, cta: CTA_LABELS, music: MOODS, captions: CAPTION_STYLES });
+  $("insights").innerHTML = ins.rows.length ? `<div class="card"><h2>What works for you</h2>
+      <p class="meta">From ${ins.count} reels with results · ${ins.avg} average views · best: ${esc(ins.top)}</p>
+      ${ins.rows.map((x) => `<div class="insight"><b>${esc(x.name)}</b> · ${esc(x.text)}<br><small class="meta">next best ${esc(x.vs)}${x.lift >= 1.2 ? ` · ${x.lift.toFixed(1)}× more` : ""}</small></div>`).join("")}
+      <p class="meta" style="margin-top:8px">Make more of what wins. More results make this more reliable.</p></div>`
+    : `<div class="card"><h2>What works for you</h2><p class="meta">Add the views (and likes, comments, saves) of ${ins.count ? "one more reel" : "two or more reels"} under “Add results” and this shows which niche, length, narrator, ending and music get you the most views.</p></div>`;
+}
+
 function renderDrafts() {
   const drafts = listDrafts();
   $("drafts").innerHTML = drafts.length ? `<div class="card"><h2>Drafts</h2><p>Scripts you saved to finish later.</p>${drafts.map((d) => `
@@ -210,9 +230,19 @@ $("drafts").addEventListener("click", async (e) => {
   catch (err) { screen("form"); showError(err, "The draft couldn't be opened"); }
   state.busy = false;
 });
+$("reels").addEventListener("change", (e) => {
+  const input = e.target.closest("[data-result]"); if (!input) return;
+  const card = input.closest("[data-reel]"), r = state.reels.get(card?.dataset.reel); if (!r) return;
+  const stats = Object.fromEntries([...card.querySelectorAll("[data-result]")].map((i) => [i.dataset.result, i.value]));
+  if (saveResult(r, stats)) {
+    card.querySelector(".results summary").textContent = Number(stats.views) ? `Results: ${Number(stats.views).toLocaleString()} views` : "Add results (views, likes…)";
+    renderInsights();
+  } else toast("Couldn't save the results (storage full?)");
+});
 async function renderLibrary() {
   renderDrafts();
   const list = await listReels();
+  renderInsights();
   $("reels").innerHTML = list.length ? list.map((r) => { try { return reelCard(r); } catch (e) { console.warn("reel card", e); return ""; } }).join("") : `<div class="empty">No reels yet.<br>Make your first one in Create.</div>`;
 }
 document.addEventListener("click", async (ev) => {
@@ -226,6 +256,22 @@ document.addEventListener("click", async (ev) => {
     return;
   }
   if (btn.dataset.act === "delete" && confirm("Delete this reel from your phone?")) { await deleteReel(r.id); card.remove(); }
+  if (btn.dataset.act === "remix") {
+    // The reel's script becomes a draft in the review screen: change the voice, style, lines or hook, then make it again.
+    if (state.busy) return;
+    const data = await appData(), generic = data.generic_visuals[r.niche] || data.generic_visuals["personal finance"];
+    const lines = (r.script || "").split("\n").map((x) => x.trim()).filter(Boolean);
+    const draft = { id: "draft-" + Date.now(), saved: Date.now(), label: (r.title || "Remix").replace(/\s*#Shorts$/, ""), edited: true, generic,
+      script: { kind: r.kind || "custom", topicId: "remix-" + r.id, title: (r.title || "Remix").replace(/\s*#Shorts$/, ""), topicTitle: r.topic || "", niche: r.niche || "personal finance",
+        lines: lines.map((text, i) => ({ text, visual: "", query: visualMatch(text) || generic[i % generic.length], kind: i === lines.length - 1 ? "outro" : "media" })),
+        extras: [], sources: r.sources || [], tags: r.tags || [] } };
+    state.busy = true; show("create");
+    screen("job"); $("job-title").textContent = "Opening your remix…"; $("preview").classList.add("hidden"); say("Finding photos…", 0);
+    try { state.plan = await planFromDraft(draft, { say }); state.draftId = null; showReview(); }
+    catch (err) { screen("form"); showError(err, "The remix couldn't be opened"); }
+    state.busy = false;
+    return;
+  }
   if (btn.dataset.act === "cover" || btn.dataset.act === "srt") {
     const file = btn.dataset.act === "cover" ? new File([r.cover], `${r.id}-cover.jpg`, { type: "image/jpeg" })
       : new File([r.srt], `${r.id}.srt`, { type: "text/plain" });
@@ -250,7 +296,7 @@ function options() {
     niche: state.niche, mode: state.mode, topicId: state.mode === "evergreen" ? $("topic").value : "",
     customTopic: $("custom").value, brand: $("brand").value.trim() || "Money Minute", repo: repo(),
     handle: cleanHandle($("handle").value),
-    cta: ctaText(state.cta, cleanHandle($("handle").value)), logo: store.get("logo") || "",
+    cta: ctaText(state.cta, cleanHandle($("handle").value)), ctaKind: state.cta, logo: store.get("logo") || "", coverStyle: state.cover,
     music: state.mood, accent: state.accent, voiceSpeed: SPEEDS[state.speed] || 1, length: state.length,
     voiceEngine: voiceOpts(state.voice).engine, voice: voiceOpts(state.voice).voice, musicVolume: MUSIC_VOLUMES[state.musicVol] ?? 1,
     captionStyle: state.capStyle, captionPos: state.capPos, pops: $("pops").checked, offline: $("offline").checked,
@@ -826,6 +872,31 @@ async function init() {
   prefChips("voices", VOICE_LABELS, "voice", "af_heart", () => { resetVoiceLevel(); voiceNote(); }); voiceNote();
   prefChips("music-vol", { low: "Low", medium: "Medium", high: "High" }, "musicVol", "medium");
   prefChips("ctas", CTA_LABELS, "cta", "follow");
+  prefChips("covers", COVER_STYLES, "cover", "bold");
+  // Your own music: kept in the app's storage on the phone (not uploaded anywhere).
+  const showMusic = () => {
+    const name = store.get("musicName");
+    $("music-note").textContent = name ? `My music: ${name}. Pick “My music” above to use it.` : "My music: upload a track you have the rights to use. It loops under the voice and dips when the narrator speaks.";
+    $("music-remove").classList.toggle("hidden", !name);
+  };
+  $("music-file").addEventListener("change", async (e) => {
+    const f = e.target.files?.[0]; e.target.value = ""; if (!f) return;
+    if (f.size > 40e6) return toast("That file is over 40 MB. Pick a shorter track.");
+    try {
+      const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+      await new OAC(1, 1, SR).decodeAudioData(await f.arrayBuffer());          // can the phone play it?
+      await (await caches.open(USER_CACHE)).put(USER_MUSIC, new Response(f, { headers: { "Content-Type": f.type || "audio/mpeg" } }));
+      store.set("musicName", f.name.slice(0, 60)); store.set("mood", "mine"); state.mood = "mine";
+      [...$("moods").children].forEach((c) => c.classList.toggle("on", c.textContent === "My music"));
+      showMusic(); toast("Your music is ready. It's kept on this phone.");
+    } catch (err) { toast("Couldn't use that file: " + (err.message || "unsupported audio")); }
+  });
+  $("music-remove").addEventListener("click", async () => {
+    await (await caches.open(USER_CACHE)).delete(USER_MUSIC).catch(() => {});
+    localStorage.removeItem("musicName"); if (state.mood === "mine") { state.mood = "lofi"; store.set("mood", "lofi"); prefChips("moods", MOODS, "mood", "lofi"); }
+    showMusic();
+  });
+  showMusic();
   // Logo: resized on the phone to at most 240 px and kept on the phone.
   const showLogo = () => { const l = store.get("logo"); $("logo-preview").innerHTML = l ? `<img src="${l}" alt="" style="max-height:48px;max-width:96px;border-radius:8px">` : ""; $("logo-remove").classList.toggle("hidden", !l); };
   $("logo-file").addEventListener("change", async (e) => {

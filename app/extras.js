@@ -235,7 +235,7 @@ export function makeSrt(words) {
 /* ---------------------------------------------------------------- cover image */
 
 // A 1080x1920 cover (thumbnail) with the title big and readable, over the reel's best picture.
-export async function makeCover({ title, brand, accent, handle, scenes }, drawBackground) {
+export async function makeCover({ title, brand, accent, handle, scenes, style = "bold", keyNumber = "", question = "" }, drawBackground) {
   const W = 1080, H = 1920, c = document.createElement("canvas"); c.width = W; c.height = H;
   const ctx = c.getContext("2d");
   drawBackground(ctx, scenes);
@@ -249,6 +249,27 @@ export async function makeCover({ title, brand, accent, handle, scenes }, drawBa
     const tw = ctx.measureText(brand.toUpperCase()).width;
     ctx.fillStyle = rgb; ctx.beginPath(); ctx.roundRect(W / 2 - tw / 2 - 32, 170, tw + 64, 74, 37); ctx.fill();
     ctx.fillStyle = "rgb(12,12,20)"; ctx.fillText(brand.toUpperCase(), W / 2, 209);
+  }
+  // "Big number": the reel's key figure, huge, with the title below it.
+  if (style === "number" && keyNumber) {
+    let size = 420; ctx.font = `${size}px Anton`;
+    while (ctx.measureText(keyNumber).width > W - 120 && size > 160) { size -= 20; ctx.font = `${size}px Anton`; }
+    ctx.lineJoin = "round"; ctx.lineWidth = 30; ctx.strokeStyle = "rgba(0,0,0,0.9)"; ctx.strokeText(keyNumber, W / 2, 720);
+    ctx.fillStyle = rgb; ctx.fillText(keyNumber, W / 2, 720);
+    title = title.replace(/\s*#Shorts$/, "");
+    let ts = 96; ctx.font = `${ts}px Anton`;
+    const wordsN = title.toUpperCase().split(/\s+/), rows = []; let cur = "";
+    for (const w of wordsN) { const t = (cur + " " + w).trim(); if (ctx.measureText(t).width <= W - 140) cur = t; else { rows.push(cur); cur = w; } }
+    rows.push(cur);
+    rows.slice(0, 3).forEach((ln, i) => { ctx.lineWidth = 16; ctx.strokeText(ln, W / 2, 1060 + i * ts * 1.1); ctx.fillStyle = "#fff"; ctx.fillText(ln, W / 2, 1060 + i * ts * 1.1); });
+    if (handle) { ctx.font = "800 46px Montserrat"; ctx.fillStyle = "#fff"; ctx.fillText(handle, W / 2, H - 150); }
+    return await new Promise((res) => c.toBlob(res, "image/jpeg", 0.9));
+  }
+  // "Question": the hook question (or the title as one), with the question mark in the accent colour.
+  if (style === "question") {
+    let q = (question || title.replace(/\s*#Shorts$/, "")).trim();
+    if (!/\?$/.test(q)) q = q.replace(/[.!]+$/, "") + "?";
+    title = q;
   }
   // Title: up to 4 lines, as big as fits; the last line in the accent colour.
   const words = title.replace(/\s*#Shorts$/, "").toUpperCase().split(/\s+/);

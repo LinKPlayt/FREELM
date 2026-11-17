@@ -325,6 +325,17 @@ function creditsOf(reel) {
 }
 const shortCredit = (c) => c.replace(/\s+https?:\/\/\S+$/, "").replace(/^"([^"]{0,40})[^"]*"/, '"$1"');
 
+// Hashtags for the reel's own topic ("Index fund" -> #IndexFunds #indexfund), not just its niche.
+const TAG_SKIP = new Set(["the", "a", "an", "of", "and", "or", "to", "in", "on", "for", "your", "you", "how", "what", "why", "is", "are", "explained", "really", "plain", "english", "never", "skip", "part", "quick", "simple", "power", "truth", "about", "when", "with", "without"]);
+export function topicHashtags(reel) {
+  const src = (reel.topic || reel.title || "").replace(/\s*#Shorts$/, "").replace(/·\s*Part \d+/i, "").replace(/\(([a-z])\)/gi, "$1");
+  const words = (src.match(/[A-Za-z0-9&]+/g) || []).filter((w) => !TAG_SKIP.has(w.toLowerCase()) && w.length > 1).slice(0, 3);
+  if (!words.length) return [];
+  const camel = "#" + words.map((w) => (/^[A-Z0-9&]+$/.test(w) ? w : w[0].toUpperCase() + w.slice(1).toLowerCase())).join("").replace(/&/g, "And");
+  const lower = "#" + words.join("").toLowerCase().replace(/&/g, "and");
+  return [...new Set([camel, lower])].filter((t) => t.length >= 4 && t.length <= 26);
+}
+
 export function platformCaptions(reel) {
   // Older or partly saved reels may lack some fields: fall back rather than fail (or paste "undefined").
   reel = { ...reel, title: reel.title || "Money tip", description: reel.description || "" };
@@ -333,7 +344,7 @@ export function platformCaptions(reel) {
   const body = lines.slice(0, -1);                    // drop the call to action
   const follow = reel.handle ? `Follow ${reel.handle} for a new money tip every day.` : "Follow for a new money tip every day.";
   const niche = reel.niche || (reel.tags || []).find((t) => NICHE_TAGS[t]) || "personal finance";
-  const tags = NICHE_TAGS[niche] || NICHE_TAGS["personal finance"];
+  const tags = [...topicHashtags(reel), ...(NICHE_TAGS[niche] || NICHE_TAGS["personal finance"])];
   const credits = creditsOf(reel);
   const sources = reel.sources || [];
   const disclaimer = "Not financial advice. For education only.";

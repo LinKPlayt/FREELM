@@ -224,10 +224,31 @@ function limitAndLevel(v) {
   return v;
 }
 
+// Your own music (uploaded once, kept on the phone in the app's storage): decoded, looped to the
+// video's length, faded in and out, and levelled so it sits under the voice like the built-in music.
+export async function userMusic(total) {
+  const res = await (await caches.open(USER_CACHE)).match(USER_MUSIC);
+  if (!res) return null;
+  const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  const buf = await new OAC(1, 1, SR).decodeAudioData(await res.arrayBuffer());
+  const n = Math.ceil(total * SR), out = new Float32Array(n), chans = [...Array(buf.numberOfChannels).keys()].map((c) => buf.getChannelData(c));
+  const len = chans[0].length;
+  if (!len) return null;
+  for (let i = 0; i < n; i++) { let s = 0; for (const ch of chans) s += ch[i % len]; out[i] = s / chans.length; }
+  let peak = 0; for (const s of out) peak = Math.max(peak, Math.abs(s));
+  const fadeIn = SR * 0.6, fadeOut = SR * 1.5;
+  for (let i = 0; i < n; i++) out[i] = (out[i] / (peak || 1)) * Math.min(1, i / fadeIn, (n - i) / fadeOut);
+  return out;
+}
+export const USER_CACHE = "reelbot-user-v1", USER_MUSIC = "/user/music";
+
 async function assembleAudio(clips, mood, lines, musicVolume = 1) {
   const total = Math.max(seconds(clips, lines), MIN_S);
   const voice = await masterVoice(clips, lines, total);
-  return { audio: mix(voice, mood && mood !== "none" ? generateMusic(total, mood) : null, (mood === "cinematic" ? 0.17 : 0.14) * musicVolume), total };
+  let music = null, level = mood === "cinematic" ? 0.17 : 0.14;
+  if (mood === "mine") { music = await userMusic(total).catch((e) => { console.warn("your music couldn't be read", e); return null; }); level = 0.13; }
+  if (!music && mood && mood !== "none") music = generateMusic(total, mood === "mine" ? "lofi" : mood);
+  return { audio: mix(voice, music, level * musicVolume), total };
 }
 
 // Rough spoken length of a script, for the review screen.
@@ -428,7 +449,9 @@ export async function produceReel(plan, opts, ui) {
   const result = await renderReel(job, ui.canvas, ui.audioCtx, (f) => ui.say("Rendering your reel on this device…", 0.6 + 0.4 * f), opts.forceEncoder);
   ui.say("Making the cover and captions…", 0.99);
   const accentRgb = (() => { const n = parseInt((opts.accent || "#FFD60A").slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; })();
-  const cover = await makeCover({ title: script.title, brand: opts.brand, accent: accentRgb, handle: opts.handle || "", scenes },
+  const keyNumber = script.lines.map((l) => (l.kind === "media" ? statFor(l.text) : null)).find(Boolean) || "";
+  const question = script.lines.find((l) => l.kind === "media" && /\?\s*$/.test(l.text) && l.text.split(/\s+/).length <= 12)?.text || "";
+  const cover = await makeCover({ title: script.title, brand: opts.brand, accent: accentRgb, handle: opts.handle || "", scenes, style: opts.coverStyle || "bold", keyNumber, question },
     (ctx, list) => coverBackground(ctx, list, accentRgb)).catch((e) => { console.warn("cover", e); return null; });
   releasePlan(plan);
 
@@ -438,6 +461,8 @@ export async function produceReel(plan, opts, ui) {
     id: `${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, "")}-${script.topicId}`,
     ...meta, kind: script.kind, duration: total, created: Date.now(), blob: result.blob, ext: result.ext, how: result.how, sound: result.sound, written: result.written, niche: script.niche,
     credits, sources: script.sources, handle: opts.handle || "", srt: makeSrt(words), cover,
+    topic: (script.topicTitle || "").replace(/\s+\(.*\)$/, ""),
+    settings: { voice: opts.voiceEngine === "fast" ? "classic" : opts.voice || "af_heart", cta: opts.ctaKind || "follow", music: opts.music || "lofi", captions: opts.captionStyle || "bold", length: opts.length || "standard" },
     script: script.lines.map((l) => l.text).join("\n"),
   };
 }

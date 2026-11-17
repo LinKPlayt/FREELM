@@ -64,6 +64,16 @@ export default async function ({ t, newPage }) {
     for (let i = 0; i < c2.length; i++) { const s = i / rate; c2[i] = (s > 0.9 && s < 1.2) || (s > 2.0 && s < 2.3) ? 0 : Math.sin(i / 7) * 0.5; }
     const tm = MK._test.timings({ lines: [{ text: "First part here, second part there, and the third part.", kind: "media" }] }, [c2]);
     out.tm = tm.words.map((w) => [w.text, +w.start.toFixed(2), +w.end.toFixed(2)]);
+    // topic hashtags and the results summary
+    out.tags = [S.topicHashtags({ topic: "Index fund" }), S.topicHashtags({ title: "Never Skip the 401(k) Match #Shorts" }), S.topicHashtags({ topic: "S&P 500" }), S.topicHashtags({})];
+    const Rz = await import("./app/results.js");
+    localStorage.removeItem("results");
+    Rz.saveResult({ id: "a", title: "A", niche: "investing", kind: "evergreen", duration: 30, settings: { voice: "af_heart", cta: "comment", music: "lofi", captions: "bold" } }, { views: 12000, likes: 900, comments: 120 });
+    Rz.saveResult({ id: "b", title: "B", niche: "crypto", kind: "custom", duration: 70, settings: { voice: "classic", cta: "follow", music: "none", captions: "bold" } }, { views: 3000, likes: 100 });
+    Rz.saveResult({ id: "c", title: "C", niche: "investing", kind: "evergreen", duration: 34, settings: { voice: "af_heart", cta: "comment", music: "lofi", captions: "boxed" } }, { views: "abc", likes: -5 });
+    out.ins = Rz.insights({ voice: { af_heart: "Heart", classic: "Classic" }, cta: { comment: "Ask a question", follow: "Follow" } });
+    out.resC = Rz.getResult("c");
+    localStorage.removeItem("results");
     // platform captions
     out.caps = S.platformCaptions({ title: "Test #Shorts", description: "Desc", script: "Line one.\nLine two.\nFollow.", niche: "investing", handle: "@me" });
     out.capsOld = S.platformCaptions({ script: "Only line.\nFollow." });
@@ -105,6 +115,10 @@ export default async function ({ t, newPage }) {
   const w = r.tm, ordered = w.every((x, i) => x[2] >= x[1] && (i === 0 || x[1] >= w[i - 1][1]));
   const second = w.find((x) => x[0] === "second"), third = w.find((x) => x[0] === "and");
   t.ok(ordered && second && Math.abs(second[1] - 1.2) < 0.06 && third && Math.abs(third[1] - 2.3) < 0.06, "captions start each phrase right after the voice's pause, in order", JSON.stringify(w));
+  t.ok(r.tags[0].join() === "#IndexFund,#indexfund" && r.tags[1].join() === "#401kMatch,#401kmatch" && r.tags[2][0] === "#SAndP500" && r.tags[3].length === 0, "topic hashtags are made from the topic", JSON.stringify(r.tags));
+  const insText = JSON.stringify(r.ins.rows);
+  t.ok(r.ins.count === 2 && /Ask a question: 12\.0k/.test(insText) && /Heart/.test(insText) && /Niche/.test(insText), "results summary picks what gets the most views", JSON.stringify(r.ins).slice(0, 300));
+  t.ok(r.resC && !r.resC.stats.views && !("likes" in r.resC.stats), "bad numbers in results are ignored (text, negatives)", JSON.stringify(r.resC));
   t.ok(r.caps.youtube && r.caps.tiktok && r.caps.instagram && !/undefined/.test(JSON.stringify(r.caps)), "platform captions are complete", "");
   t.ok(!/undefined/.test(JSON.stringify(r.capsOld)) && r.capsOld.youtube.length > 5, "captions work for old reels with missing fields", JSON.stringify(r.capsOld).slice(0, 120));
   await page.context().close();

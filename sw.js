@@ -1,6 +1,6 @@
 // Service worker: keeps the app and its big files (voice models, WebAssembly, fonts, research library)
 // on the phone so they download once. Live data (news, photos) always uses the network.
-const VERSION = "reelbot-v27";
+const VERSION = "reelbot-v28";
 // Big binary files (model weights, WebAssembly, fonts) live in a cache that survives app updates, so
 // an update doesn't download the voice again. Only binaries: small settings and code files (config.json,
 // .js) can change in place, so they're refreshed with every app update (a stale AI config.json, kept
@@ -12,7 +12,7 @@ const DATA = /\/app\/ai\/data\//;      // research library: replaced when the ap
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => {
-  e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== VERSION && k !== MODELS).map((k) => caches.delete(k))))
+  e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== VERSION && k !== MODELS && !k.startsWith("reelbot-user")).map((k) => caches.delete(k))))   // reelbot-user-*: your own files (music)
     .then(dropRetired).then(() => self.clients.claim()));
 });
 
