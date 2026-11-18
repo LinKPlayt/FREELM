@@ -134,6 +134,14 @@ export default async function ({ t, newPage }) {
     const batch = IL.nextBatch("crypto", "neon", [255, 214, 10]);
     out.batch = [batch.length, batch[0].motifs[0], await IL.drawAhead(batch.slice(0, 2), "test"), IL.nextBatch("crypto", "neon", [255, 214, 10]).length, IL.savedArt().length];
     await caches.delete(IL.ART_CACHE); IL.forgetArt();
+    // quiz reels
+    const QZ = await import("./app/quiz.js");
+    const qz = QZ.buildQuiz({ niche: "crypto", cta: "Follow." });
+    out.quiz = [qz.kind, qz.lines.length, qz.lines.filter((l) => l.kind === "quiz").length, qz.lines.filter((l) => l.kind === "answer").length,
+      qz.lines.filter((l) => l.kind === "quiz").every((l) => l.hold >= 2 && /^Question \d\. True or false: .+\?$/.test(l.text)),
+      qz.lines.filter((l) => l.kind === "answer").every((l) => /^(True|False)! /.test(l.text) && l.payoff),
+      Object.values(QZ.QUIZ).every((bank) => bank.length >= 4 && bank.every(([q, a, why]) => q.length > 10 && typeof a === "boolean" && why.length > 10)),
+      QZ.buildQuiz({ niche: "crypto", cta: "x" }, { recent: qz.questions }).questions.some((q) => qz.questions.includes(q))];
     // the proofreader
     const WD = await import("./app/wording.js");
     out.words = ["an ETF is a the the fund ,that tracks a index", "Plan A is simple. a 8% return and a 18 year loan", "You could of saved alot more then you think",
@@ -222,6 +230,7 @@ export default async function ({ t, newPage }) {
     "It's 50/30/20 and 24/7.", "Class A shares and an HSA."]), "the proofreader fixes grammar and wording the narrator would say wrong", JSON.stringify(r.words));
   t.ok(r.proof[0] === 2 && r.proof[1].join("|") === "The fund grows.|Follow for more.|PART 1" && r.proof[2] === "the the fund grows" && r.proof[3] === 0, "proofreading fixes a script in place once, keeps the original for the fact check, and leaves chapter cards alone", JSON.stringify(r.proof));
   t.ok(r.warn.length === 2 && /long sentence/.test(r.warn[0]) && /quotation/.test(r.warn[1]), "long sentences and unclosed quotes are flagged for you to look at", JSON.stringify(r.warn));
+  t.ok(r.quiz.slice(0, 7).join() === "quiz,9,3,3,true,true,true" && r.quiz[7] === false, "a quiz: hook, 3 true-or-false questions with countdowns, 3 answers, a question and the ending; recent questions aren't repeated", JSON.stringify(r.quiz));
   t.ok(r.insert.join() === "1,2", "a spare definition goes after the hook; other spares go before the takeaway", JSON.stringify(r.insert));
   t.ok(r.caps.youtube && r.caps.tiktok && r.caps.instagram && !/undefined/.test(JSON.stringify(r.caps)), "platform captions are complete", "");
   t.ok(!/undefined/.test(JSON.stringify(r.capsOld)) && r.capsOld.youtube.length > 5, "captions work for old reels with missing fields", JSON.stringify(r.capsOld).slice(0, 120));

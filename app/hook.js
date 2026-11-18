@@ -176,7 +176,7 @@ export function dramatize(script, { length = "standard", ctaKind = "follow" } = 
     def.claim = def.claim || def.text; def.text = "Simply put, " + def.text[0].toLowerCase() + def.text.slice(1);
   }
   // 2c. A clear position before the takeaway ("Bottom line: …"), for subjects with a well-supported one.
-  const stance = !script.person && !deep && length !== "short" && STANCES.find(([re]) => re.test(topicName))?.[1];
+  const stance = !script.person && !deep && script.kind !== "quiz" && length !== "short" && STANCES.find(([re]) => re.test(topicName))?.[1];
   if (stance && !lines.some((l) => /^(bottom line|remember)\b/i.test(l.text))) {
     const tipAt = lines.findIndex((l, i) => i > 0 && l.kind === "media" && (l.tip || /^So here's what to do/.test(l.text)));
     const at = tipAt > 0 ? tipAt : lines.findIndex((l) => l.kind === "outro");
@@ -185,6 +185,13 @@ export function dramatize(script, { length = "standard", ctaKind = "follow" } = 
   // 3. Pacing: the hook is delivered with a little more energy, then a beat; a beat before the payoff.
   hook.pace = hook.pace || 1.05;
   hook.hold = Math.max(hook.hold || 0, 0.3);
+  // A narrator slows down for what matters: the payoff, the bottom line and quiz answers land a touch slower.
+  for (const l of lines) {
+    if (l.pace) continue;
+    if (l.stance) l.pace = 0.94;
+    else if (l.payoff || l.kind === "answer") l.pace = 0.96;
+    else if (l.kind === "quiz") l.pace = 1.0;
+  }
   const payAt = lines.findIndex((l) => l.payoff);
   if (payAt > 1) lines[payAt - 1].hold = Math.max(lines[payAt - 1].hold || 0, 0.25);
 

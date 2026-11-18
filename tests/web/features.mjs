@@ -25,7 +25,7 @@ export default async function ({ t, newPage, BASE }) {
   try {
     const niches = await page.$$eval("#niches .chip", (els) => els.map((e) => e.textContent));
     const customs = { Crypto: "Stablecoin", Economy: "Inflation", Investing: "Index fund", "Personal Finance": "Credit score", "Real Estate": "Mortgage", "Side Hustles": "Freelancer" };
-    for (const n of niches) for (const m of ["Explainer", "Today's news", "Market recap", "Your topic"]) {
+    for (const n of niches) for (const m of ["Explainer", "Today's news", "Market recap", "Your topic", "Quiz"]) {
       await page.click(`#niches .chip >> text="${n}"`); await page.click(`#modes .chip >> text="${m}"`);
       if (m === "Your topic") await page.fill("#custom", customs[n] || "Budget");
       await page.click("#go");
@@ -96,6 +96,21 @@ export default async function ({ t, newPage, BASE }) {
     }
     await page.click('#lengths .chip >> text="Standard 30–45s"');
   } catch (e) { t.ok(false, "section crashed: Features: deep dive and full story", String(e.message || e).split("\n")[0]); await page.goto(page.url()).catch(() => {}); }
+
+  t.section("Features: quiz reel");
+  try {
+    await page.click('nav [data-tab="create"]').catch(() => {});
+    await page.click('#niches .chip >> text="Investing"'); await page.click('#modes .chip >> text="Quiz"');
+    await page.click("#go"); await page.waitForSelector("#review:not(.hidden)", { timeout: 120000 });
+    const tags = await page.$$eval(".scene-tag", (els) => els.map((e) => e.textContent));
+    t.ok(tags.filter((x) => /Question \d · countdown/.test(x)).length === 3 && tags.filter((x) => /Answer · (True|False)/.test(x)).length === 3 && tags.some((x) => /Big words/.test(x)), "a quiz has 3 questions with countdowns, 3 answers and a big-words question at the end", tags.join(" | "));
+    await page.click('#voices .chip >> text="Classic (fast)"');
+    await page.click("#produce");
+    await until(page, () => /Your reel is ready|Couldn't|went wrong/.test(document.getElementById("result").textContent), null, 600000);
+    const res = await page.innerText("#result");
+    t.ok(/Your reel is ready/.test(res), "a quiz reel is made", res.slice(0, 160));
+    await page.click('#voices .chip >> text="Michael"');
+  } catch (e) { t.ok(false, "section crashed: Features: quiz reel", String(e.message || e).split("\n")[0]); await page.goto(page.url()).catch(() => {}); }
 
   t.section("Features: plan my week, voice preview, logo");
   try {
@@ -227,11 +242,11 @@ export default async function ({ t, newPage, BASE }) {
   t.section("Features: What's new, storage, make-time, Library covers");
   try {
     // a returning user who last saw version 29 (the window shows the newest three updates)
-    await page.evaluate(() => localStorage.setItem("seenVersion", "33"));
+    await page.evaluate(() => localStorage.setItem("seenVersion", "34"));
     await page.reload(); await until(page, () => window.__ready, null, 60000);
     t.ok(await page.locator("#news-sheet").count() === 1 && /What's new/.test(await page.innerText("#news-sheet")), "What's new appears after an update");
     const news = await page.innerText("#news-sheet");
-    t.ok(/proofreader/.test(news) && /Many more illustrations/.test(news) && !/takes a stand/.test(news), "it lists only the updates since the last one seen", news.slice(0, 200));
+    t.ok(/Quiz reels/.test(news) && /proofreader/.test(news) && !/Illustrations drawn/.test(news), "it lists only the updates since the last one seen", news.slice(0, 200));
     await page.click('[data-news="close"]');
     t.ok(await page.locator("#news-sheet").count() === 0, "Got it closes it");
     await page.reload(); await until(page, () => window.__ready, null, 60000);

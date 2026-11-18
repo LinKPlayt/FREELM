@@ -250,6 +250,18 @@ function sparkle(out, at, gain) {
     for (let i = 0; i < n && s0 + i < out.length; i++) { const t = i / SR; out[s0 + i] += gain * 0.35 * Math.sin(2 * Math.PI * f * t) * Math.exp(-t * 9); }
   });
 }
+// A clock tick (the quiz countdown).
+function tick(out, at, gain) {
+  const n = Math.floor(0.05 * SR), s0 = Math.floor(at * SR);
+  for (let i = 0; i < n && s0 + i < out.length; i++) { const t = i / SR; out[s0 + i] += gain * (Math.random() * 2 - 1) * Math.exp(-t * 160) + gain * 0.6 * Math.sin(2 * Math.PI * 2400 * t) * Math.exp(-t * 90); }
+}
+// A soft "wrong answer" buzz: two low, slightly rough tones.
+function buzzer(out, at, gain) {
+  for (const [f, d] of [[180, 0], [140, 0.22]]) {
+    const n = Math.floor(0.26 * SR), s0 = Math.floor((at + d) * SR);
+    for (let i = 0; i < n && s0 + i < out.length; i++) { const t = i / SR, ph = 2 * Math.PI * f * t; out[s0 + i] += gain * (Math.sin(ph) + 0.35 * Math.sin(3 * ph)) * Math.min(1, t / 0.01) * Math.exp(-t * 5); }
+  }
+}
 export function addSoundEffects(audio, scenes) {
   impact(audio, 0, 0.35);
   scenes.forEach((sc, i) => {
@@ -258,6 +270,8 @@ export function addSoundEffects(audio, scenes) {
     if (sc.tone === "tip" && !sc.payoff) bell(audio, sc.start + 0.08, 0.08);
     if (sc.tone === "stance") impact(audio, sc.start, 0.16);
     if (sc.tone === "question") bloop(audio, sc.start + 0.1, 0.2);
+    if (sc.kind === "quiz" && sc.countEnd > sc.countStart) { const step = (sc.countEnd - sc.countStart) / 3; for (let k = 0; k < 3; k++) tick(audio, sc.countStart + k * step, 0.22); }
+    if (sc.kind === "answer") (sc.answer ? chime : buzzer)(audio, sc.start + 0.05, sc.answer ? 0.2 : 0.16);
     if (sc.kind === "outro") sparkle(audio, sc.start + 0.1, 0.14);
     if (i > 0 && !sc.payoff) whoosh(audio, sc.start, sc.kind === "section" ? 0.5 : 0.24 + 0.12 * ((i * 7) % 5) / 4);
     if (sc.kind === "stat" || sc.stat) (/^\$/.test(sc.stat || "") ? coins : pop)(audio, sc.start + 0.15, 0.22);

@@ -1,0 +1,88 @@
+// Quiz reels: "True or false?" questions with a countdown, then the answer and why. Viewers play along,
+// comment their score and watch to the end, which is what short-video apps reward.
+//
+// The questions are written by hand and checked, so a quiz never says something false without
+// correcting it straight away: a "false" statement is always followed by "False!" and the facts.
+
+export const QUIZ = {
+  "personal finance": [
+    ["Paying only the minimum on a credit card can keep you in debt for years.", true, "Minimum payments mostly cover interest, so the balance shrinks very slowly."],
+    ["Checking your own credit report lowers your credit score.", false, "Checking your own report is a soft inquiry, so it doesn't affect your score at all."],
+    ["Most experts suggest an emergency fund of three to six months of expenses.", true, "That's enough to cover a job loss or a big surprise bill without borrowing."],
+    ["Closing your oldest credit card always raises your credit score.", false, "It can lower it, because it shortens your credit history and raises how much of your limit you use."],
+    ["Using a debit card helps build your credit score.", false, "Debit card spending isn't reported to the credit bureaus, so it doesn't build credit."],
+    ["The 50/30/20 rule puts 20 percent of your take-home pay toward savings and paying off debt.", true, "Fifty percent goes to needs, thirty to wants, and twenty to your future."],
+    ["Money in a savings account at an FDIC-insured bank is protected up to $250,000 per depositor, per bank, for each account category.", true, "If the bank fails, that insurance pays you back, up to the limit."],
+    ["Payment history is one of the biggest factors in most credit scores.", true, "Paying every bill on time does more for your score than almost anything else."],
+  ],
+  investing: [
+    ["An index fund tries to beat the market by picking the best stocks.", false, "An index fund simply tracks a market index, like the S&P 500, instead of picking winners."],
+    ["A fund's expense ratio is charged every year you hold it.", true, "It's taken out of the fund each year, so even small fees add up over decades."],
+    ["By the Rule of 72, money growing at 8 percent a year doubles in about 9 years.", true, "Divide 72 by the yearly return: 72 divided by 8 is 9."],
+    ["Owning many different stocks removes all investment risk.", false, "Diversifying lowers the risk of one company sinking you, but the whole market can still fall."],
+    ["A company's dividend is guaranteed.", false, "Companies can cut or stop their dividends at any time, especially in hard years."],
+    ["Qualified withdrawals from a Roth IRA in retirement are tax-free.", true, "You pay tax on the money going in, so it can come out tax-free later if you follow the rules."],
+    ["An employer 401(k) match is extra money you miss out on if you don't contribute enough.", true, "If your employer matches, contributing at least enough to get the full match is like an instant return."],
+    ["Over long periods, most actively managed stock funds fail to beat their index.", true, "Research on fund performance has shown this again and again, often because of higher fees."],
+  ],
+  crypto: [
+    ["Bitcoin's total supply is capped at 21 million coins.", true, "The limit is built into Bitcoin's code, and new coins are released more slowly over time."],
+    ["Crypto held on an exchange is insured by the FDIC like a bank account.", false, "FDIC insurance covers bank deposits, not crypto, so if an exchange fails your coins aren't covered."],
+    ["If you lose the recovery phrase to your own wallet, the company that made the wallet can always reset it.", false, "With self-custody, only the recovery phrase can restore your wallet. Lose it and the coins are usually gone for good."],
+    ["A stablecoin is designed to keep a steady value, usually one US dollar.", true, "It's only as stable as whatever backs it, and some have lost their peg."],
+    ["A crypto transfer sent to the wrong address can usually be reversed by the network.", false, "Blockchain transfers are generally final, so always double-check the address before you send."],
+    ["Bitcoin and Ethereum run on the same blockchain.", false, "They're separate networks, each with its own coin, rules and software."],
+  ],
+  economy: [
+    ["Inflation means the same amount of money buys less than it used to.", true, "When prices rise across the economy, each dollar stretches less far."],
+    ["When the Federal Reserve raises interest rates, borrowing usually gets more expensive.", true, "Higher rates flow through to credit cards, car loans and mortgages."],
+    ["In the US, a recession is declared the moment the stock market falls.", false, "A committee of economists dates US recessions using jobs, income, spending and output, not stock prices."],
+    ["GDP measures the total value of the goods and services an economy produces.", true, "It's the most common way to measure how big an economy is and whether it's growing."],
+    ["Falling prices across the whole economy are always good news.", false, "Widespread falling prices, called deflation, can lead people to delay spending, which can hurt jobs and wages."],
+    ["A tariff is a tax on imported goods.", true, "It's paid when the goods come into the country, and the cost is often passed on to buyers."],
+  ],
+  "side hustles": [
+    ["In the US, side hustle income is taxable even if you don't get a tax form for it.", true, "All income counts, so keep records and set some aside for taxes."],
+    ["Self-employed people in the US pay Social Security and Medicare through self-employment tax.", true, "There's no employer paying half, so you pay both parts yourself."],
+    ["You have to quit your day job to start a side hustle.", false, "Most side hustles start small on evenings and weekends, alongside a regular job."],
+    ["Business expenses for a side hustle can lower the income you pay tax on.", true, "Costs you need to run the business can usually be deducted, so track every receipt."],
+  ],
+  "real estate": [
+    ["A 15-year mortgage usually has a lower interest rate than a 30-year mortgage.", true, "Lenders take less risk on shorter loans, so rates are usually lower, though the monthly payment is higher."],
+    ["Paying points when you get a mortgage can lower your interest rate.", true, "Each point is a fee paid upfront in exchange for a lower rate over the life of the loan."],
+    ["The monthly payment on an adjustable-rate mortgage always stays the same.", false, "After the fixed period ends, the rate can change, and so can your payment."],
+    ["With a conventional loan, a down payment under 20 percent often means paying for mortgage insurance.", true, "Private mortgage insurance protects the lender, and it adds to your monthly cost."],
+    ["Renting is always throwing money away.", false, "Rent buys you a home plus flexibility, and renters skip costs like repairs and property tax."],
+    ["Home equity is your home's value minus what you still owe on it.", true, "It grows as you pay down the loan and as the home's value rises."],
+  ],
+};
+
+const shuffle = (a) => { const b = [...a]; for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
+
+// A quiz script: a hook, then for each question a "True or false" line (with a countdown after it)
+// and the answer line, then "How many did you get?" and your ending.
+export function buildQuiz(opts, { count = 3, recent = [] } = {}) {
+  const bank = QUIZ[opts.niche] || QUIZ["personal finance"];
+  // Questions you haven't used lately come first.
+  const fresh = shuffle(bank.filter((q) => !recent.includes(q[0]))), used = shuffle(bank.filter((q) => recent.includes(q[0])));
+  const picked = [...fresh, ...used].slice(0, Math.min(count, bank.length));
+  const label = { crypto: "crypto", investing: "investing", economy: "economy", "side hustles": "side hustle", "real estate": "real estate" }[opts.niche] || "money";
+  const n = picked.length;
+  const lines = [{ text: `Quick ${label} quiz: ${n} questions. Keep score!`, visual: "", kind: "media", chart: null }];
+  picked.forEach(([q, answer, why], i) => {
+    const statement = q.replace(/\.$/, "?");
+    // Ordinary first words go lower case after the colon; names (Bitcoin, GDP, FDIC) keep their capitals.
+    const said = /^(A|An|The|In|If|Using|Paying|Checking|Closing|Most|Money|Over|When|With|Owning|Falling|You|Business|Renting|Home|Crypto|Qualified|Payment|By|Inflation|Self-employed)\b/.test(statement) ? statement[0].toLowerCase() + statement.slice(1) : statement;
+    lines.push({ text: `Question ${i + 1}. True or false: ${said}`,
+      kind: "quiz", quiz: { n: i + 1, of: n, answer }, claim: q, hold: 2.6, visual: "", chart: null });
+    lines.push({ text: `${answer ? "True!" : "False!"} ${why}`, kind: "answer", answer, payoff: true, claim: answer ? q : why, visual: "", chart: null });
+  });
+  lines.push({ text: `How many did you get right out of ${n}? Tell me in the comments.`, kind: "media", question: true, visual: "", chart: null });
+  lines.push({ text: opts.cta, visual: "", kind: "outro", chart: null });
+  const date = new Date().toISOString().slice(0, 10).replaceAll("-", "");
+  const cap = label.replace(/\b\w/g, (c) => c.toUpperCase());
+  return {
+    kind: "quiz", topicId: `quiz-${opts.niche.replace(/\s+/g, "-")}-${date}`, title: `${cap} Quiz: Can You Get All ${n}?`, topicTitle: `${cap} quiz`,
+    niche: opts.niche, lines, extras: [], tags: [`${label} quiz`, opts.niche, "quiz", "true or false"], sources: [], questions: picked.map((q) => q[0]),
+  };
+}

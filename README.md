@@ -174,6 +174,20 @@ the self-hosted server's page forwards to the app when opened on GitHub Pages. T
 code network-first, so each launch gets the latest version, and an app left open in the background
 checks for a newer version when it comes back to the screen.
 
+### Quiz reels
+
+Pick **Quiz** as the type. The app picks three "True or false?" questions for your niche from a
+hand-written, checked bank (`app/quiz.js`, 40 questions; ones you used recently are skipped). Each
+question appears word by word under **TRUE OR FALSE?**, followed by a 3-2-1 countdown with a ticking
+clock; then a **TRUE ✓** or **FALSE ✗** stamp lands with a chime or buzzer while the narrator explains.
+It ends by asking viewers how many they got right. A false statement is always corrected straight away.
+
+### Big-word moments
+
+The bottom line and the question for the comments are shown as big words that appear as they're
+spoken (captions are hidden on those scenes). The narrator also slows slightly for the payoff, the bottom
+line and quiz answers. Choose Photo or Illustration on a scene to turn the big words off for it.
+
 ### Deep dives and better results
 
 - **Deep dive (60–90 s).** Pick *Deep dive* under Length for explainers, your own topics and

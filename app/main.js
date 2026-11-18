@@ -18,8 +18,8 @@ import { SR } from "./music.js";
 
 const $ = (id) => document.getElementById(id);
 const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } } };
-const MODES = ["auto", "evergreen", "news", "market", "custom"];
-const MODE_LABELS = { auto: "Auto", evergreen: "Explainer", news: "Today's news", market: "Market recap", custom: "Your topic" };
+const MODES = ["auto", "evergreen", "news", "market", "custom", "quiz"];
+const MODE_LABELS = { auto: "Auto", evergreen: "Explainer", news: "Today's news", market: "Market recap", custom: "Your topic", quiz: "Quiz" };
 const COLORS = ["#FFD60A", "#2ED573", "#00D2FF", "#FF6B81", "#FF9F1A", "#B388FF", "#FFFFFF"];
 const SPEEDS = { slow: 0.92, normal: 1.0, fast: 1.1 };
 const MUSIC_VOLUMES = { low: 0.55, medium: 1, high: 1.5 };
@@ -630,10 +630,13 @@ function showReview() {
   const visuals = script.lines.map((l, i) => decideVisual(l, i, script.title));
   $("scenes").innerHTML = script.lines.map((l, i) => {
     const v = visuals[i];
-    let tag = i === 0 ? "Hook" : l.kind === "outro" ? "Ending" : l.kind === "chart" ? "Chart" : l.kind === "section" ? `Chapter ${l.num}` : l.kind === "recap" ? "Recap" : `Scene ${i}`;
+    let tag = i === 0 ? "Hook" : l.kind === "outro" ? "Ending" : l.kind === "quiz" ? `Question ${l.quiz?.n || ""} · countdown` : l.kind === "answer" ? `Answer · ${l.answer ? "True" : "False"}` : l.kind === "chart" ? "Chart" : l.kind === "section" ? `Chapter ${l.num}` : l.kind === "recap" ? "Recap" : `Scene ${i}`;
     if (l.source) tag += ` · ${l.source}`;
-    if (l.kind === "media") tag += ` · ${VISUAL_NAMES[v.type]}${v.type === "stat" ? ": " + describeStat(v.spec) : v.type === "illus" ? ": " + (v.label || v.icon).toLowerCase() : ""}`;
-    const thumb = l.kind === "outro" ? `<div class="thumb">END<br>CARD</div>` : l.kind === "chart" ? `<div class="thumb">LIVE<br>CHART</div>`
+    const big = l.kind === "media" && (l.stance || l.question) && !l.vmode;
+    if (big) tag += " · Big words on screen";
+    else if (l.kind === "media") tag += ` · ${VISUAL_NAMES[v.type]}${v.type === "stat" ? ": " + describeStat(v.spec) : v.type === "illus" ? ": " + (v.label || v.icon).toLowerCase() : ""}`;
+    const thumb = l.kind === "outro" ? `<div class="thumb">END<br>CARD</div>` : l.kind === "quiz" ? `<div class="thumb">TRUE OR<br>FALSE?</div>` : big ? `<div class="thumb">BIG<br>WORDS</div>`
+      : l.kind === "answer" ? `<div class="thumb" style="color:${l.answer ? "var(--good)" : "var(--bad)"}">${l.answer ? "TRUE ✓" : "FALSE ✗"}</div>` : l.kind === "chart" ? `<div class="thumb">LIVE<br>CHART</div>`
       : l.kind === "section" ? `<div class="thumb">PART ${l.num}<br>${esc(l.label || "")}</div>` : l.kind === "recap" ? `<div class="thumb">QUICK<br>RECAP</div>`
       : `<div class="thumb"><canvas width="152" height="270" data-thumb="${i}"></canvas></div>`;
     const mode = l.vmode || "auto", hasStat = Boolean(l.analysis?.stat);

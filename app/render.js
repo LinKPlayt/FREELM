@@ -152,6 +152,106 @@ class TypeBg {
   dispose() { this.bg.width = this.bg.height = 0; }
 }
 
+// Big words that appear as they're spoken: for the moments that matter (the bottom line, the question
+// for the comments, a quiz question). The captions are hidden on these scenes: the words ARE the scene.
+class KineticBg {
+  constructor(words, accent, seed = 0, { top = 900, size = 108, label = "" } = {}) {
+    this.words = words; this.accent = accent; this.t = 0; this.label = label;
+    const bg = canvas(W, H), c = bg.getContext("2d");
+    const g = c.createLinearGradient(0, 0, W, H); g.addColorStop(0, "rgb(12,14,32)"); g.addColorStop(1, rgba(accent.map((v) => Math.round(v * 0.28))));
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    for (let i = 0; i < 6; i++) { c.beginPath(); c.arc((seed * 197 + i * 331) % W, 300 + ((seed * 89 + i * 263) % 1300), 140 + (i * 53) % 200, 0, Math.PI * 2); c.fillStyle = rgba(accent, 0.05 + (i % 3) * 0.02); c.fill(); }
+    this.bg = bg;
+    // Lay the words out once: as big as fits in at most 6 lines.
+    const m = canvas(10, 10).getContext("2d"), texts = words.map((w) => w.text.replace(/["“”]/g, "").toUpperCase());
+    for (this.size = size; ; this.size -= 6) {
+      m.font = `${this.size}px Anton`; const gap = this.size * 0.3, rows = [[]]; let x = 0;
+      texts.forEach((tx, i) => { const w = m.measureText(tx).width; if (x + w > W - 150 && rows.at(-1).length) { rows.push([]); x = 0; } rows.at(-1).push([i, tx, w]); x += w + gap; });
+      if (rows.length <= 5 || this.size <= 56) { this.rows = rows; this.gap = gap; break; }
+    }
+    this.top = top - (this.rows.length - 1) * this.size * 0.6;
+    this.feel = words.map((w) => emphasisOf(w.text));
+  }
+  setTime(t) { this.t = t; }
+  draw(ctx, p) {
+    ctx.drawImage(this.bg, 0, 0);
+    if (this.label) { ctx.save(); ctx.font = "800 46px Montserrat"; ctx.textAlign = "center"; ctx.fillStyle = rgba(this.accent); ctx.fillText(this.label, W / 2, this.top - this.size * 1.1); ctx.restore(); }
+    ctx.save(); ctx.font = `${this.size}px Anton`; ctx.textBaseline = "middle"; ctx.textAlign = "left"; ctx.lineJoin = "round";
+    this.rows.forEach((row, r) => {
+      const total = row.reduce((n, [, , w]) => n + w, 0) + this.gap * (row.length - 1);
+      let x = (W - total) / 2; const y = this.top + r * this.size * 1.2;
+      for (const [i, tx, w] of row) {
+        const wd = this.words[i], age = this.t - wd.start;
+        if (age < -0.02) { x += w + this.gap; continue; }                     // not said yet
+        const k = Math.min(1, Math.max(0, age / 0.14)), s = 0.6 + 0.4 * ease(k) + (k < 1 ? 0.12 * Math.sin(Math.PI * k) : 0);
+        const on = this.t >= wd.start && this.t < wd.end + 0.05;
+        ctx.save(); ctx.globalAlpha = Math.min(1, 0.2 + k); ctx.translate(x + w / 2, y); ctx.scale(s, s);
+        ctx.lineWidth = 14; ctx.strokeStyle = "rgba(0,0,0,0.85)"; ctx.strokeText(tx, -w / 2, 0);
+        ctx.fillStyle = on ? rgba(this.accent) : this.feel[i] > 0 ? "rgb(74,222,128)" : this.feel[i] < 0 ? "rgb(255,92,92)" : "#fff";
+        ctx.fillText(tx, -w / 2, 0); ctx.restore();
+        x += w + this.gap;
+      }
+    });
+    ctx.restore();
+  }
+  dispose() { this.bg.width = this.bg.height = 0; }
+}
+
+// A quiz question: "QUESTION 1 OF 3", "TRUE OR FALSE?", the statement word by word, then a 3-2-1 countdown.
+class QuizBg extends KineticBg {
+  constructor(words, accent, seed, { num, of, countStart, countEnd }) {
+    super(words, accent, seed, { top: 960, size: 92 });
+    this.num = num; this.of = of; this.countStart = countStart; this.countEnd = countEnd;
+  }
+  draw(ctx, p) {
+    super.draw(ctx, p);
+    ctx.save(); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.font = "800 44px Montserrat"; ctx.fillStyle = "rgba(255,255,255,0.75)"; ctx.fillText(`QUESTION ${this.num} OF ${this.of}`, W / 2, 470);
+    const pulse = 1 + 0.03 * Math.sin(this.t * 6);
+    ctx.translate(W / 2, 580); ctx.scale(pulse, pulse); ctx.font = "120px Anton"; ctx.lineJoin = "round"; ctx.lineWidth = 16; ctx.strokeStyle = "rgba(0,0,0,0.85)";
+    ctx.strokeText("TRUE OR FALSE?", 0, 0); ctx.fillStyle = rgba(this.accent); ctx.fillText("TRUE OR FALSE?", 0, 0);
+    ctx.restore();
+    // The countdown, in the pause after the question.
+    const left = this.countEnd - this.t, span = this.countEnd - this.countStart;
+    if (this.t >= this.countStart && left > 0) {
+      const n = Math.min(3, Math.max(1, Math.ceil((left / span) * 3))), frac = ((left / span) * 3) % 1 || 1;
+      const cx = W / 2, cy = 1450;
+      ctx.save();
+      ctx.beginPath(); ctx.arc(cx, cy, 120, 0, Math.PI * 2); ctx.fillStyle = "rgba(0,0,0,0.45)"; ctx.fill();
+      ctx.beginPath(); ctx.arc(cx, cy, 120, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (left / span)); ctx.lineWidth = 16; ctx.strokeStyle = rgba(this.accent); ctx.lineCap = "round"; ctx.stroke();
+      const s = 0.8 + 0.4 * frac;
+      ctx.translate(cx, cy); ctx.scale(s, s); ctx.font = "150px Anton"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#fff"; ctx.fillText(String(n), 0, 8);
+      ctx.restore();
+    }
+  }
+}
+
+// The answer: TRUE or FALSE stamped on screen in green or red; the explanation runs in the captions.
+class AnswerBg {
+  constructor(answer, accent) {
+    this.answer = answer; this.accent = accent;
+    const col = answer ? [34, 160, 90] : [200, 50, 60];
+    const bg = canvas(W, H), c = bg.getContext("2d");
+    const g = c.createRadialGradient(W / 2, 760, 50, W / 2, 760, 1300); g.addColorStop(0, rgba(col)); g.addColorStop(1, "rgb(10,12,26)");
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    this.bg = bg; this.col = col;
+  }
+  draw(ctx, p) {
+    ctx.drawImage(this.bg, 0, 0);
+    const k = Math.min(1, p / 0.12), s = 1.7 - 0.7 * ease(k);
+    ctx.save(); ctx.globalAlpha = Math.min(1, k * 1.5); ctx.translate(W / 2, 720); ctx.rotate(-0.08); ctx.scale(s, s);
+    // ✓ or ✗ in a circle, then the word
+    ctx.beginPath(); ctx.arc(0, -170, 110, 0, Math.PI * 2); ctx.fillStyle = "#fff"; ctx.fill();
+    ctx.lineWidth = 26; ctx.lineCap = ctx.lineJoin = "round"; ctx.strokeStyle = rgba(this.col); ctx.beginPath();
+    if (this.answer) { ctx.moveTo(-50, -170); ctx.lineTo(-12, -128); ctx.lineTo(56, -214); } else { ctx.moveTo(-44, -214); ctx.lineTo(44, -126); ctx.moveTo(44, -214); ctx.lineTo(-44, -126); }
+    ctx.stroke();
+    ctx.font = "230px Anton"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.lineWidth = 22; ctx.strokeStyle = "rgba(0,0,0,0.7)";
+    ctx.strokeText(this.answer ? "TRUE" : "FALSE", 0, 60); ctx.fillStyle = "#fff"; ctx.fillText(this.answer ? "TRUE" : "FALSE", 0, 60);
+    ctx.restore();
+  }
+  dispose() { this.bg.width = this.bg.height = 0; }
+}
+
 class OutroBg {
   constructor(brand, accent, handle = "") {
     this.accent = accent;
@@ -371,6 +471,10 @@ class Painter {
     try {
       if (sc.kind === "image" && sc.bitmap) return new ImageBg(sc.bitmap);
       if (sc.kind === "outro") return new OutroBg(this.job.brand, this.accent, this.job.handle);
+      const said = () => this.job.words.filter((w) => w.start >= sc.start - 0.05 && w.start < sc.end);
+      if (sc.kind === "kinetic") return new KineticBg(said(), this.accent, sc.seed || 0, { label: sc.tone === "question" ? "YOUR TURN" : "" });
+      if (sc.kind === "quiz") { const w = said(), k = w.findIndex((x) => /^false:?$/i.test(x.text.replace(/[^a-z:]/gi, ""))); return new QuizBg(k >= 0 ? w.slice(k + 1) : w, this.accent, sc.seed || 0, sc); }
+      if (sc.kind === "answer") return new AnswerBg(sc.answer, this.accent);
       if (sc.kind === "chart") return new ChartBg(sc.chart);
       if (sc.kind === "stat" && sc.spec) return new StatBg(sc.spec, this.accent, this.job.captionPos, sc.seed || 0);
       if (sc.kind === "illus") return new IllusBg(sc.icon, sc.label, this.accent, this.job.captionPos, sc.seed || 0);
@@ -392,12 +496,13 @@ class Painter {
     }
     const into = t - sc.start;
     // A quick punch-in as each scene starts (harder on the hook and on the payoff), like an edited video.
-    const punch = ["outro", "recap", "section"].includes(sc.kind) ? 0 : idx === 0 || sc.payoff ? 0.1 : 0.04;
+    const punch = ["outro", "recap", "section", "kinetic", "quiz"].includes(sc.kind) ? 0 : idx === 0 || sc.payoff || sc.kind === "answer" ? 0.1 : 0.04;
     const z = punch && into < 0.35 ? 1 + punch * (1 - ease(into / 0.35)) : 1;
     // ...and a short shake when the payoff hits.
     const shake = sc.payoff && into < 0.22 ? 14 * (1 - into / 0.22) : 0;
     const sx = shake * Math.sin(into * 97), sy = shake * Math.cos(into * 83);
     ctx.setTransform(this.k * z, 0, 0, this.k * z, this.k * (W * (1 - z) / 2 + sx), this.k * (H * (1 - z) / 2 + sy));
+    this.bg.setTime?.(t);
     this.bg.draw(ctx, (t - sc.start) / Math.max(0.001, sc.end - sc.start));
     ctx.setTransform(this.k, 0, 0, this.k, 0, 0);
     // A white flash on the payoff, so the moment the video promised feels like one.
@@ -407,7 +512,7 @@ class Painter {
     if (sc.stat && !["outro", "chart", "stat"].includes(sc.kind)) drawStatPop(ctx, sc.stat, into, sc.end - t, this.popY, this.accent);
     if (sc.chip) drawChip(ctx, sc.chip, into, sc.end - t, this.accent, sc.tone);
     if (sc.source) drawSource(ctx, sc.source, Math.min(1, into / 0.3) * Math.min(1, (sc.end - t) / 0.2));
-    if (sc.kind !== "recap") this.captions.draw(ctx, t, sc.kind === "outro" ? 1180 : sc.kind === "section" ? 1520 : this.captionY);
+    if (!["recap", "kinetic", "quiz"].includes(sc.kind)) this.captions.draw(ctx, t, sc.kind === "outro" ? 1180 : sc.kind === "section" ? 1520 : this.captionY);
     ctx.fillStyle = rgba(this.accent); ctx.fillRect(0, H - 12, W * (t / this.total), 12);
   }
   dispose() { this.bg?.dispose(); for (const c of [this.header, this.plain, this.snap]) c.width = c.height = 0; }

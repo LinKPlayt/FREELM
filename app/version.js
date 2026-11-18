@@ -1,9 +1,15 @@
 // The app's version and its update notes, shown once in a "What's new" window after each update.
 // When you deploy: bump APP_VERSION, add an entry at the top of UPDATES, and set the same number in
 // sw.js (VERSION = "reelbot-v<APP_VERSION>"). A test checks the two match.
-export const APP_VERSION = 36;
+export const APP_VERSION = 37;
 
 export const UPDATES = [
+  { version: 37, title: "Quiz reels and big-word moments", items: [
+    "New type: Quiz. Three “True or false?” questions for your niche, each with a 3-2-1 countdown and ticking clock, then a TRUE ✓ or FALSE ✗ stamp with a chime or buzzer and the explanation. Viewers play along and comment their score.",
+    "Quiz questions are written and checked by hand (40 of them across the six niches), and the app avoids repeating the ones you used recently.",
+    "The bottom line and the question for the comments now appear as big words on screen, word by word as they're spoken.",
+    "The narrator slows down a touch for the moments that matter: the payoff, the bottom line and quiz answers.",
+  ] },
   { version: 36, title: "A proofreader for the narrator", items: [
     "Every line is proofread before it's spoken: “a” vs “an” (an ETF, an 8% return, a university), doubled words, spacing and punctuation, capitals, and slips like “could of”, “alot” or “more then”.",
     "Written-only shorthand is said properly: “e.g.” becomes “for example”, “etc.” becomes “and so on”, and citation marks like [3] are removed.",

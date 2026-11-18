@@ -7,6 +7,7 @@ import { generateMusic, mix, resample, SR } from "./music.js";
 import { loadFonts, renderReel } from "./render.js";
 import { analyzeLine, iconFor } from "./visuals.js";
 import { dramatize } from "./hook.js";
+import { buildQuiz } from "./quiz.js";
 import { proofread } from "./wording.js";
 import { artFor, motifsFor, artOptions, drawAhead, styleFor } from "./illustrator.js";
 const accentOf = (hex = "#FFD60A") => { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
@@ -45,6 +46,13 @@ async function writeScript(opts, data, say) {
   const hist = [...history(), ...(opts.exclude || []).map((id) => ({ id, kind: "evergreen" }))], done = new Set(hist.map((h) => h.id));
   const generic = data.generic_visuals[opts.niche] || data.generic_visuals["personal finance"];
   const o = { niche: opts.niche, cta: opts.cta, generic };
+  if (opts.mode === "quiz") {
+    say("Picking quiz questions…");
+    let recent = []; try { recent = JSON.parse(localStorage.getItem("quizUsed") || "[]"); } catch { /* none */ }
+    const quiz = buildQuiz(o, { recent });
+    try { localStorage.setItem("quizUsed", JSON.stringify([...recent, ...quiz.questions].slice(-24))); } catch { /* private mode */ }
+    return quiz;
+  }
   let order = [opts.topicId || opts.offline ? "evergreen" : opts.mode];   // news and markets need the internet
   if (order[0] === "auto") {
     const w = ["investing", "crypto", "economy"].includes(opts.niche) ? { evergreen: 0.4, news: 0.3, market: 0.3 } : { evergreen: 0.5, news: 0.3, market: 0.2 };
@@ -306,7 +314,8 @@ export async function planReel(opts, ui) {
     ? await customScript(opts, generic, say)
     : await writeScript(opts, data, (t) => say(t, 0.1));
   if (isDeep(opts.length)) { say("Researching more detail for the deep dive…", 0.15); await deepen(script, { ...opts, depth: opts.depth || 2 }); }
-  const fact = await checkFacts(script, opts, say);
+  // Quiz questions are written and checked by hand (and some are deliberately false until the answer).
+  const fact = script.kind === "quiz" ? null : await checkFacts(script, opts, say);
   polish(script);                    // the storyteller's last pass: no repeats, one definition, in order
   dramatize(script, opts);           // the emotion layer: a hook with a promise, its payoff, pacing, a question
   script.wording = proofread(script);   // the proofreader: grammar, spacing and wording the narrator will say
@@ -370,7 +379,8 @@ export async function planFromIdea(idea, opts, ui) {
   const script = scriptFromIdea(idea, { niche: opts.niche, cta: opts.cta, generic, visualFor: visualMatch });
   const say = (text, f = 0) => ui.say(text, Math.min(1, Math.max(0, f)));
   if (isDeep(opts.length)) { say("Researching more detail for the deep dive…", 0.1); await deepen(script, { ...opts, depth: opts.depth || 2 }); }
-  const fact = await checkFacts(script, opts, say);
+  // Quiz questions are written and checked by hand (and some are deliberately false until the answer).
+  const fact = script.kind === "quiz" ? null : await checkFacts(script, opts, say);
   polish(script);                    // the storyteller's last pass: no repeats, one definition, in order
   dramatize(script, opts);           // the emotion layer: a hook with a promise, its payoff, pacing, a question
   script.wording = proofread(script);   // the proofreader: grammar, spacing and wording the narrator will say
@@ -486,6 +496,10 @@ export async function produceReel(plan, opts, ui) {
     else if (line.kind === "chart" && line.chart) { sc.kind = "chart"; sc.chart = line.chart; }
     else if (line.kind === "section") { sc.kind = "section"; sc.num = line.num; sc.label = line.label; }
     else if (line.kind === "recap") { sc.kind = "recap"; sc.items = line.items; }
+    else if (line.kind === "quiz") { sc.kind = "quiz"; sc.num = line.quiz?.n || 1; sc.of = line.quiz?.of || 1; sc.countStart = spans[i][1]; sc.countEnd = sc.end; }
+    else if (line.kind === "answer") { sc.kind = "answer"; sc.answer = line.answer !== false; sc.payoff = true; }
+    // The big moments (the bottom line, the question for the comments) as big words on screen.
+    else if (line.kind === "media" && (line.stance || line.question) && !line.vmode && opts.kinetic !== false) { sc.kind = "kinetic"; sc.chip = ""; }
     else {
       line.asset = await line.asset;
       const v = decideVisual(line, i, script.title);
@@ -583,7 +597,7 @@ export function releasePlan(plan) {
 // Photos are found again when a draft is opened (your own photos aren't kept, to save space).
 export function draftFromPlan(plan, label) {
   const strip = (l) => ({ text: l.text, visual: l.visual, query: l.query, kind: l.kind, chart: l.chart || null, vmode: l.vmode, concrete: l.concrete,
-    source: l.source, hold: l.hold, items: l.items, num: l.num, label: l.label, section: l.section, tip: l.tip, claim: l.claim, pace: l.pace, payoff: l.payoff, artPick: l.artPick, question: l.question, optional: l.optional, stance: l.stance, role: l.role,
+    source: l.source, hold: l.hold, items: l.items, num: l.num, label: l.label, section: l.section, tip: l.tip, claim: l.claim, pace: l.pace, payoff: l.payoff, artPick: l.artPick, question: l.question, optional: l.optional, stance: l.stance, quiz: l.quiz, answer: l.answer, role: l.role,
     check: l.check ? { status: l.check.status, kind: l.check.kind, sources: l.check.sources, live: l.check.live,
       evidence: (l.check.evidence || []).slice(0, 2).map((e) => ({ text: e.text, source: e.source, section: e.section })) } : undefined,
     mine: l.asset && !l.asset.credit ? true : undefined });
