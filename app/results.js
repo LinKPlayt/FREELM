@@ -21,7 +21,9 @@ export function saveResult(reel, stats) {
 }
 
 const LENGTH_NAME = (s) => (s < 32 ? "Short (under 32 s)" : s < 48 ? "Standard (32–48 s)" : s < 75 ? "Long (48–75 s)" : "Deep dive (75 s+)");
-const KIND_NAME = { evergreen: "Explainers", news: "Today's news", market: "Market recaps", custom: "Your topics", idea: "Idea Lab ideas" };
+const KIND_NAME = { evergreen: "Explainers", news: "Today's news", market: "Market recaps", custom: "Your topics", idea: "Idea Lab ideas", quiz: "Quizzes" };
+const HOOK_NAME = { stakes: "Why it matters to you", catch: "“Nobody mentions the catch”", number: "“One number most people never hear”", plain: "“Most people never learn how it works”",
+  person: "Who they are", written: "Hand-written hook", quiz: "Quiz hook", news: "News hook", market: "Market hook" };
 
 // What works: for each setting, the value with the most average views (needs 2+ values with data).
 export function insights(labels = {}) {
@@ -29,24 +31,26 @@ export function insights(labels = {}) {
   if (rows.length < 2) return { count: rows.length, rows: [] };
   const fmt = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(Math.round(n)));
   const engagement = (r) => ((r.stats.likes || 0) + (r.stats.comments || 0) * 2 + (r.stats.saves || 0) * 2) / r.stats.views;
+  // [name, setting it can apply to (or null), the raw value, how to show it]
   const dims = [
-    ["Niche", (r) => r.niche],
-    ["Length", (r) => (r.duration ? LENGTH_NAME(r.duration) : null)],
-    ["Type", (r) => KIND_NAME[r.kind] || null],
-    ["Narrator", (r) => labels.voice?.[r.settings.voice] || r.settings.voice],
-    ["Ending", (r) => labels.cta?.[r.settings.cta] || r.settings.cta],
-    ["Music", (r) => labels.music?.[r.settings.music] || r.settings.music],
-    ["Captions", (r) => labels.captions?.[r.settings.captions] || r.settings.captions],
+    ["Niche", null, (r) => r.niche, (v) => v],
+    ["Length", null, (r) => (r.duration ? LENGTH_NAME(r.duration) : null), (v) => v],
+    ["Type", null, (r) => KIND_NAME[r.kind] || null, (v) => v],
+    ["Hook", null, (r) => r.settings.hook || null, (v) => HOOK_NAME[v] || v],
+    ["Narrator", "voice", (r) => r.settings.voice, (v) => labels.voice?.[v] || v],
+    ["Ending", "cta", (r) => r.settings.cta, (v) => labels.cta?.[v] || v],
+    ["Music", "music", (r) => r.settings.music, (v) => labels.music?.[v] || v],
+    ["Captions", "captions", (r) => r.settings.captions, (v) => labels.captions?.[v] || v],
   ];
   const out = [];
-  for (const [name, key] of dims) {
+  for (const [name, setting, key, show] of dims) {
     const groups = new Map();
     for (const r of rows) { const k = key(r); if (!k) continue; const g = groups.get(k) || []; g.push(r); groups.set(k, g); }
     if (groups.size < 2) continue;
     const scored = [...groups].map(([k, g]) => ({ k, n: g.length, views: g.reduce((a, r) => a + r.stats.views, 0) / g.length, eng: g.reduce((a, r) => a + engagement(r), 0) / g.length }))
       .sort((a, b) => b.views - a.views);
     const best = scored[0], next = scored[1];
-    out.push({ name, best: best.k, text: `${best.k}: ${fmt(best.views)} average views (${best.n} reel${best.n > 1 ? "s" : ""})`, lift: next.views ? best.views / next.views : 0, vs: `${next.k}: ${fmt(next.views)}` });
+    out.push({ name, setting, best: best.k, text: `${show(best.k)}: ${fmt(best.views)} average views (${best.n} reel${best.n > 1 ? "s" : ""})`, lift: next.views ? best.views / next.views : 0, vs: `${show(next.k)}: ${fmt(next.views)}` });
   }
   const total = rows.reduce((a, r) => a + r.stats.views, 0);
   const top = rows.slice().sort((a, b) => b.stats.views - a.stats.views)[0];

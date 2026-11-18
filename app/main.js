@@ -3,6 +3,7 @@ import { drawAlternatives, seriesTopics, appData, planReel, produceReel, release
 import { StatBg, IllusBg } from "./graphics.js";
 import { describeStat } from "./visuals.js";
 import { hookOptions, coach } from "./extras.js";
+import { smartHooks } from "./hook.js";
 import { checkWording, proofread } from "./wording.js";
 import { drawArt, motifsFor, pickMotifs, styleFor, ART_STYLES, forgetArt, savedArt, drawAhead, nextBatch, MOTIFS } from "./illustrator.js";
 const MOTIFS_COUNT = Object.keys(MOTIFS).length;
@@ -216,24 +217,84 @@ function resultsForm(r) {
   return `<details class="results"><summary>${resultsSummary(res)}</summary>
     <div class="results-grid">${FIELDS.map(([k, label]) => `<div><label>${label}</label><input type="number" inputmode="numeric" min="0" data-result="${k}" value="${res[k] || ""}"></div>`).join("")}</div></details>`;
 }
+// Applies the best narrator, ending, music and caption style from your results to your settings.
+const BEST_TO_PREF = { voice: ["voices", VOICE_LABELS, "voice"], cta: ["ctas", CTA_LABELS, "cta"], music: ["moods", MOODS, "mood"], captions: ["cap-styles", CAPTION_STYLES, "capStyle"] };
+function useBest() {
+  const ins = insights({ voice: VOICE_LABELS, cta: CTA_LABELS, music: MOODS, captions: CAPTION_STYLES }), done = [];
+  for (const row of ins.rows) {
+    const pref = BEST_TO_PREF[row.setting]; if (!pref || !pref[1][row.best]) continue;
+    store.set(pref[2], row.best); prefChips(pref[0], pref[1], pref[2], row.best);
+    done.push(`${row.name.toLowerCase()}: ${pref[1][row.best]}`);
+  }
+  if (done.some((x) => x.startsWith("narrator"))) { resetVoiceLevel(); showVoiceNote?.(); }
+  drawStylePreview();
+  toast(done.length ? `Now using ${done.join(", ")}` : "Nothing to change yet");
+}
 function renderInsights() {
   const ins = insights({ voice: VOICE_LABELS, cta: CTA_LABELS, music: MOODS, captions: CAPTION_STYLES });
   $("insights").innerHTML = ins.rows.length ? `<div class="card"><h2>What works for you</h2>
       <p class="meta">From ${ins.count} reels with results · ${ins.avg} average views · best: ${esc(ins.top)}</p>
       ${ins.rows.map((x) => `<div class="insight"><b>${esc(x.name)}</b> · ${esc(x.text)}<br><small class="meta">next best ${esc(x.vs)}${x.lift >= 1.2 ? ` · ${x.lift.toFixed(1)}× more` : ""}</small></div>`).join("")}
+      ${ins.rows.some((x) => x.setting) ? `<button class="btn" data-use-best="1" style="width:100%;margin-top:6px">Use what works (${ins.rows.filter((x) => x.setting).map((x) => x.name.toLowerCase()).join(", ")})</button>` : ""}
       <p class="meta" style="margin-top:8px">Make more of what wins. More results make this more reliable.</p></div>`
     : `<div class="card"><h2>What works for you</h2><p class="meta">Add the views (and likes, comments, saves) of ${ins.count ? "one more reel" : "two or more reels"} under “Add results” and this shows which niche, length, narrator, ending and music get you the most views.</p></div>`;
 }
 
+// Today's planned video (from Plan my week): one tap to make it, or open it to review first.
+const todayDraft = () => { const day = new Date().toLocaleDateString("en-US", { weekday: "short" }); return listDrafts().find((d) => d.label.startsWith(day + " · ")); };
+function renderToday() {
+  const d = todayDraft(), el = $("today"); if (!el) return;
+  el.classList.toggle("hidden", !d);
+  if (d) el.innerHTML = `<h2>Today's video</h2><p>${esc(d.label.replace(/^\w{3} · /, ""))}</p>
+    <div class="btns" style="margin:0"><button class="primary" data-today="make">Make it now</button><button class="btn" data-today="open">Review first</button></div>`;
+}
+
+// Makes several drafts one after another (Make all, or today's video): each is turned into a video,
+// saved to the Library and removed from Drafts. Stops at the first one that fails, keeping the rest.
+async function makeDrafts(list) {
+  if (state.busy || !list.length) return;
+  state.busy = true;
+  show("create");      // the progress screen is on the Create tab
+  screen("job"); $("preview").classList.remove("hidden"); $("job-title").textContent = "Getting ready…"; say("Starting…", 0);
+  let wake = null; try { wake = await navigator.wakeLock?.request("screen"); } catch { /* not supported */ }
+  const t0 = performance.now(), made = [];
+  try {
+    if (state.ideasUI) await state.ideasUI.unloadAI();
+    const opts = options();
+    for (const [i, d] of list.entries()) {
+      const tag = list.length > 1 ? `Video ${i + 1} of ${list.length}` : "Today's video";
+      $("job-title").textContent = `${tag}: ${d.label.replace(/^\w{3} · /, "")}`;
+      const partSay = (text, f) => say(`${tag}: ${text}`, f);
+      const plan = await planFromDraft(d, { say: (t, f) => partSay(t, (f || 0) * 0.05) });
+      const t1 = performance.now();
+      const reel = await produceReel(plan, opts, { say: partSay, canvas: $("preview"), audioCtx: state.audioCtx, toast });
+      learnMakeRate((performance.now() - t1) / 1000, reel.duration);
+      await saveReel(reel); deleteDraft(d.id); made.push(reel);
+    }
+    screen("form");
+    store.set("made", "1"); store.set("voiceReady-" + voiceOpts(state.voice).engine, "1");
+    $("result").innerHTML = `<h2>${made.length === 1 ? "Your video is ready" : `All ${made.length} videos are ready`}</h2><p>Made in ${fmtDuration((performance.now() - t0) / 1000)} on this device. ${made.length > 1 ? "They're all in the Library." : ""}</p>` + made.map((r) => reelCard(r, true)).join("<hr>");
+    $("result").classList.remove("hidden");
+    window.__lastReel = made.at(-1); window.__batch = made;
+  } catch (e) {
+    screen("form");
+    showError(e, made.length ? `Made ${made.length} of ${list.length}, then stopped. The rest are still in Drafts` : "The video couldn't be made");
+  }
+  wake?.release?.().catch(() => {}); closeAudio();
+  state.busy = false; renderDrafts(); renderToday();
+}
+
 function renderDrafts() {
   const drafts = listDrafts();
-  $("drafts").innerHTML = drafts.length ? `<div class="card"><h2>Drafts</h2><p>Scripts you saved to finish later.</p>${drafts.map((d) => `
+  $("drafts").innerHTML = drafts.length ? `<div class="card"><h2>Drafts</h2><p>Scripts you saved to finish later.${drafts.length > 1 ? " Make them all in one go: keep the app open and the phone plugged in." : ""}</p>
+    ${drafts.length > 1 ? `<button class="primary" data-draft-all="1" style="margin:4px 0 10px">Make all ${drafts.length} videos</button>` : ""}${drafts.map((d) => `
     <div class="draft"><div><b>${esc(d.label)}</b><div class="meta">${new Date(d.saved).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} · ${d.script.lines.length} scenes</div></div>
       <div class="mini" style="margin:0"><button data-draft-open="${esc(d.id)}">Open</button><button class="del" data-draft-del="${esc(d.id)}">Delete</button></div></div>`).join("")}</div>` : "";
 }
 $("drafts").addEventListener("click", async (e) => {
+  if (e.target.closest("[data-draft-all]")) { unlockAudio(); return makeDrafts(listDrafts().sort((a, b) => a.saved - b.saved)); }
   const open = e.target.closest("[data-draft-open]"), del = e.target.closest("[data-draft-del]");
-  if (del) { deleteDraft(del.dataset.draftDel); renderDrafts(); return; }
+  if (del) { deleteDraft(del.dataset.draftDel); renderDrafts(); renderToday(); return; }
   if (!open || state.busy) return;
   const d = listDrafts().find((x) => x.id === open.dataset.draftOpen); if (!d) return;
   state.busy = true; show("create");
@@ -480,6 +541,7 @@ async function planWeek() {
       made.push(d);
     }
     screen("form");
+    renderToday();
     $("result").innerHTML = `<h2>Your week is planned</h2><p>${made.length} drafts saved in the Library, each fact-checked and ready to review. Open one when you're ready to make it.</p><ol class="steps">${made.map((d) => `<li>${esc(d.label)}</li>`).join("")}</ol>`;
     $("result").classList.remove("hidden");
   } catch (e) { screen("form"); showError(e, made.length ? `Planned ${made.length}, then stopped` : "Couldn't plan the week"); }
@@ -683,6 +745,7 @@ $("scenes").addEventListener("input", (e) => {
   line.text = e.target.value.replace(/\s+/g, " ").trim();
   line.analysis = null;                                  // re-read numbers and concepts from the new text
   line.claim = null;                                     // your wording is now what gets fact-checked
+  if (+i === 0) state.plan.script.hookKind = "written";
   state.plan.edited = true; updateEstimate();
   // Re-check an edited fact against the evidence already gathered (instant, on the phone).
   if (line.check) line.check = { ...line.check, stale: true };
@@ -724,6 +787,7 @@ $("scenes").addEventListener("click", async (e) => {
     plan.hookChoices ??= [first.text, ...options.filter((o) => o !== first.text)];
     plan.hookIndex = ((plan.hookIndex || 0) + 1) % plan.hookChoices.length;
     first.text = plan.hookChoices[plan.hookIndex]; first.analysis = null; plan.edited = true;
+    plan.script.hookKind = smartHooks(plan.script).find((o) => o.text === first.text)?.kind || "written";   // for "What works for you"
     return showReview();
   }
   if (b.dataset.artpick != null) {
@@ -1106,6 +1170,14 @@ async function init() {
   $("version-line").textContent = `Version ${APP_VERSION} · ${UPDATES[0].title}`;
   $("whats-new").addEventListener("click", () => showWhatsNew(APP_VERSION - 3));
   $("art-more").addEventListener("click", drawMoreArt);
+  $("insights").addEventListener("click", (e) => { if (e.target.closest("[data-use-best]")) useBest(); });
+  renderToday();
+  $("today").addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-today]"), d = todayDraft(); if (!b || !d || state.busy) return;
+    unlockAudio();   // inside the tap, for iPhone audio
+    if (b.dataset.today === "make") return makeDrafts([d]);
+    show("library"); document.querySelector(`[data-draft-open="${CSS.escape(d.id)}"]`)?.click();
+  });
   checkWhatsNew();
   $("ai-check").addEventListener("click", aiCheck);
   $("wipe").addEventListener("click", async () => { if (confirm("Delete every reel stored on this phone?")) { await clearReels(); renderLibrary(); toast("Deleted"); } });

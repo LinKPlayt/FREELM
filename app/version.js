@@ -1,9 +1,15 @@
 // The app's version and its update notes, shown once in a "What's new" window after each update.
 // When you deploy: bump APP_VERSION, add an entry at the top of UPDATES, and set the same number in
 // sw.js (VERSION = "reelbot-v<APP_VERSION>"). A test checks the two match.
-export const APP_VERSION = 40;
+export const APP_VERSION = 41;
 
 export const UPDATES = [
+  { version: 41, title: "Your week, made in one go", items: [
+    "Make all: the Library can now turn every draft into a video in one go, one after another, while you keep the app open.",
+    "Today's video: when Plan my week has a draft for today, it shows at the top of Create with a one-tap “Make it now”.",
+    "What works for you now compares hook styles (stakes, the catch, a number, quiz…) and includes quizzes.",
+    "“Use what works” applies your best narrator, ending, music and caption style in one tap.",
+  ] },
   { version: 40, title: "Better covers, a varied week, more quiz questions", items: [
     "Covers: a wide photo is shown whole over a soft blurred copy instead of being cropped, and drawn illustrations sit below the title instead of behind it.",
     "Photos: foreign banknotes and coins (like pound notes) are only used when nothing else turns up.",

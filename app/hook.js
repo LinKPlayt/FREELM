@@ -127,17 +127,17 @@ export function smartHooks(script) {
   const out = [];
   if (script.person) {
     const rich = content.some(([l]) => /\b(billion|richest|wealthiest|net worth|fortune)\b/i.test(l.text));
-    out.push({ text: rich ? `How did ${topic} build one of the biggest fortunes on earth? Here's the short version.` : `Who is ${topic}, and why does everyone know the name?` });
+    out.push({ kind: "person", text: rich ? `How did ${topic} build one of the biggest fortunes on earth? Here's the short version.` : `Who is ${topic}, and why does everyone know the name?` });
     return out;
   }
   const stake = STAKES.find(([re]) => re.test(topic))?.[1];
   const risk = content.find(([l]) => l.role === "risk" || /^The catch:/i.test(l.text));
   const num = content.find(([l]) => (l.role === "number" || /^By the numbers:/i.test(l.text)) && statFor(body(l.text)));
   // Short enough to land in the first two seconds (14 words or fewer).
-  if (stake) out.push({ text: stake.split(/\s+/).length <= 10 ? `${stake} Here's how it works.` : stake });
-  if (risk) out.push({ text: `${cap(topic)}: everyone talks about it. Almost nobody mentions the catch.`, payoff: risk[1], lead: "Here's the catch:" });
-  if (num) out.push({ text: `${cap(topic)}: there's one number most people never hear. Stay for it.`, payoff: num[1], lead: "Here's that number:" });
-  out.push({ text: `${cap(topic)}: most people never learn how it actually works. Here's the short version.` });
+  if (stake) out.push({ kind: "stakes", text: stake.split(/\s+/).length <= 10 ? `${stake} Here's how it works.` : stake });
+  if (risk) out.push({ kind: "catch", text: `${cap(topic)}: everyone talks about it. Almost nobody mentions the catch.`, payoff: risk[1], lead: "Here's the catch:" });
+  if (num) out.push({ kind: "number", text: `${cap(topic)}: there's one number most people never hear. Stay for it.`, payoff: num[1], lead: "Here's that number:" });
+  out.push({ kind: "plain", text: `${cap(topic)}: most people never learn how it actually works. Here's the short version.` });
   return out;
 }
 
@@ -148,6 +148,7 @@ const GENERIC_HOOK = /explained in|here's what it actually means|really means, i
 export function dramatize(script, { length = "standard", ctaKind = "follow" } = {}) {
   if (!script?.lines?.length || script.dramatized) return script;
   script.dramatized = true;
+  script.hookKind = { quiz: "quiz", news: "news", market: "market" }[script.kind] || "written";
   const lines = script.lines, hook = lines[0];
   const deep = length === "deep" || length === "full" || script.deep;
 
@@ -157,7 +158,7 @@ export function dramatize(script, { length = "standard", ctaKind = "follow" } = 
     // Prefer a tease with a payoff (it keeps people to the end), then the stakes, then the rest.
     const best = options.find((o) => o.payoff != null && !deep) || options[0];
     if (best) {
-      hook.text = best.text; hook.analysis = null;
+      hook.text = best.text; hook.analysis = null; script.hookKind = best.kind;
       if (best.payoff != null) {
         const p = lines[best.payoff];
         p.text = relead(p.text, best.lead); p.payoff = true; p.analysis = null;

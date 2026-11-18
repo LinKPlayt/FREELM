@@ -123,7 +123,24 @@ export default async function ({ t, newPage, BASE }) {
     await page.click('nav [data-tab="library"]'); await page.locator("[data-draft-open]").first().click();
     await page.waitForSelector("#review:not(.hidden)", { timeout: 180000 });
     t.ok(await page.locator(".scene").count() >= 4, "a saved draft opens in the review screen, with photos found again");
-    await page.click("#cancel-review"); await page.click('nav [data-tab="create"]').catch(() => {});
+    await page.click("#cancel-review");
+    // Library: "Make all" appears with several drafts.
+    await page.click('nav [data-tab="library"]');
+    t.ok(await page.locator("[data-draft-all]").isVisible(), "the Library offers Make all for several drafts", await page.innerText("#drafts").catch(() => ""));
+    // Today's video: keep one draft, labelled for today, and make it with one tap from the Create tab.
+    const left = await page.evaluate(() => {
+      const day = new Date().toLocaleDateString("en-US", { weekday: "short" }), all = JSON.parse(localStorage.getItem("drafts") || "[]");
+      const keep = all.slice(-1).map((d) => ({ ...d, label: `${day} · ${d.label.replace(/^\w{3} · /, "")}` }));
+      localStorage.setItem("drafts", JSON.stringify(keep)); return keep.length;
+    });
+    await page.reload(); await until(page, () => window.__ready, null, 60000); await toastLog();
+    t.ok(left === 1 && await page.locator("#today").isVisible() && /Today's video/.test(await page.innerText("#today")), "a draft planned for today shows as Today's video on the Create tab");
+    await page.evaluate(() => { window.__lastReel = null; window.__lastError = null; });
+    await page.click('[data-today="make"]');
+    await until(page, () => window.__batch || window.__lastError || /couldn't|stopped/i.test(document.getElementById("result").textContent), null, 900000);
+    const today = await page.evaluate(() => ({ n: (window.__batch || []).length, sound: window.__batch?.[0]?.sound, drafts: JSON.parse(localStorage.getItem("drafts") || "[]").length, err: window.__lastError }));
+    t.ok(today.n === 1 && today.sound === true && today.drafts === 0 && await page.locator("#today").isHidden(), "Make it now makes today's video, saves it, and clears it from Drafts", JSON.stringify(today));
+    await page.click('nav [data-tab="create"]').catch(() => {});
     for (const v of ["Heart", "Classic (fast)"]) {
       await page.click(`#voices .chip >> text="${v}"`); await page.evaluate(() => { window.__toasts = []; });
       await page.click("#voice-preview");
@@ -208,6 +225,10 @@ export default async function ({ t, newPage, BASE }) {
     const other = page.locator("#reels [data-reel]").nth(1);
     if (await other.count()) { await other.locator(".results summary").click(); await other.locator('[data-result="views"]').fill("4100"); await other.locator('[data-result="views"]').dispatchEvent("change"); }
     t.ok(/What works for you/.test(await page.innerText("#insights")) && /average views/.test(await page.innerText("#insights")), "results show a What works summary", (await page.innerText("#insights")).slice(0, 200));
+    if (await page.locator("[data-use-best]").count()) {
+      await page.evaluate(() => { window.__toasts = []; }); await page.click("[data-use-best]");
+      t.ok(await page.evaluate(() => localStorage.getItem("mood")) === "mine" && /Now using/.test(await page.evaluate(() => window.__toasts.join(" "))), "Use what works applies the best settings (here: your music)", await page.evaluate(() => window.__toasts.join(" | ")));
+    }
     await page.click('nav [data-tab="create"]').catch(() => {}); await page.click('nav [data-tab="library"]');
     t.ok(/15,400 views/.test(await page.innerText(`#reels [data-reel="${r2.id}"] .results summary`)), "results are kept");
     const caps = await page.evaluate(async (id) => { const S = await import("./app/script.js"); const { listReels } = await import("./app/store.js"); const r = (await listReels()).find((x) => x.id === id); return S.platformCaptions(r).tiktok; }, r2.id);
@@ -245,11 +266,11 @@ export default async function ({ t, newPage, BASE }) {
   t.section("Features: What's new, storage, make-time, Library covers");
   try {
     // a returning user who last saw version 29 (the window shows the newest three updates)
-    await page.evaluate(() => localStorage.setItem("seenVersion", "37"));
+    await page.evaluate(() => localStorage.setItem("seenVersion", "38"));
     await page.reload(); await until(page, () => window.__ready, null, 60000);
     t.ok(await page.locator("#news-sheet").count() === 1 && /What's new/.test(await page.innerText("#news-sheet")), "What's new appears after an update");
     const news = await page.innerText("#news-sheet");
-    t.ok(/Better covers/.test(news) && /stronger opening/.test(news) && !/Quiz reels/.test(news), "it lists only the updates since the last one seen", news.slice(0, 200));
+    t.ok(/made in one go/.test(news) && /Better covers/.test(news) && !/Sharper videos/.test(news), "it lists only the updates since the last one seen", news.slice(0, 200));
     await page.click('[data-news="close"]');
     t.ok(await page.locator("#news-sheet").count() === 0, "Got it closes it");
     await page.reload(); await until(page, () => window.__ready, null, 60000);

@@ -186,6 +186,11 @@ checks for a newer version when it comes back to the screen.
 varied (Mon explainer, Tue news, Wed quiz, Thu explainer, Fri market recap; offline, news and markets
 become explainers); with a type chosen, all five are that type. Drafts are labelled with their day.
 
+**Make all** in the Library turns every draft into a video, one after another (keep the app open; each
+finished video goes to the Library and leaves Drafts; if one fails, the rest stay in Drafts). When a
+draft is planned for today, **Today's video** appears at the top of Create with **Make it now** (no review)
+or **Review first**.
+
 ### Quiz reels
 
 Pick **Quiz** as the type. The app picks three "True or false?" questions for your niche from a
@@ -250,6 +255,9 @@ Under each reel in the Library, **Add results** lets you type in its views, like
 from TikTok, Instagram or YouTube. With two or more reels logged, **What works for you** shows which
 niche, length, type of video, narrator, ending, music and caption style get you the most views, so you
 can make more of what wins. The numbers stay on the phone, even after old reels are deleted.
+
+**What works for you** compares niche, length, type, hook style, narrator, ending, music and captions by
+average views. **Use what works** applies the best narrator, ending, music and caption style to your settings.
 
 ### Remix
 

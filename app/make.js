@@ -568,7 +568,7 @@ export async function produceReel(plan, opts, ui) {
     ...meta, kind: script.kind, duration: total, created: Date.now(), blob: result.blob, ext: result.ext, how: result.how, sound: result.sound, written: result.written, niche: script.niche,
     credits, sources: script.sources, handle: opts.handle || "", srt: makeSrt(words), cover,
     topic: (script.topicTitle || "").replace(/\s+\(.*\)$/, ""),
-    settings: { voice: opts.voiceEngine === "fast" ? "classic" : opts.voice || "af_heart", cta: opts.ctaKind || "follow", music: opts.music || "lofi", captions: opts.captionStyle || "bold", length: opts.length || "standard" },
+    settings: { voice: opts.voiceEngine === "fast" ? "classic" : opts.voice || "af_heart", cta: opts.ctaKind || "follow", music: opts.music || "lofi", captions: opts.captionStyle || "bold", length: opts.length || "standard", hook: script.hookKind || "written", art: opts.artStyle || "auto" },
     script: script.lines.map((l) => l.text).join("\n"),
   };
 }

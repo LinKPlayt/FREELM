@@ -68,8 +68,8 @@ export default async function ({ t, newPage }) {
     out.tags = [S.topicHashtags({ topic: "Index fund" }), S.topicHashtags({ title: "Never Skip the 401(k) Match #Shorts" }), S.topicHashtags({ topic: "S&P 500" }), S.topicHashtags({})];
     const Rz = await import("./app/results.js");
     localStorage.removeItem("results");
-    Rz.saveResult({ id: "a", title: "A", niche: "investing", kind: "evergreen", duration: 30, settings: { voice: "af_heart", cta: "comment", music: "lofi", captions: "bold" } }, { views: 12000, likes: 900, comments: 120 });
-    Rz.saveResult({ id: "b", title: "B", niche: "crypto", kind: "custom", duration: 70, settings: { voice: "classic", cta: "follow", music: "none", captions: "bold" } }, { views: 3000, likes: 100 });
+    Rz.saveResult({ id: "a", title: "A", niche: "investing", kind: "quiz", duration: 30, settings: { voice: "af_heart", cta: "comment", music: "lofi", captions: "bold", hook: "quiz" } }, { views: 12000, likes: 900, comments: 120 });
+    Rz.saveResult({ id: "b", title: "B", niche: "crypto", kind: "custom", duration: 70, settings: { voice: "classic", cta: "follow", music: "none", captions: "bold", hook: "catch" } }, { views: 3000, likes: 100 });
     Rz.saveResult({ id: "c", title: "C", niche: "investing", kind: "evergreen", duration: 34, settings: { voice: "af_heart", cta: "comment", music: "lofi", captions: "boxed" } }, { views: "abc", likes: -5 });
     out.ins = Rz.insights({ voice: { af_heart: "Heart", classic: "Classic" }, cta: { comment: "Ask a question", follow: "Follow" } });
     out.resC = Rz.getResult("c");
@@ -199,6 +199,9 @@ export default async function ({ t, newPage }) {
   t.ok(r.tags[0].join() === "#IndexFund,#indexfund" && r.tags[1].join() === "#401kMatch,#401kmatch" && r.tags[2][0] === "#SAndP500" && r.tags[3].length === 0, "topic hashtags are made from the topic", JSON.stringify(r.tags));
   const insText = JSON.stringify(r.ins.rows);
   t.ok(r.ins.count === 2 && /Ask a question: 12\.0k/.test(insText) && /Heart/.test(insText) && /Niche/.test(insText), "results summary picks what gets the most views", JSON.stringify(r.ins).slice(0, 300));
+  const rowOf = (n) => r.ins.rows.find((x) => x.name === n) || {};
+  t.ok(/Quizzes/.test(rowOf("Type").text) && /Quiz hook/.test(rowOf("Hook").text) && rowOf("Narrator").setting === "voice" && rowOf("Narrator").best === "af_heart" && rowOf("Ending").best === "comment" && !rowOf("Niche").setting,
+    "results compare video types (quizzes too) and hook styles, and know which settings “Use what works” can apply", JSON.stringify(r.ins.rows.map((x) => [x.name, x.setting, x.best])));
   t.ok(r.resC && !r.resC.stats.views && !("likes" in r.resC.stats), "bad numbers in results are ignored (text, negatives)", JSON.stringify(r.resC));
   t.ok(r.versions[0] === r.versions[1] && r.versions[0] === r.versions[2] && r.versions[3], "app version, service worker version and the newest update note agree", JSON.stringify(r.versions));
   t.section("Logic: the storyteller");
