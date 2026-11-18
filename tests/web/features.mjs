@@ -149,6 +149,13 @@ export default async function ({ t, newPage, BASE }) {
       t.ok(!/Couldn't|didn't work/.test(tl), `voice preview plays: ${v}`, tl);
     }
     await page.click('#voices .chip >> text="Michael"');
+    // Music preview: plays 8 seconds of the chosen mood.
+    await page.click('#moods .chip >> text="Bright"'); await page.evaluate(() => { window.__toasts = []; });
+    await page.click("#music-preview");
+    const playing = await page.innerText("#music-preview");
+    await until(page, () => document.getElementById("music-preview").textContent.includes("Hear it"), null, 30000);
+    t.ok(/Stop/.test(playing) && !/Couldn't/.test(await page.evaluate(() => (window.__toasts || []).join(" "))), "music preview plays the chosen mood", playing);
+    await page.click('#moods .chip >> text="Lo-fi"');
   } catch (e) { t.ok(false, "section crashed: Features: plan my week, voice preview, logo", String(e.message || e).split("\n")[0]); await page.goto(page.url()).catch(() => {}); }
 
   t.section("Features: Idea Lab");
@@ -277,11 +284,11 @@ export default async function ({ t, newPage, BASE }) {
   t.section("Features: What's new, storage, make-time, Library covers");
   try {
     // a returning user who last saw version 29 (the window shows the newest three updates)
-    await page.evaluate(() => localStorage.setItem("seenVersion", "39"));
+    await page.evaluate(() => localStorage.setItem("seenVersion", "40"));
     await page.reload(); await until(page, () => window.__ready, null, 60000);
     t.ok(await page.locator("#news-sheet").count() === 1 && /What's new/.test(await page.innerText("#news-sheet")), "What's new appears after an update");
     const news = await page.innerText("#news-sheet");
-    t.ok(/Smoother cuts/.test(news) && /made in one go/.test(news) && !/stronger opening/.test(news), "it lists only the updates since the last one seen", news.slice(0, 200));
+    t.ok(/moves with the video/.test(news) && /Smoother cuts/.test(news) && !/Better covers/.test(news), "it lists only the updates since the last one seen", news.slice(0, 200));
     await page.click('[data-news="close"]');
     t.ok(await page.locator("#news-sheet").count() === 0, "Got it closes it");
     await page.reload(); await until(page, () => window.__ready, null, 60000);

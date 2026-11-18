@@ -1,9 +1,15 @@
 // The app's version and its update notes, shown once in a "What's new" window after each update.
 // When you deploy: bump APP_VERSION, add an entry at the top of UPDATES, and set the same number in
 // sw.js (VERSION = "reelbot-v<APP_VERSION>"). A test checks the two match.
-export const APP_VERSION = 42;
+export const APP_VERSION = 43;
 
 export const UPDATES = [
+  { version: 43, title: "Music that moves with the video", items: [
+    "The beat now drops after the hook: the opening line plays over soft chords, a swell builds, and the drums land as the first point begins.",
+    "Two new moods: Bright (light and plucky) and Suspense (ticking, minor key).",
+    "Auto music (the new default) picks a mood for each video: suspense for quizzes, bright for news, cinematic for big market drops and stories about people, upbeat for green days.",
+    "“▶ Hear it” plays 8 seconds of the music you've chosen before you make a video.",
+  ] },
   { version: 42, title: "Smoother cuts, smarter Library, clearer voice", items: [
     "Transitions: scenes now arrive with a quick whip (with motion blur), a zoom-through or a fade, chosen to suit the moment, instead of the same crossfade every time.",
     "Library: search your reels, filter by type (explainers, news, quizzes…), and sort by most views.",

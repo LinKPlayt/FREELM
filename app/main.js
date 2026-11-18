@@ -13,9 +13,9 @@ import { listReels, saveReel, deleteReel, clearReels, listDrafts, saveDraft, del
 import { platformCaptions, setPronunciations, visualMatch } from "./script.js";
 import { FIELDS, getResult, saveResult, insights } from "./results.js";
 import { APP_VERSION, UPDATES } from "./version.js";
-import { USER_CACHE, USER_MUSIC } from "./make.js";
+import { USER_CACHE, USER_MUSIC, userMusic } from "./make.js";
 import { encoderInfo, renderReel, loadFonts, previewFrame } from "./render.js";
-import { SR } from "./music.js";
+import { SR, generateMusic } from "./music.js";
 
 const $ = (id) => document.getElementById(id);
 const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } } };
@@ -29,7 +29,7 @@ const VOICE_LABELS = { ...Object.fromEntries(Object.entries(KOKORO_VOICES).map((
 const voiceOpts = (id) => (id === "classic" ? { engine: "fast" } : { engine: "natural", voice: id });
 const CAPTION_STYLES = { bold: "Bold", boxed: "Boxed", clean: "Clean" };
 const CAPTION_POS = { low: "Low", middle: "Middle" };
-const MOODS = { lofi: "Lo-fi", upbeat: "Upbeat", cinematic: "Cinematic", calm: "Calm", mine: "My music", none: "None" };
+const MOODS = { auto: "Auto (fits the video)", lofi: "Lo-fi", upbeat: "Upbeat", bright: "Bright", cinematic: "Cinematic", calm: "Calm", suspense: "Suspense", mine: "My music", none: "None" };
 const COVER_STYLES = { bold: "Bold title", number: "Big number", question: "Question" };
 const LENGTH_LABELS = { short: "Short 20–30s", standard: "Standard 30–45s", long: "Long 40–60s", deep: "Deep dive 60–90s", full: "Full story 2–3 min" };
 const DEPTH_LABELS = { 1: "Quick", 2: "Standard", 3: "Deep", 4: "Maximum" };
@@ -1101,7 +1101,7 @@ async function init() {
   chips($("speeds"), Object.keys(SPEEDS), state.speed, (v) => { state.speed = v; store.set("speed", v); updateEstimate(); });
   prefChips("cap-styles", CAPTION_STYLES, "capStyle", "bold", drawStylePreview);
   prefChips("cap-pos", CAPTION_POS, "capPos", "low", drawStylePreview);
-  prefChips("moods", MOODS, "mood", store.get("musicOff") === "1" ? "none" : "lofi");
+  prefChips("moods", MOODS, "mood", store.get("musicOff") === "1" ? "none" : "auto");
   prefChips("lengths", LENGTH_LABELS, "length", "standard", updateEstimate);
   const voiceNote = () => {
     const v = KOKORO_VOICES[state.voice], err = lastVoiceError();
@@ -1188,6 +1188,26 @@ async function init() {
   $("version-line").textContent = `Version ${APP_VERSION} · ${UPDATES[0].title}`;
   $("whats-new").addEventListener("click", () => showWhatsNew(APP_VERSION - 3));
   $("art-more").addEventListener("click", drawMoreArt);
+  // Hear the chosen music: 8 seconds, made the same way as in a video (Auto plays a sample of each mood it picks from).
+  let musicSrc = null;
+  $("music-preview").addEventListener("click", async () => {
+    if (musicSrc) { try { musicSrc.stop(); } catch { /* already stopped */ } return; }
+    const ctx = unlockAudio(); if (!ctx) return toast("This browser can't play audio");
+    const mood = state.mood;
+    if (mood === "none") return toast("No music: only the voice and sound effects.");
+    $("music-preview").textContent = "■ Stop";
+    try {
+      let samples;
+      if (mood === "mine") samples = await userMusic(8);
+      else if (mood === "auto") { const a = generateMusic(4, "suspense", { dropAt: 1 }), b = generateMusic(4, "bright", { dropAt: 0.5 }); samples = new Float32Array(a.length + b.length); samples.set(a); samples.set(b, a.length); }
+      else samples = generateMusic(8, mood, { dropAt: 2 });
+      if (!samples) throw new Error("no track");
+      const buf = ctx.createBuffer(1, samples.length, SR); buf.copyToChannel(samples.map((v) => v * 0.6), 0);
+      musicSrc = ctx.createBufferSource(); musicSrc.buffer = buf; musicSrc.connect(ctx.destination);
+      musicSrc.onended = () => { musicSrc = null; $("music-preview").textContent = "▶ Hear it"; };
+      musicSrc.start();
+    } catch (e) { musicSrc = null; $("music-preview").textContent = "▶ Hear it"; toast(mood === "mine" ? "Choose a track first" : "Couldn't play the music"); }
+  });
   $("lib-q").addEventListener("input", () => { (state.libFilter ??= { q: "", kind: "all", sort: "new" }).q = $("lib-q").value; renderReelList(); });
   $("lib-tools").addEventListener("click", (e) => {
     const f = (state.libFilter ??= { q: "", kind: "all", sort: "new" }), k = e.target.closest("[data-lib-kind]"), s = e.target.closest("[data-lib-sort]");

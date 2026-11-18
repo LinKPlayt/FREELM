@@ -270,7 +270,8 @@ async function assembleAudio(clips, mood, lines, musicVolume = 1, spans = []) {
   const voice = await masterVoice(clips, lines, total);
   let music = null, level = mood === "cinematic" ? 0.17 : 0.14;
   if (mood === "mine") { music = await userMusic(total).catch((e) => { console.warn("your music couldn't be read", e); return null; }); level = 0.13; }
-  if (!music && mood && mood !== "none") music = generateMusic(total, mood === "mine" ? "lofi" : mood);
+  // The beat drops when the first point after the hook begins.
+  if (!music && mood && mood !== "none") music = generateMusic(total, mood === "mine" ? "lofi" : mood, { dropAt: spans[1]?.[0] || 0 });
   if (music) shapeMusic(music, lines, spans, total);
   return { audio: mix(voice, music, level * musicVolume), total };
 }
@@ -295,6 +296,20 @@ function shapeMusic(music, lines, spans, total) {
     const g = env(i / SR);
     for (let j = i; j < Math.min(music.length, i + step); j++) music[j] *= g;
   }
+}
+
+// Auto music: a mood that suits the video. Quizzes get suspense, a big red market day gets cinematic
+// strings, a green one gets upbeat, news gets bright, stories about people get cinematic, and
+// explainers follow their niche.
+export function autoMood(script) {
+  if (script.kind === "quiz") return "suspense";
+  if (script.kind === "market") {
+    const m = /\b(Up|Down) (\d+(?:\.\d+)?)%/.exec(script.title || "");
+    return !m ? "calm" : m[1] === "Down" && +m[2] >= 1 ? "cinematic" : m[1] === "Up" && +m[2] >= 1 ? "upbeat" : "lofi";
+  }
+  if (script.kind === "news") return "bright";
+  if (script.person) return "cinematic";
+  return { crypto: "upbeat", "side hustles": "upbeat", economy: "calm", "real estate": "calm", investing: "lofi", "personal finance": "lofi" }[script.niche] || "lofi";
 }
 
 // Rough spoken length of a script, for the review screen.
@@ -477,7 +492,8 @@ export async function produceReel(plan, opts, ui) {
   }
   await releaseVoice();      // free the voice model's memory before the video is encoded
   const { words, spans } = timings(script, clips);
-  const { audio, total } = await assembleAudio(clips, opts.music, script.lines, opts.musicVolume ?? 1, spans);
+  const mood = opts.music === "auto" ? autoMood(script) : opts.music;
+  const { audio, total } = await assembleAudio(clips, mood, script.lines, opts.musicVolume ?? 1, spans);
 
   ui.say("Preparing scenes…", 0.56);
   const scenes = [], credits = [], shown = [];      // shown: main subjects of recent illustrations
@@ -568,7 +584,7 @@ export async function produceReel(plan, opts, ui) {
     ...meta, kind: script.kind, duration: total, created: Date.now(), blob: result.blob, ext: result.ext, how: result.how, sound: result.sound, written: result.written, niche: script.niche,
     credits, sources: script.sources, handle: opts.handle || "", srt: makeSrt(words), cover,
     topic: (script.topicTitle || "").replace(/\s+\(.*\)$/, ""),
-    settings: { voice: opts.voiceEngine === "fast" ? "classic" : opts.voice || "af_heart", cta: opts.ctaKind || "follow", music: opts.music || "lofi", captions: opts.captionStyle || "bold", length: opts.length || "standard", hook: script.hookKind || "written", art: opts.artStyle || "auto" },
+    settings: { voice: opts.voiceEngine === "fast" ? "classic" : opts.voice || "af_heart", cta: opts.ctaKind || "follow", music: mood || "lofi", captions: opts.captionStyle || "bold", length: opts.length || "standard", hook: script.hookKind || "written", art: opts.artStyle || "auto" },
     script: script.lines.map((l) => l.text).join("\n"),
   };
 }

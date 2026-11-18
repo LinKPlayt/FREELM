@@ -140,6 +140,13 @@ export default async function ({ t, newPage }) {
       ST.junkHeadline("Bitcoin Covenants Part 6: FE Covenants"), ST.junkHeadline("Emaar Partners with Huspy to Enhance Mortgage Advisory Services"), ST.junkHeadline("Mortgage demand turns lower as rates rise"),
       IL.pickMotifs({ text: "Dividends grow over time." }, "Dividend", ["tree"])[0] !== "tree", IL.pickMotifs({ text: "Dividends grow over time.", artPick: 0 }, "Dividend", ["tree"])[0],
       (await import("./app/wording.js")).checkWording("Freelance, freelancer, or freelance worker, are terms often used for a person.").text];
+    // music: Auto moods, new moods, and the beat dropping after the hook
+    const MU = await import("./app/music.js"), MK2 = await import("./app/make.js");
+    out.moods = [MK2.autoMood({ kind: "quiz" }), MK2.autoMood({ kind: "market", title: "Market Check: S&P 500 Down 1.9%" }), MK2.autoMood({ kind: "market", title: "Market Check: Bitcoin Up 2.4%" }),
+      MK2.autoMood({ kind: "news" }), MK2.autoMood({ kind: "custom", person: true }), MK2.autoMood({ kind: "evergreen", niche: "crypto" })];
+    // High-pitched energy (hi-hats, claps, plucks): what the beat adds.
+    const busy = (a, from, to) => { let s = 0; const i0 = Math.floor(from * MU.SR), i1 = Math.floor(to * MU.SR); for (let i = i0 + 2; i < i1; i++) { const d = a[i] - 2 * a[i - 1] + a[i - 2]; s += d * d; } return Math.sqrt(s / (i1 - i0)); };
+    out.drop = ["bright", "suspense", "upbeat"].map((m) => { const a = MU.generateMusic(10, m, { dropAt: 4 }); return [a.length === 10 * MU.SR, a.every((v) => Number.isFinite(v)), busy(a, 4.1, 6) / Math.max(1e-9, busy(a, 1.2, 3.0))]; });
     // quiz reels
     const QZ = await import("./app/quiz.js");
     const qz = QZ.buildQuiz({ niche: "crypto", cta: "Follow." });
@@ -243,6 +250,8 @@ export default async function ({ t, newPage }) {
   t.ok(r.refine.slice(0, 5).join() === "true,true,true,false,true" && r.refine[5] === "tree" && r.refine[6] === "Freelance, freelancer, or freelance worker are terms often used for a person.",
     "definitions phrased as “terms for” are found; series and press-release headlines are skipped; illustrations don't repeat the last subject (unless you chose it)", JSON.stringify(r.refine));
   t.ok(r.say2.join("|") === "Save 3 to 6 months at an A P R of 24 percent.|A hee lock, a four oh three b and a W 2.|Rates hit 5.25 percent to 5.5 percent, up 1.5 times year to date.", "ranges, multiples and finance acronyms are said the way people say them", r.say2.join(" | "));
+  t.ok(r.moods.join() === "suspense,cinematic,upbeat,bright,cinematic,upbeat", "Auto music picks a mood that suits each video", r.moods.join());
+  t.ok(r.drop.every(([len, ok, ratio]) => len && ok && ratio > 1.5), "the new moods play, and the beat drops in after the hook", JSON.stringify(r.drop));
   t.ok(r.insert.join() === "1,2", "a spare definition goes after the hook; other spares go before the takeaway", JSON.stringify(r.insert));
   t.ok(r.caps.youtube && r.caps.tiktok && r.caps.instagram && !/undefined/.test(JSON.stringify(r.caps)), "platform captions are complete", "");
   t.ok(!/undefined/.test(JSON.stringify(r.capsOld)) && r.capsOld.youtube.length > 5, "captions work for old reels with missing fields", JSON.stringify(r.capsOld).slice(0, 120));

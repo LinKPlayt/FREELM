@@ -118,6 +118,11 @@ After the storyteller, every script gets an emotion layer (`app/hook.js`). It ne
   the takeaway; a bloop for the question; a sparkle on the ending. Music fades out at the end.
 - **Hook title.** The opening line appears big on screen, word by word, over the dimmed opening picture
   (captions are hidden for it). Turn off under Style → Hook title.
+- **Music that moves.** The music is generated for each video (moods: Auto, Lo-fi, Upbeat, Bright,
+  Cinematic, Calm, Suspense, or your own track). The hook plays over chords only; a swell leads into a
+  beat drop timed to the first point. **Auto** picks a mood per video (quiz → Suspense, news → Bright,
+  big red market day or a person → Cinematic, green day → Upbeat, otherwise by niche). **▶ Hear it**
+  previews the chosen music.
 - **Transitions.** Scenes arrive with a whip (a fast slide with motion blur), a zoom-through or a fade:
   mid-line cuts whip, chapter cards and the ending fade, payoffs fade under their flash, the rest take turns.
 - **Quick cuts.** A line longer than about five seconds cuts, at a word near its middle, to a second
