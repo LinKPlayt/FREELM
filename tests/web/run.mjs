@@ -22,7 +22,9 @@ const zcache = new Map();
 function serve() {
   const server = http.createServer((req, res) => {
     const rel = decodeURIComponent(req.url.split("?")[0]).replace(/^\/+/, "") || "index.html";
-    const file = path.join(ROOT, rel);
+    let file = path.join(ROOT, rel);
+    // Like GitHub Pages: a folder serves its index.html.
+    if (file.startsWith(ROOT) && fs.existsSync(file) && fs.statSync(file).isDirectory()) file = path.join(file, "index.html");
     if (!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); return res.end(); }
     const key = file + fs.statSync(file).mtimeMs;
     if (!zcache.has(key)) zcache.set(key, zlib.gzipSync(fs.readFileSync(file), { level: 1 }));
