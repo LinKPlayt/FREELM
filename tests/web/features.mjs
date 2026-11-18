@@ -104,12 +104,11 @@ export default async function ({ t, newPage, BASE }) {
     await page.click("#go"); await page.waitForSelector("#review:not(.hidden)", { timeout: 120000 });
     const tags = await page.$$eval(".scene-tag", (els) => els.map((e) => e.textContent));
     t.ok(tags.filter((x) => /Question \d · countdown/.test(x)).length === 3 && tags.filter((x) => /Answer · (True|False)/.test(x)).length === 3 && tags.some((x) => /Big words/.test(x)), "a quiz has 3 questions with countdowns, 3 answers and a big-words question at the end", tags.join(" | "));
-    await page.click('#voices .chip >> text="Classic (fast)"');
+    await page.evaluate(() => { window.__lastReel = null; window.__lastError = null; });
     await page.click("#produce");
-    await until(page, () => /Your reel is ready|Couldn't|went wrong/.test(document.getElementById("result").textContent), null, 600000);
-    const res = await page.innerText("#result");
-    t.ok(/Your reel is ready/.test(res), "a quiz reel is made", res.slice(0, 160));
-    await page.click('#voices .chip >> text="Michael"');
+    await until(page, () => window.__lastReel || window.__lastError);
+    const q = await page.evaluate(() => ({ err: window.__lastError, sound: window.__lastReel?.sound, dur: window.__lastReel?.duration, script: window.__lastReel?.script || "" }));
+    t.ok(!q.err && q.sound === true && q.dur > 25 && /True or false/.test(q.script) && /^(True|False)! /m.test(q.script), `a quiz reel is made with sound (${Math.round(q.dur || 0)} s)`, q.err || q.script.slice(0, 160));
   } catch (e) { t.ok(false, "section crashed: Features: quiz reel", String(e.message || e).split("\n")[0]); await page.goto(page.url()).catch(() => {}); }
 
   t.section("Features: plan my week, voice preview, logo");
