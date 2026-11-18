@@ -5,6 +5,8 @@ import { fetchT } from "./research.js";
 const BAD_TITLE = /\b(map|logo|flag|coat of arms|seal|signature|icon|diagram|svg|chart|graph|locator|emblem|banner|poster|screenshot|text|document|scan|page)\b/i;
 const UNSAFE_TITLE = /\b(hoes?|sexy|nude|naked|bikini|lingerie|porn|xxx|drunk|weed|gun|guns|weapon|blood|dead|corpse|nazi|fuck|shit|bitch|ass)\b/i;
 const OK_LICENSE = /(cc0|public domain|^pd|pdm|cc[ -]by(?![ -]?nc)(?![ -]?nd))/i;
+// Money from other countries looks wrong in a US-focused finance video ("£10 notes" for "money").
+const FOREIGN_MONEY = /\b(pounds?|sterling|£|euros?|€|rupees?|yen|yuan|renminbi|pesos?|rubles?|roubles?|lira|francs?|krona|krone|kronor|rand|naira|shillings?|dinars?|dirhams?|baht|ringgit|rupiah|hryvnia|zloty|forint|bank of england|reserve bank of india)\b/i;
 const STOP = new Set(["the", "and", "for", "with", "photo", "image", "stock"]);
 
 const keywords = (q) => (q.toLowerCase().match(/[a-z0-9]+/g) || []).filter((w) => w.length > 2 && !STOP.has(w));
@@ -91,8 +93,9 @@ export class MediaFinder {
     const lists = await Promise.allSettled([searchOpenverse(query), searchCommons(query)]);
     const candidates = lists.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
     // Photos whose title/tags name the subject first; then portrait and large images, which crop best into 9:16.
-    for (const c of candidates) c.fit = fit(c.about || c.title, query);
-    candidates.sort((a, b) => (b.fit - a.fit) || (Number(b.height >= b.width) - Number(a.height >= a.width)) || (Math.min(b.width, 2400) - Math.min(a.width, 2400)));
+    for (const c of candidates) { c.fit = fit(c.about || c.title, query); c.foreign = FOREIGN_MONEY.test(`${c.title} ${c.about || ""}`) && !FOREIGN_MONEY.test(query); }
+    // Foreign banknotes and coins go last (used only if nothing else turns up).
+    candidates.sort((a, b) => (Number(a.foreign) - Number(b.foreign)) || (b.fit - a.fit) || (Number(b.height >= b.width) - Number(a.height >= a.width)) || (Math.min(b.width, 2400) - Math.min(a.width, 2400)));
     let attempts = 0;
     for (const c of candidates) {
       if (this.used.has(c.url) || (c.width && c.width < 640)) continue;

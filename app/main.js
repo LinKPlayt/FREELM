@@ -467,12 +467,15 @@ async function planWeek() {
   const made = [], used = [];
   try {
     const base = options();
+    // On Auto, a varied week: explainers, the day's news, a mid-week quiz and a Friday market recap.
+    const MIX = ["evergreen", "news", "quiz", "evergreen", "market"], DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
     for (let i = 0; i < 5; i++) {
-      const opts = { ...base, mode: base.mode === "custom" ? "auto" : base.mode, noPhotos: true, exclude: used };
+      const mode = base.mode === "auto" || base.mode === "custom" ? (base.offline && /news|market/.test(MIX[i]) ? "evergreen" : MIX[i]) : base.mode;
+      const opts = { ...base, mode, noPhotos: true, exclude: used };
       const plan = await planReel(opts, { say: (t, f) => say(`Script ${i + 1} of 5: ${t}`, (i + (f || 0)) / 5) });
       used.push(plan.script.topicId);
-      if (made.some((d) => d.label === plan.script.title)) { releasePlan(plan); continue; }
-      const d = draftFromPlan(plan, plan.script.title); releasePlan(plan);
+      if (plan.script.kind !== "quiz" && made.some((d) => d.label.endsWith(plan.script.title))) { releasePlan(plan); continue; }   // quizzes share a title but not questions
+      const d = draftFromPlan(plan, `${DAYS[made.length] || ""} · ${plan.script.title}`.replace(/^ · /, "")); releasePlan(plan);
       if (!saveDraft(d)) break;
       made.push(d);
     }
@@ -661,6 +664,8 @@ function showReview() {
   updateEstimate();
   const rate = makeRate(), secs = estimateSeconds(script.lines, SPEEDS[state.speed] || 1);
   $("produce").textContent = rate ? `Make the video (about ${fmtDuration(rate * secs)})` : "Make the video";
+  // A series follows a topic into related ones; news, market recaps and quizzes don't have one.
+  $("series").classList.toggle("hidden", ["news", "market", "quiz"].includes(script.kind));
   screen("review");
   warmVoice();
 }

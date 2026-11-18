@@ -42,6 +42,7 @@ export default async function ({ t, newPage, BASE }) {
   try {
     await page.click('#niches .chip >> text="Investing"'); await page.click('#modes .chip >> text="Explainer"'); await page.click("#go");
     await page.waitForSelector("#review:not(.hidden)", { timeout: 180000 });
+    t.ok(await page.locator("#series").isVisible(), "an explainer offers a 3-part series");
     const n0 = await page.locator(".scene").count();
     await page.click("#add-line"); t.ok(await page.locator(".scene").count() === n0 + 1, "+ Add a line adds a scene");
     await page.locator("[data-del]").first().click(); t.ok(await page.locator(".scene").count() === n0, "Remove deletes a scene");
@@ -103,6 +104,7 @@ export default async function ({ t, newPage, BASE }) {
     await page.click('#niches .chip >> text="Investing"'); await page.click('#modes .chip >> text="Quiz"');
     await page.click("#go"); await page.waitForSelector("#review:not(.hidden)", { timeout: 120000 });
     const tags = await page.$$eval(".scene-tag", (els) => els.map((e) => e.textContent));
+    t.ok(await page.locator("#series").isHidden(), "a quiz doesn't offer a 3-part series");
     t.ok(tags.filter((x) => /Question \d · countdown/.test(x)).length === 3 && tags.filter((x) => /Answer · (True|False)/.test(x)).length === 3 && tags.some((x) => /Big words/.test(x)), "a quiz has 3 questions with countdowns, 3 answers and a big-words question at the end", tags.join(" | "));
     await page.evaluate(() => { window.__lastReel = null; window.__lastError = null; });
     await page.click("#produce");
@@ -113,9 +115,11 @@ export default async function ({ t, newPage, BASE }) {
 
   t.section("Features: plan my week, voice preview, logo");
   try {
+    await page.click('nav [data-tab="create"]').catch(() => {}); await page.click('#modes .chip >> text="Auto"');
     await page.click("#plan-week");
     await until(page, () => /week is planned|Couldn't|stopped/.test(document.getElementById("result").textContent), null, 600000);
-    t.ok(/week is planned/.test(await page.innerText("#result")), "Plan my week saves drafts", (await page.innerText("#result")).slice(0, 160));
+    const week = await page.innerText("#result");
+    t.ok(/week is planned/.test(week) && /Mon · /.test(week) && /(Tue|Wed|Thu) · [^\n]*Quiz/i.test(week), "Plan my week saves a varied week of drafts (with a mid-week quiz)", week.slice(0, 300));
     await page.click('nav [data-tab="library"]'); await page.locator("[data-draft-open]").first().click();
     await page.waitForSelector("#review:not(.hidden)", { timeout: 180000 });
     t.ok(await page.locator(".scene").count() >= 4, "a saved draft opens in the review screen, with photos found again");
@@ -241,11 +245,11 @@ export default async function ({ t, newPage, BASE }) {
   t.section("Features: What's new, storage, make-time, Library covers");
   try {
     // a returning user who last saw version 29 (the window shows the newest three updates)
-    await page.evaluate(() => localStorage.setItem("seenVersion", "36"));
+    await page.evaluate(() => localStorage.setItem("seenVersion", "37"));
     await page.reload(); await until(page, () => window.__ready, null, 60000);
     t.ok(await page.locator("#news-sheet").count() === 1 && /What's new/.test(await page.innerText("#news-sheet")), "What's new appears after an update");
     const news = await page.innerText("#news-sheet");
-    t.ok(/stronger opening/.test(news) && /Sharper videos/.test(news) && !/proofreader/.test(news), "it lists only the updates since the last one seen", news.slice(0, 200));
+    t.ok(/Better covers/.test(news) && /stronger opening/.test(news) && !/Quiz reels/.test(news), "it lists only the updates since the last one seen", news.slice(0, 200));
     await page.click('[data-news="close"]');
     t.ok(await page.locator("#news-sheet").count() === 0, "Got it closes it");
     await page.reload(); await until(page, () => window.__ready, null, 60000);

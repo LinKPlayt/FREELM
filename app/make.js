@@ -576,10 +576,28 @@ export async function produceReel(plan, opts, ui) {
 // The cover's picture: the reel's first photo, else its first chart or illustration.
 function coverBackground(ctx, scenes, accent) {
   // Only a photo that fits the topic makes the cover; otherwise the reel's chart or illustration does.
-  const photo = scenes.find((s) => s.kind === "image" && s.bitmap && s.relevant);
+  // Best first: a tall photo or a drawn illustration (both fill the cover cleanly), then a wide photo.
+  const images = scenes.filter((s) => s.kind === "image" && s.bitmap && s.relevant && s.bitmap.width > 0);
+  const tall = images.find((s) => s.bitmap.height >= s.bitmap.width * 0.9) || images.find((s) => s.art);
+  const photo = tall || images[0];
   if (photo) {
-    const b = photo.bitmap, sc = Math.max(1080 / b.width, 1920 / b.height), w = 1080 / sc, h = 1920 / sc;
-    ctx.drawImage(b, (b.width - w) / 2, (b.height - h) * 0.4, w, h, 0, 0, 1080, 1920);
+    const b = photo.bitmap;
+    const cover = (dw, dh, dx = 0, dy = 0, cy = 0.4) => { const k = Math.max(dw / b.width, dh / b.height), w = dw / k, h = dh / k; ctx.drawImage(b, (b.width - w) / 2, (b.height - h) * cy, w, h, dx, dy, dw, dh); };
+    if (b === tall?.bitmap && photo.art) {
+      // A drawn illustration: moved down so its main subject sits below the title, not behind it.
+      ctx.drawImage(b, 0, 0, b.width, 8, 0, 0, 1080, 300); ctx.drawImage(b, 0, 280, 1080, 1920);
+      return;
+    }
+    if (b === tall?.bitmap) { cover(1080, 1920); return; }
+    // A wide photo: a soft, darkened copy fills the cover, and the whole photo sits in the lower half
+    // (cropping it to 9:16 cuts off whatever made it a good picture, like text or faces).
+    const small = document.createElement("canvas"); small.width = 135; small.height = 240;
+    const sx = small.getContext("2d"); const k = Math.max(135 / b.width, 240 / b.height); sx.drawImage(b, (135 - b.width * k) / 2, (240 - b.height * k) / 2, b.width * k, b.height * k);
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.drawImage(small, 0, 0, 1080, 1920);
+    ctx.fillStyle = "rgba(0,0,0,0.45)"; ctx.fillRect(0, 0, 1080, 1920);
+    let w = 1000, h = b.height * w / b.width; if (h > 760) { h = 760; w = b.width * h / b.height; }
+    ctx.save(); ctx.shadowColor = "rgba(0,0,0,0.6)"; ctx.shadowBlur = 40; ctx.drawImage(b, (1080 - w) / 2, 1300 - h / 2, w, h); ctx.restore();
+    small.width = small.height = 0;
     return;
   }
   const gen = scenes.find((s) => s.kind === "stat" || s.kind === "illus");

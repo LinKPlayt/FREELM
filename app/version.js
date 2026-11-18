@@ -1,9 +1,16 @@
 // The app's version and its update notes, shown once in a "What's new" window after each update.
 // When you deploy: bump APP_VERSION, add an entry at the top of UPDATES, and set the same number in
 // sw.js (VERSION = "reelbot-v<APP_VERSION>"). A test checks the two match.
-export const APP_VERSION = 39;
+export const APP_VERSION = 40;
 
 export const UPDATES = [
+  { version: 40, title: "Better covers, a varied week, more quiz questions", items: [
+    "Covers: a wide photo is shown whole over a soft blurred copy instead of being cropped, and drawn illustrations sit below the title instead of behind it.",
+    "Photos: foreign banknotes and coins (like pound notes) are only used when nothing else turns up.",
+    "Plan my week on Auto now plans a varied week: explainers, the day's news, a mid-week quiz and a market recap, each labelled with its day.",
+    "Quiz: 56 hand-checked questions (up from 36), so weekly quizzes repeat less.",
+    "“Make a 3-part series” only appears for videos that can have one (not news, market recaps or quizzes).",
+  ] },
   { version: 39, title: "A stronger opening, faster drawing", items: [
     "Hook title: the first line now appears big on screen, word by word, over the dimmed opening picture, so viewers read it in the first second (Style → Hook title).",
     "Illustrations draw up to twice as fast, so videos with many drawn scenes are made sooner.",
