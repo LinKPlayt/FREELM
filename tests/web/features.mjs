@@ -225,10 +225,21 @@ export default async function ({ t, newPage, BASE }) {
     const other = page.locator("#reels [data-reel]").nth(1);
     if (await other.count()) { await other.locator(".results summary").click(); await other.locator('[data-result="views"]').fill("4100"); await other.locator('[data-result="views"]').dispatchEvent("change"); }
     t.ok(/What works for you/.test(await page.innerText("#insights")) && /average views/.test(await page.innerText("#insights")), "results show a What works summary", (await page.innerText("#insights")).slice(0, 200));
-    if (await page.locator("[data-use-best]").count()) {
-      await page.evaluate(() => { window.__toasts = []; }); await page.click("[data-use-best]");
-      t.ok(await page.evaluate(() => localStorage.getItem("mood")) === "mine" && /Now using/.test(await page.evaluate(() => window.__toasts.join(" "))), "Use what works applies the best settings (here: your music)", await page.evaluate(() => window.__toasts.join(" | ")));
-    }
+    // "Use what works": two example results where Save this / Calm / Boxed clearly win.
+    await page.evaluate(() => {
+      const all = JSON.parse(localStorage.getItem("results") || "{}"), base = { title: "T", created: Date.now(), kind: "evergreen", niche: "investing", duration: 40 };
+      all.zz1 = { ...base, settings: { voice: "af_heart", cta: "save", music: "calm", captions: "boxed" }, stats: { views: 900000 } };
+      all.zz2 = { ...base, settings: { voice: "af_heart", cta: "follow", music: "lofi", captions: "bold" }, stats: { views: 10 } };
+      localStorage.setItem("results", JSON.stringify(all));
+    });
+    await page.click('nav [data-tab="create"]'); await page.click('nav [data-tab="library"]');
+    await page.click("[data-use-best]");
+    const used = await page.evaluate(() => ({ cta: localStorage.getItem("cta"), mood: localStorage.getItem("mood"), cap: localStorage.getItem("capStyle"), toast: document.getElementById("toast").textContent }));
+    t.ok(used.cta === "save" && used.mood === "calm" && used.cap === "boxed" && /Now using/.test(used.toast), "Use what works applies the best ending, music and caption style", JSON.stringify(used));
+    await page.evaluate(() => { const all = JSON.parse(localStorage.getItem("results") || "{}"); delete all.zz1; delete all.zz2; localStorage.setItem("results", JSON.stringify(all)); });
+    await page.click('nav [data-tab="create"]');
+    for (const [row, label] of [["ctas", "Follow"], ["moods", "Lo-fi"], ["cap-styles", "Bold"]]) await page.click(`#${row} .chip >> text="${label}"`);
+    await page.click('nav [data-tab="library"]');
     await page.click('nav [data-tab="create"]').catch(() => {}); await page.click('nav [data-tab="library"]');
     t.ok(/15,400 views/.test(await page.innerText(`#reels [data-reel="${r2.id}"] .results summary`)), "results are kept");
     const caps = await page.evaluate(async (id) => { const S = await import("./app/script.js"); const { listReels } = await import("./app/store.js"); const r = (await listReels()).find((x) => x.id === id); return S.platformCaptions(r).tiktok; }, r2.id);
