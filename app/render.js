@@ -359,7 +359,7 @@ class Captions {
       for (;;) {
         ctx.font = this.font(size);
         widths = texts.map((x) => ctx.measureText(x).width);
-        total = widths.reduce((a, b) => a + b, 0) + size * 0.28 * (texts.length - 1);
+        total = widths.reduce((a, b) => a + b, 0) + size * 0.32 * (texts.length - 1);
         if (total <= maxW || size <= 54) break;
         size -= 6;
       }
@@ -368,7 +368,7 @@ class Captions {
     let active = idxs.find((i) => t >= this.words[i].start && t < this.words[i].end + 0.05);
     if (active === undefined) active = t >= this.words[idxs[idxs.length - 1]].start ? idxs[idxs.length - 1] : idxs[0];
     const age = t - this.times[k][0], s = age < 0.12 ? 0.82 + 0.18 * ease(age / 0.12) : 1;
-    const gap = lay.size * 0.28;
+    const gap = lay.size * 0.32;
     ctx.save();
     ctx.translate(W / 2, centerY); ctx.scale(s, s);
     ctx.font = this.font(lay.size); ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
@@ -389,7 +389,7 @@ class Captions {
       const on = idxs[j] === active, feel = this.feel[idxs[j]];
       const tone = feel > 0 ? "rgb(74,222,128)" : feel < 0 ? "rgb(255,92,92)" : "#fff";
       // The spoken word grows a little as it's said.
-      const grow = on ? 1 + 0.09 * Math.min(1, (t - this.words[idxs[j]].start) / 0.08) : 1;
+      const grow = on ? 1 + 0.05 * Math.min(1, (t - this.words[idxs[j]].start) / 0.08) : 1;
       ctx.save();
       if (grow !== 1) { const cx = x + lay.widths[j] / 2; ctx.translate(cx, 0); ctx.scale(grow, grow); ctx.translate(-cx, 0); }
       if (this.style === "bold") {

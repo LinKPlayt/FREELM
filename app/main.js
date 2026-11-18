@@ -4,7 +4,7 @@ import { StatBg, IllusBg } from "./graphics.js";
 import { describeStat } from "./visuals.js";
 import { hookOptions, coach } from "./extras.js";
 import { checkWording, proofread } from "./wording.js";
-import { drawArt, motifsFor, styleFor, ART_STYLES, forgetArt, savedArt, drawAhead, nextBatch, MOTIFS } from "./illustrator.js";
+import { drawArt, motifsFor, pickMotifs, styleFor, ART_STYLES, forgetArt, savedArt, drawAhead, nextBatch, MOTIFS } from "./illustrator.js";
 const MOTIFS_COUNT = Object.keys(MOTIFS).length;
 import { KOKORO_VOICES, setVoice, loadVoice, phonemize, synthesize, voiceRate, releaseVoice, voiceNotice, resetVoiceLevel, naturalFailed, lastVoiceError } from "./tts.js";
 const factModule = () => import("./ai/factcheck.js");
@@ -312,7 +312,7 @@ function options() {
     music: state.mood, accent: state.accent, voiceSpeed: SPEEDS[state.speed] || 1, length: state.length,
     voiceEngine: voiceOpts(state.voice).engine, voice: voiceOpts(state.voice).voice, musicVolume: MUSIC_VOLUMES[state.musicVol] ?? 1,
     captionStyle: state.capStyle, captionPos: state.capPos, pops: $("pops").checked, offline: $("offline").checked,
-    sfx: $("sfx").checked, showSources: $("sources").checked,
+    sfx: $("sfx").checked, cuts: $("cuts").checked, showSources: $("sources").checked,
     depth: Number(state.depth) || 2, factCheck: $("factcheck").checked, strict: $("factcheck").checked && $("strict").checked,
     forceEncoder: params.get("encoder") || undefined,
   };
@@ -590,12 +590,14 @@ function updateEstimate() {
 }
 // Thumbnail of a generated chart or illustration (drawn with the real renderer at full size, then scaled).
 let thumbStage = null;
-function drawGenerated(cv, v, line) {
+function drawGenerated(cv, v, line, recent = []) {
   thumbStage ??= Object.assign(document.createElement("canvas"), { width: 1080, height: 1920 });
   const n = parseInt(state.accent.slice(1), 16), accent = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
   if (v.type === "illus" && line && state.art !== "icons") {
     const script = state.plan?.script || {};
-    drawArt(thumbStage.getContext("2d"), { motifs: motifsFor(line, script.topicTitle || script.title || ""), style: styleFor(state.art, script.niche), accent });
+    const motifs = pickMotifs(line, script.topicTitle || script.title || "", recent.slice(-2));
+    recent.push(motifs[0]);
+    drawArt(thumbStage.getContext("2d"), { motifs, style: styleFor(state.art, script.niche), accent });
     cv.getContext("2d").drawImage(thumbStage, 0, 0, cv.width, cv.height);
     return;
   }
@@ -647,13 +649,14 @@ function showReview() {
       : `<div class="mini">${v.type === "illus" && state.art !== "icons" ? `<button data-artpick="${i}">Another illustration</button>` : ""}<button data-swap="${i}">New photo</button><button data-search="${i}">Search…</button><button data-mine="${i}">My photo</button>${content > 2 ? `<button class="del" data-del="${i}">Remove</button>` : ""}</div>`;
     const hookBtn = i === 0 ? `<div class="mini"><button data-hook="1">Another hook</button></div>` : "";
     return `<div class="scene"><div>${thumb}</div><div><div class="scene-tag"><span>${esc(tag)}</span></div>
-      <textarea data-line="${i}" rows="3">${esc(l.text)}</textarea>${factBadge(l, i)}${hookBtn}${chips}${tools}</div></div>`;
+      <textarea data-line="${i}" rows="${Math.min(7, Math.max(2, Math.ceil(l.text.length / 34)))}">${esc(l.text)}</textarea>${factBadge(l, i)}${hookBtn}${chips}${tools}</div></div>`;
   }).join("");
+  const recentArt = [];
   script.lines.forEach((l, i) => {
     const cv = document.querySelector(`[data-thumb="${i}"]`), v = visuals[i];
     if (!cv) return;
     if (v.type === "photo" && l.asset?.bitmap) drawThumb(cv, l.asset);
-    else if (v.type === "stat" || v.type === "illus") drawGenerated(cv, v, l);
+    else if (v.type === "stat" || v.type === "illus") drawGenerated(cv, v, l, recentArt);
   });
   updateEstimate();
   const rate = makeRate(), secs = estimateSeconds(script.lines, SPEEDS[state.speed] || 1);
@@ -1074,7 +1077,7 @@ async function init() {
   prefChips("depths", DEPTH_LABELS, "depth", "2", depthNote); depthNote();
   $("handle").value = store.get("handle") || "";
   $("handle").addEventListener("change", () => { $("handle").value = cleanHandle($("handle").value); store.set("handle", $("handle").value); });
-  for (const [id, key] of [["sfx", "sfx"], ["sources", "sources"], ["factcheck", "factcheck"], ["strict", "strict"]]) {
+  for (const [id, key] of [["sfx", "sfx"], ["cuts", "cuts"], ["sources", "sources"], ["factcheck", "factcheck"], ["strict", "strict"]]) {
     $(id).checked = store.get(key) !== "0";
     $(id).addEventListener("change", () => store.set(key, $(id).checked ? "1" : "0"));
   }

@@ -1,9 +1,18 @@
 // The app's version and its update notes, shown once in a "What's new" window after each update.
 // When you deploy: bump APP_VERSION, add an entry at the top of UPDATES, and set the same number in
 // sw.js (VERSION = "reelbot-v<APP_VERSION>"). A test checks the two match.
-export const APP_VERSION = 37;
+export const APP_VERSION = 38;
 
 export const UPDATES = [
+  { version: 38, title: "Sharper videos, tighter scripts", items: [
+    "Quick cuts: a long line now cuts to a second picture of the same idea halfway through, like an edited video (Style → Quick cuts).",
+    "Illustrations no longer repeat the subject that was just on screen.",
+    "Scripts stay within your chosen length: the bottom line and comment question are only added when they fit.",
+    "Hooks are kept to 14 words or fewer so they land in the first two seconds.",
+    "Better research picks: definitions like “Freelancer” are found, sentences that lean on missing context are skipped, and technical or press-release headlines are left out of news reels.",
+    "Comment questions that fit the topic (taxes, interest rates, retirement, debt and more).",
+    "Tidier screens: script boxes grow to fit each line, and settings text no longer gets squeezed.",
+  ] },
   { version: 37, title: "Quiz reels and big-word moments", items: [
     "New type: Quiz. Three “True or false?” questions for your niche, each with a 3-2-1 countdown and ticking clock, then a TRUE ✓ or FALSE ✗ stamp with a chime or buzzer and the explanation. Viewers play along and comment their score.",
     "Quiz questions are written and checked by hand (40 of them across the six niches), and the app avoids repeating the ones you used recently.",

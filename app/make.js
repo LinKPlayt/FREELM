@@ -9,7 +9,7 @@ import { analyzeLine, iconFor } from "./visuals.js";
 import { dramatize } from "./hook.js";
 import { buildQuiz } from "./quiz.js";
 import { proofread } from "./wording.js";
-import { artFor, motifsFor, artOptions, drawAhead, styleFor } from "./illustrator.js";
+import { artFor, motifsFor, pickMotifs, artOptions, drawAhead, styleFor } from "./illustrator.js";
 const accentOf = (hex = "#FFD60A") => { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
 import { deepen, addSoundEffects, makeSrt, makeCover } from "./extras.js";
 import { polish, insertIndex } from "./story.js";
@@ -480,7 +480,7 @@ export async function produceReel(plan, opts, ui) {
   const { audio, total } = await assembleAudio(clips, opts.music, script.lines, opts.musicVolume ?? 1, spans);
 
   ui.say("Preparing scenes…", 0.56);
-  const scenes = [], credits = [];
+  const scenes = [], credits = [], shown = [];      // shown: main subjects of recent illustrations
   for (let i = 0; i < script.lines.length; i++) {
     const line = script.lines[i];
     const sc = { start: i === 0 ? 0 : spans[i][0] - GAP / 2, end: i === script.lines.length - 1 ? total : spans[i + 1][0] - GAP / 2, kind: "fallback",
@@ -510,8 +510,10 @@ export async function produceReel(plan, opts, ui) {
       else if (opts.artStyle !== "icons") {
         // Drawn for this line (or reused if this idea was drawn before), in the reel's art style.
         try {
-          const art = await artFor({ motifs: motifsFor(line, script.topicTitle || script.title), style: styleFor(opts.artStyle, script.niche), accent: accentOf(opts.accent) }, script.topicTitle || script.title);
-          sc.kind = "image"; sc.bitmap = art.bitmap; sc.art = true; sc.relevant = true;
+          const motifs = pickMotifs(line, script.topicTitle || script.title, shown.slice(-2));
+          shown.push(motifs[0]);
+          const art = await artFor({ motifs, style: styleFor(opts.artStyle, script.niche), accent: accentOf(opts.accent) }, script.topicTitle || script.title);
+          sc.kind = "image"; sc.bitmap = art.bitmap; sc.art = true; sc.relevant = true; sc.hero = motifs[0];
         } catch (e) { console.warn("illustration", e); sc.kind = "illus"; sc.icon = v.icon; sc.label = v.label; }
       }
       else { sc.kind = "illus"; sc.icon = v.icon; sc.label = v.label; }
@@ -520,6 +522,30 @@ export async function produceReel(plan, opts, ui) {
     scenes.push(sc);
   }
 
+  // Cuts: a long line doesn't sit on one picture. Halfway through (at a word), it cuts to a second
+  // visual of the same idea, the way an editor would. Payoffs and labels stay on the first shot.
+  if (opts.cuts !== false && opts.artStyle !== "icons") {
+    ui.say("Adding cuts…", 0.58);
+    const topic = script.topicTitle || script.title, style = styleFor(opts.artStyle, script.niche), accent = accentOf(opts.accent);
+    const out = [];
+    for (let k = 0; k < scenes.length; k++) {
+      const sc = scenes[k], line = script.lines[k];
+      out.push(sc);
+      if (sc.kind !== "image" || !line || line.kind !== "media" || sc.end - sc.start < 5.2) continue;
+      const mid = (sc.start + sc.end) / 2;
+      const at = words.filter((w) => w.start > sc.start + 1.8 && w.start < sc.end - 1.8).sort((a, b) => Math.abs(a.start - mid) - Math.abs(b.start - mid))[0];
+      if (!at) continue;
+      try {
+        // The second shot shows the idea a different way from the first, and from what was just on screen.
+        const recent = [...(sc.art ? [sc.hero] : []), ...out.slice(-3).map((x) => x.hero)].filter(Boolean);
+        const motifs = pickMotifs({ text: line.text }, topic, recent);
+        const art = await artFor({ motifs, style, accent }, topic);
+        const cut = { ...sc, hero: motifs[0], start: at.start - 0.04, bitmap: art.bitmap, art: true, payoff: false, chip: "", tone: "", stat: null, seed: (sc.seed || 0) + 100 };
+        sc.end = cut.start; out.push(cut);
+      } catch (e) { console.warn("cut", e); }
+    }
+    scenes.splice(0, scenes.length, ...out);
+  }
   if (opts.sfx !== false) addSoundEffects(audio, scenes);
   let logo = null;
   if (opts.logo) { try { logo = await createImageBitmap(await (await fetch(opts.logo)).blob()); } catch { logo = null; } }

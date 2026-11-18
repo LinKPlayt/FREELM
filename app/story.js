@@ -61,7 +61,13 @@ export function sameIdea(a, b, threshold = 0.6) {
   let n = 0; for (const w of A) if (B.has(w)) n++;
   return n / Math.min(A.size, B.size) > threshold;
 }
-const topicRe = (topic) => new RegExp("\\b" + topic.replace(/\s+\(.*\)$/, "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&").split(/\s+/).join("[\\s-]+") + "(?:s|es|ing)?\\b", "i");
+const topicRe = (topic) => {
+  const base = topic.replace(/\s+\(.*\)$/, "");
+  let alt = base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").split(/\s+/).join("[\\s-]+") + "(?:s|es|ing)?";
+  // A one-word topic for a person or role also matches its word family ("Freelancer" -> "freelance work").
+  if (/^[a-z]{6,}(?:er|or|ist)$/i.test(base)) alt += "|" + base.replace(/(?:er|or|ist)$/i, "") + "\\w*";
+  return new RegExp("\\b(?:" + alt + ")\\b", "i");
+};
 
 const PRONOUN_START = /^(It|This|These|They|Their|Its|That|Those|Such|He|She|Instead|However|Also|Moreover|Furthermore|Thus|Therefore|Hence|As a result|In addition|For example|For instance)\b,?\s*/;
 const ADVICE_START = /^(?:(?:at minimum|first|then|next|instead|so|and|but|finally),?\s+)?(start|keep|set|pay|use|try|automate|avoid|don't|do not|never|always|check|compare|aim|pick|look|save|invest|build|before you|think|watch|budget|read|decide|ask|track|spread|make|stop|get|open|treat|contribute|choose|consider|split)\b(?!-)(?!\s+(?:is|are|was|were|has|have|had|of|and|or)\b)/i;
@@ -95,7 +101,7 @@ export function isDefinition(text, topic) {
   const head = words(text).slice(0, 14).join(" ");
   const m = topicRe(topic).exec(head);
   if (!m || ADVICE_START.test(text)) return false;
-  return /^[^.;:]{0,45}?\s+(?:(?:is|are|was|were) (?:a|an|the|any|one|when|what|how|money|digital|terms?)\b|means\b|refers to\b|describes\b)/.test(head.slice(m.index + m[0].length));
+  return /^[^.;:]{0,45}?\s+(?:(?:is|are|was|were) (?:(?:a|an|the)\s+)?(?:(?:common|general|broad|informal|technical|popular|legal)\s+)?(?:a|an|the|any|one|when|what|how|money|digital|terms?|names?|words?)\b|means\b|refers to\b|describes\b)/.test(head.slice(m.index + m[0].length));
 }
 export const isAdvice = (t) => ADVICE_START.test(t) || /\byou (should|can|could|need)\b/i.test(t);
 
@@ -202,7 +208,7 @@ export function composeStory(topic, niche, candidates, { max = 5, takeaway = tru
     const follows = out.length && p.prev && out.at(-1).raw === p.prev;
     if (!follows) {
       // "some of these episodes…", "such loans…" point at a sentence that isn't here.
-      if (/\b(these|those|such)\s+[a-z]+|\bthe (above|following|same)\b/i.test(text)) { used.push(p); return false; }
+      if (/\b(these|those|such)\s+[a-z]+|\bthe (above|following|same)\b|^the (first|second|third|last|former|latter|two|three|four|remaining|other|aforementioned)\b/i.test(text)) { used.push(p); return false; }
       text = standAlone(text, topic, { person }); if (!text) { used.push(p); return false; }
     }
     used.push(p);
@@ -217,7 +223,12 @@ export function composeStory(topic, niche, candidates, { max = 5, takeaway = tru
   // 1. What it is: the source's own opening definition (the next one only if that's a mouthful).
   // Prefer one where the topic itself is the subject ("A credit score is…", not "A business credit score is…"),
   // and the main article's over a section's.
-  const subject = (p) => new RegExp("^(?:an?|the)?\\s*" + topicRe(topic).source, "i").test(p.text) ? 0 : 1;
+  // ...or is one item in a list of names before the verb ("Freelance, freelancer, and freelance worker are…").
+  const subject = (p) => {
+    if (new RegExp("^(?:an?|the)?\\s*(?:" + topicRe(topic).source + ")", "i").test(p.text)) return 0;
+    const head = (p.text.match(/^(.{3,80}?)\s+(?:is|are|was|were)\s/) || [])[1] || "";
+    return head && head.split(/,\s*(?:and\s+|or\s+)?|\s+(?:and|or)\s+/).some((x) => new RegExp("^(?:an?|the)?\\s*(?:" + topicRe(topic).source + ")$", "i").test(x.trim())) ? 0 : 1;
+  };
   const inSection = (p) => (/\s—\s/.test(p.source || "") || p.other ? 1 : 0);
   const defs = pool.filter((p) => p.role === "definition" && (person || !subject(p))).sort((x, y) => subject(x) - subject(y) || inSection(x) - inSection(y) || x.i - y.i).slice(0, 3);
   let def = defs.find((d) => words(d.text).length <= 26) || defs[0];
@@ -366,7 +377,10 @@ const THEMES = [
   ["AI and tech", /\b(ai|artificial intelligence|nvidia|chips?|tech)\b/i, () => "Big tech now drives a large share of the market, so it moves most index funds too."],
 ];
 // Headlines that aren't news: newsletter titles, live blogs, round-ups.
-export const junkHeadline = (t) => /^(here'?s|here is) what (happened|to know|to watch|you need)|\b(live updates?|live blog|morning brief(ing)?|daily (wrap|brief|digest|recap)|week in review|stocks to watch|things to know|what to watch|newsletter|podcast|price prediction|sponsored)\b/i.test(t);
+export const junkHeadline = (t) => /^(here'?s|here is) what (happened|to know|to watch|you need)|\b(live updates?|live blog|morning brief(ing)?|daily (wrap|brief|digest|recap)|week in review|stocks to watch|things to know|what to watch|newsletter|podcast|price prediction|sponsored)\b/i.test(t)
+  // Series and technical posts ("Covenants Part 6: …"), and company press releases ("X Partners with Y to Enhance…").
+  || /\bpart \d+\b|\bepisode \d+|\b(deep dive|explainer|tutorial|whitepaper|changelog|release notes)\b/i.test(t)
+  || /\b(partners|teams up|collaborates) with\b.{0,60}\bto (enhance|expand|launch|offer|provide|deliver|bring|power|accelerate)\b|\b(announces|unveils|launches) (new|its|the)\b.{0,40}\b(platform|solution|partnership|program)\b/i.test(t);
 
 export function headlineThread(titles, nicheTheme = "") {
   const hits = THEMES.map(([name, re, say]) => ({ name, say, at: titles.map((t, i) => (re.test(t) ? i : -1)).filter((i) => i >= 0) })).filter((h) => h.at.length);
@@ -382,11 +396,11 @@ export function headlineThread(titles, nicheTheme = "") {
 // One line on how the markets moved overall, for the opening and the closing thought.
 export function marketMood(markets) {
   const moves = markets.filter((m) => !m.is_yield).map((m) => m.day_pct);
-  if (!moves.length) return { opening: "", closing: "Remember: daily moves are noise. Long term habits build wealth." };
+  if (!moves.length) return { opening: "", closing: "Remember: daily moves are noise. Long-term habits build wealth." };
   const up = moves.filter((v) => v > 0.05).length, down = moves.filter((v) => v < -0.05).length, big = Math.max(...moves.map(Math.abs));
   const what = markets[0].asset === "crypto" || /bitcoin|ether/i.test(markets[0].name || "") ? "Crypto" : "Stocks";
-  if (down === moves.length) return { opening: `${what} fell across the board${big >= 1.5 ? ", and it was a rough one" : ""}.`, closing: big >= 1.5 ? "Remember: red days like this feel scary, but they're normal. Long term habits build wealth." : "Remember: daily moves are noise. Long term habits build wealth." };
-  if (up === moves.length) return { opening: `${what} rose across the board${big >= 1.5 ? ", and it was a strong one" : ""}.`, closing: big >= 1.5 ? "Remember: green days feel great, but don't chase them. Long term habits build wealth." : "Remember: daily moves are noise. Long term habits build wealth." };
-  if (!up && !down) return { opening: "A quiet day: the markets barely moved.", closing: "Remember: boring days are part of investing. Long term habits build wealth." };
-  return { opening: "It was a mixed day for the markets.", closing: "Remember: daily moves are noise. Long term habits build wealth." };
+  if (down === moves.length) return { opening: `${what} fell across the board${big >= 1.5 ? ", and it was a rough one" : ""}.`, closing: big >= 1.5 ? "Remember: red days like this feel scary, but they're normal. Long-term habits build wealth." : "Remember: daily moves are noise. Long-term habits build wealth." };
+  if (up === moves.length) return { opening: `${what} rose across the board${big >= 1.5 ? ", and it was a strong one" : ""}.`, closing: big >= 1.5 ? "Remember: green days feel great, but don't chase them. Long-term habits build wealth." : "Remember: daily moves are noise. Long-term habits build wealth." };
+  if (!up && !down) return { opening: "A quiet day: the markets barely moved.", closing: "Remember: boring days are part of investing. Long-term habits build wealth." };
+  return { opening: "It was a mixed day for the markets.", closing: "Remember: daily moves are noise. Long-term habits build wealth." };
 }

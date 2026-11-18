@@ -42,6 +42,7 @@
   input[type=text], select { width: 100%; background: var(--surface-2); color: var(--text);
     border: 1px solid var(--line); border-radius: 12px; padding: 12px; font-size: 16px; font-family: inherit; }
   .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; }
+  .row > div:first-child { flex: 1; min-width: 0; }
   .row small { display: block; color: var(--muted); font-size: 13px; }
   .switch { position: relative; width: 52px; height: 32px; flex: none; }
   .switch input { opacity: 0; width: 0; height: 0; }
@@ -230,6 +231,8 @@
           <label class="switch"><input id="strict" type="checkbox" checked><span></span></label></div>
         <div class="row" style="margin-top:14px"><div>Number pops<small>Show key figures big on screen, like “20%”</small></div>
           <label class="switch"><input id="pops" type="checkbox" checked><span></span></label></div>
+        <div class="row"><div>Quick cuts<small>Long lines cut to a second picture halfway, like an edited video</small></div>
+          <label class="switch"><input id="cuts" type="checkbox" checked><span></span></label></div>
         <div class="row"><div>Sound effects<small>A whoosh between scenes, a pop when a number lands</small></div>
           <label class="switch"><input id="sfx" type="checkbox" checked><span></span></label></div>
         <div class="row"><div>Show sources<small>“Source: …” on scenes with researched facts</small></div>

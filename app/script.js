@@ -1,4 +1,4 @@
-import { composeStory, cleanHeadline, headlineThread, marketMood, isDefinition, junkHeadline } from "./story.js";
+import { composeStory, cleanHeadline, headlineThread, marketMood, isDefinition, junkHeadline, fits } from "./story.js";
 // Script writer: turns research into a short spoken script (hook -> points -> call to action).
 // A JavaScript port of reelbot/script.py so reels can be written on the phone.
 
@@ -111,7 +111,8 @@ export function buildEvergreen(topic, opts, definition) {
   const name = topic.wiki || topic.title;
   const explained = topic.points.some((p) => isDefinition(p, name) || /\b(means|is when|is a|is an|are|stands for)\b/i.test(p.split(/\s+/).slice(0, 9).join(" ")));
   // ...and only a short, plain one: encyclopedia definitions are often a mouthful.
-  if (definition && !explained && definition.split(/\s+/).length <= 22) {
+  // It must also pass the storyteller's checks (no legal jargon, not cut off at "U.S.", nothing missing).
+  if (definition && !explained && definition.split(/\s+/).length <= 22 && fits(definition, name)) {
     extras.push({ ...line(definition, vis[vis.length - 1]), source: "Wikipedia · " + topic.wiki });
     sources.push("https://en.wikipedia.org/wiki/" + topic.wiki.replaceAll(" ", "_"));
   }

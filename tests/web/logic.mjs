@@ -134,6 +134,11 @@ export default async function ({ t, newPage }) {
     const batch = IL.nextBatch("crypto", "neon", [255, 214, 10]);
     out.batch = [batch.length, batch[0].motifs[0], await IL.drawAhead(batch.slice(0, 2), "test"), IL.nextBatch("crypto", "neon", [255, 214, 10]).length, IL.savedArt().length];
     await caches.delete(IL.ART_CACHE); IL.forgetArt();
+    // refinements: definitions phrased as "terms for", junk headlines, illustration variety
+    out.refine = [ST.isDefinition("Freelance, freelancer, and freelance worker are common terms for a person who is self-employed.", "Freelancer"),
+      ST.junkHeadline("Bitcoin Covenants Part 6: FE Covenants"), ST.junkHeadline("Emaar Partners with Huspy to Enhance Mortgage Advisory Services"), ST.junkHeadline("Mortgage demand turns lower as rates rise"),
+      IL.pickMotifs({ text: "Dividends grow over time." }, "Dividend", ["tree"])[0] !== "tree", IL.pickMotifs({ text: "Dividends grow over time.", artPick: 0 }, "Dividend", ["tree"])[0],
+      (await import("./app/wording.js")).checkWording("Freelance, freelancer, or freelance worker, are terms often used for a person.").text];
     // quiz reels
     const QZ = await import("./app/quiz.js");
     const qz = QZ.buildQuiz({ niche: "crypto", cta: "Follow." });
@@ -231,6 +236,8 @@ export default async function ({ t, newPage }) {
   t.ok(r.proof[0] === 2 && r.proof[1].join("|") === "The fund grows.|Follow for more.|PART 1" && r.proof[2] === "the the fund grows" && r.proof[3] === 0, "proofreading fixes a script in place once, keeps the original for the fact check, and leaves chapter cards alone", JSON.stringify(r.proof));
   t.ok(r.warn.length === 2 && /long sentence/.test(r.warn[0]) && /quotation/.test(r.warn[1]), "long sentences and unclosed quotes are flagged for you to look at", JSON.stringify(r.warn));
   t.ok(r.quiz.slice(0, 7).join() === "quiz,9,3,3,true,true,true" && r.quiz[7] === false, "a quiz: hook, 3 true-or-false questions with countdowns, 3 answers, a question and the ending; recent questions aren't repeated", JSON.stringify(r.quiz));
+  t.ok(r.refine.slice(0, 5).join() === "true,true,true,false,true" && r.refine[5] === "tree" && r.refine[6] === "Freelance, freelancer, or freelance worker are terms often used for a person.",
+    "definitions phrased as “terms for” are found; series and press-release headlines are skipped; illustrations don't repeat the last subject (unless you chose it)", JSON.stringify(r.refine));
   t.ok(r.insert.join() === "1,2", "a spare definition goes after the hook; other spares go before the takeaway", JSON.stringify(r.insert));
   t.ok(r.caps.youtube && r.caps.tiktok && r.caps.instagram && !/undefined/.test(JSON.stringify(r.caps)), "platform captions are complete", "");
   t.ok(!/undefined/.test(JSON.stringify(r.capsOld)) && r.capsOld.youtube.length > 5, "captions work for old reels with missing fields", JSON.stringify(r.capsOld).slice(0, 120));

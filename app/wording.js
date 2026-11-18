@@ -67,6 +67,8 @@ export function checkWording(input) {
   fix(/\byour (welcome|going to|not|probably|already)\b/gi, "you're $1", "fixed “your” → “you're”");
   fix(new RegExp(`\\bless (${COUNT_NOUNS})\\b`, "gi"), "fewer $1", "fixed “less” → “fewer” for things you can count");
 
+  // A comma between a list of names and its verb ("…or freelance worker, are terms for…").
+  fix(/([a-z]), (are|is) ((?:common |general )?(?:terms?|names?|words?) (?:for|used|often))/g, "$1 $2 $3", "removed a comma before the verb");
   // Two articles in a row ("a the fund").
   for (let k = 0; k < 3; k++) fix(/\b(a|an|the)\s+(?:the|a|an)\s+/gi, (m, first) => first + " ", "removed a doubled article");
   // Doubled words ("the the").

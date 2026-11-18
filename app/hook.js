@@ -44,13 +44,20 @@ const QUESTIONS = [
   [/index fund|etf/i, "Do you already own an index fund? Tell me in the comments."],
   [/mortgage|rent|housing|home/i, "Renting or buying right now? Tell me in the comments."],
   [/budget/i, "Do you use a budget? Tell me in the comments."],
+  [/\btax/i, "Do you set money aside for taxes? Tell me in the comments."],
+  [/federal reserve|interest rates?|fed funds|central bank/i, "Are interest rates hitting your budget right now? Tell me in the comments."],
+  [/dividend/i, "Do you own any dividend stocks? Tell me in the comments."],
+  [/retire|401|ira\b|roth|pension/i, "How old do you want to be when you retire? Tell me in the comments."],
+  [/student loan/i, "Are you paying off student loans right now? Tell me in the comments."],
+  [/credit card|debt/i, "What's your plan for paying off debt? Tell me in the comments."],
+  [/freelanc|side hustle|gig/i, "Do you have a side hustle yet? Tell me what it is in the comments."],
 ];
 const NICHE_QUESTIONS = {
   crypto: "Would you put your own money into this? Tell me in the comments.",
   investing: "Do you invest in this already, or are you just starting? Tell me in the comments.",
   "personal finance": "Did you already know this? Tell me in the comments.",
   economy: "Are you feeling this in your own wallet? Tell me in the comments.",
-  "side hustles": "Would you try this? Tell me in the comments.",
+  "side hustles": "Do you have a side hustle yet? Tell me what it is in the comments.",
   "real estate": "Renting or buying right now? Tell me in the comments.",
 };
 
@@ -126,7 +133,8 @@ export function smartHooks(script) {
   const stake = STAKES.find(([re]) => re.test(topic))?.[1];
   const risk = content.find(([l]) => l.role === "risk" || /^The catch:/i.test(l.text));
   const num = content.find(([l]) => (l.role === "number" || /^By the numbers:/i.test(l.text)) && statFor(body(l.text)));
-  if (stake) out.push({ text: `${stake} Here's how it really works.` });
+  // Short enough to land in the first two seconds (14 words or fewer).
+  if (stake) out.push({ text: stake.split(/\s+/).length <= 10 ? `${stake} Here's how it works.` : stake });
   if (risk) out.push({ text: `${cap(topic)}: everyone talks about it. Almost nobody mentions the catch.`, payoff: risk[1], lead: "Here's the catch:" });
   if (num) out.push({ text: `${cap(topic)}: there's one number most people never hear. Stay for it.`, payoff: num[1], lead: "Here's that number:" });
   out.push({ text: `${cap(topic)}: most people never learn how it actually works. Here's the short version.` });
@@ -175,9 +183,14 @@ export function dramatize(script, { length = "standard", ctaKind = "follow" } = 
   if (def && def.text.split(/\s+/).length <= 24 && !/^Simply put/.test(def.text) && !/^[A-Z]{2}|^[A-Z][a-z]+ [A-Z]/.test(def.text) && !script.person) {
     def.claim = def.claim || def.text; def.text = "Simply put, " + def.text[0].toLowerCase() + def.text.slice(1);
   }
+  // The optional lines (bottom line, comment question) only go in if the video still fits its length:
+  // about 2.5 spoken words a second, less a little for the pauses between lines.
+  const MAX_S = { short: 30, standard: 45, long: 60 }[length] || 45;
+  const wordsIn = () => lines.reduce((n, l) => n + String(l.text || "").split(/\s+/).filter(Boolean).length, 0);
+  const fits = (text) => deep || wordsIn() + text.split(/\s+/).length <= MAX_S * 2.5 - lines.length * 0.6;
   // 2c. A clear position before the takeaway ("Bottom line: …"), for subjects with a well-supported one.
   const stance = !script.person && !deep && script.kind !== "quiz" && length !== "short" && STANCES.find(([re]) => re.test(topicName))?.[1];
-  if (stance && !lines.some((l) => /^(bottom line|remember)\b/i.test(l.text))) {
+  if (stance && fits("Bottom line: " + stance) && !lines.some((l) => /^(bottom line|remember)\b/i.test(l.text))) {
     const tipAt = lines.findIndex((l, i) => i > 0 && l.kind === "media" && (l.tip || /^So here's what to do/.test(l.text)));
     const at = tipAt > 0 ? tipAt : lines.findIndex((l) => l.kind === "outro");
     if (at > 1) lines.splice(at, 0, { text: "Bottom line: " + stance, visual: "", kind: "media", chart: null, stance: true, optional: true });
@@ -204,8 +217,8 @@ export function dramatize(script, { length = "standard", ctaKind = "follow" } = 
     const q = script.person ? `What's the biggest lesson you'd take from ${topic}? Tell me in the comments.`
       : script.kind === "news" ? "Which of these matters most to you? Tell me in the comments."
       : script.kind === "market" ? "Buying, holding or waiting right now? Tell me in the comments."
-      : QUESTIONS.find(([re]) => re.test(topic))?.[1] || NICHE_QUESTIONS[script.niche] || NICHE_QUESTIONS["personal finance"];
-    lines.splice(outro, 0, { text: q, visual: "", kind: "media", chart: null, question: true, optional: true });
+      : QUESTIONS.find(([re]) => re.test(topic) || re.test(script.title || ""))?.[1] || NICHE_QUESTIONS[script.niche] || NICHE_QUESTIONS["personal finance"];
+    if (fits(q)) lines.splice(outro, 0, { text: q, visual: "", kind: "media", chart: null, question: true, optional: true });
   }
   return script;
 }

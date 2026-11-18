@@ -173,6 +173,13 @@ export function artOptions(text, topic = "") {
   return out.length ? out : [["coins", "chartUp", "bulb"]];
 }
 export const motifsFor = (line, topic = "") => { const opts = artOptions(line.text, topic); return opts[(line.artPick || 0) % opts.length]; };
+// Like motifsFor, but avoids a main subject that was just shown (so two scenes in a row don't look the
+// same). A choice you made with "Another illustration" is always kept.
+export function pickMotifs(line, topic = "", recent = []) {
+  const opts = artOptions(line.text, topic);
+  if (line.artPick != null) return opts[line.artPick % opts.length];
+  return opts.find((o) => !recent.includes(o[0])) || opts[0];
+}
 
 const WEAK = /^(now|see|look\w*|watch\w*|notice\w*|track\w*|monitor\w*|find|found|good|great|best|yes|hard|early|years?|decades?|where|states?|regions?|free|power|rates?|said|says|reports?|reported|data|numbers|process\w*|systems?|think\w*|smart|cares?|caring|love\w*|steps?|progress|reach\w*|finish\w*|achiev\w*|pieces?|missing|aim|plans?|planning|deal|check\w*|compar\w*|stud\w*|cuts?|cutting|reduc\w*|stack|higher|fall|falls|bets?|hot|stable|access|keys?|win|wins|won|start small|seed|grow|growing|share of|split|portion|slice|people|public|engine|machines?|digital|online|content|brand\w*|promot\w*|choice|choose|balance\w*|interest|money|pay|pays|paid|earn\w*|guide|direction|strategy|map|where|location\w*|search\w*|find|research\w*|analy\w*|learn\w*|books?|study|sale|deals?|attract\w*|pull\w*|rest|passive|urgent|challeng\w*|health\w*|mind\w*|habit\w*|brain|form|forms|rule|rules|recommend\w*|approve\w*)$/;
 
