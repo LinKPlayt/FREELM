@@ -1,9 +1,10 @@
 // UI glue for the phone app.
-import { seriesTopics, appData, planReel, produceReel, releasePlan, estimateSeconds, lengthRange, draftFromPlan, planFromDraft, planFromIdea, decideVisual } from "./make.js";
+import { drawAlternatives, seriesTopics, appData, planReel, produceReel, releasePlan, estimateSeconds, lengthRange, draftFromPlan, planFromDraft, planFromIdea, decideVisual } from "./make.js";
 import { StatBg, IllusBg } from "./graphics.js";
 import { describeStat } from "./visuals.js";
 import { hookOptions, coach } from "./extras.js";
-import { drawArt, conceptsOf, styleFor, ART_STYLES, forgetArt, savedArt } from "./illustrator.js";
+import { drawArt, motifsFor, styleFor, ART_STYLES, forgetArt, savedArt, drawAhead, nextBatch, MOTIFS } from "./illustrator.js";
+const MOTIFS_COUNT = Object.keys(MOTIFS).length;
 import { KOKORO_VOICES, setVoice, loadVoice, phonemize, synthesize, voiceRate, releaseVoice, voiceNotice, resetVoiceLevel, naturalFailed, lastVoiceError } from "./tts.js";
 const factModule = () => import("./ai/factcheck.js");
 import { listReels, saveReel, deleteReel, clearReels, listDrafts, saveDraft, deleteDraft } from "./store.js";
@@ -385,8 +386,11 @@ async function produce() {
   const t0 = performance.now();
   try {
     if (state.ideasUI) { say("Freeing memory…", 0); await state.ideasUI.unloadAI(); }   // rendering needs the memory
+    const made = { script: { ...state.plan.script, lines: state.plan.script.lines.map((l) => ({ text: l.text, kind: l.kind })) }, opts: options() };
     const reel = await produceReel(state.plan, options(), { say, canvas: $("preview"), audioCtx: state.audioCtx, toast });
     state.plan = null;
+    // Quietly draw other ways to illustrate this video's scenes, so they're saved and ready next time.
+    if (made.opts.artStyle !== "icons") setTimeout(() => drawAlternatives(made.script, made.opts).then(() => { if (document.querySelector("#tab-about.active")) renderStorage(); }).catch(() => {}), 2500);
     if (state.draftId) { deleteDraft(state.draftId); state.draftId = null; }
     const kept = await saveReel(reel);
     screen("form");
@@ -585,7 +589,7 @@ function drawGenerated(cv, v, line) {
   const n = parseInt(state.accent.slice(1), 16), accent = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
   if (v.type === "illus" && line && state.art !== "icons") {
     const script = state.plan?.script || {};
-    drawArt(thumbStage.getContext("2d"), { motifs: conceptsOf(line.text, script.topicTitle || script.title || ""), style: styleFor(state.art, script.niche), accent });
+    drawArt(thumbStage.getContext("2d"), { motifs: motifsFor(line, script.topicTitle || script.title || ""), style: styleFor(state.art, script.niche), accent });
     cv.getContext("2d").drawImage(thumbStage, 0, 0, cv.width, cv.height);
     return;
   }
@@ -631,7 +635,7 @@ function showReview() {
       .filter(([m]) => m !== "chart" || hasStat)
       .map(([m, txt]) => `<button data-vmode="${i}:${m}" class="${mode === m ? "on" : ""}">${txt}</button>`).join("")}</div>`;
     const tools = l.kind !== "media" ? (["chart", "section", "recap"].includes(l.kind) && content > 2 ? `<div class="mini"><button class="del" data-del="${i}">Remove</button></div>` : "")
-      : `<div class="mini"><button data-swap="${i}">New photo</button><button data-search="${i}">Search…</button><button data-mine="${i}">My photo</button>${content > 2 ? `<button class="del" data-del="${i}">Remove</button>` : ""}</div>`;
+      : `<div class="mini">${v.type === "illus" && state.art !== "icons" ? `<button data-artpick="${i}">Another illustration</button>` : ""}<button data-swap="${i}">New photo</button><button data-search="${i}">Search…</button><button data-mine="${i}">My photo</button>${content > 2 ? `<button class="del" data-del="${i}">Remove</button>` : ""}</div>`;
     const hookBtn = i === 0 ? `<div class="mini"><button data-hook="1">Another hook</button></div>` : "";
     return `<div class="scene"><div>${thumb}</div><div><div class="scene-tag"><span>${esc(tag)}</span></div>
       <textarea data-line="${i}" rows="3">${esc(l.text)}</textarea>${factBadge(l, i)}${hookBtn}${chips}${tools}</div></div>`;
@@ -701,6 +705,11 @@ $("scenes").addEventListener("click", async (e) => {
     plan.hookChoices ??= [first.text, ...options.filter((o) => o !== first.text)];
     plan.hookIndex = ((plan.hookIndex || 0) + 1) % plan.hookChoices.length;
     first.text = plan.hookChoices[plan.hookIndex]; first.analysis = null; plan.edited = true;
+    return showReview();
+  }
+  if (b.dataset.artpick != null) {
+    const l = plan.script.lines[+b.dataset.artpick];
+    l.artPick = (l.artPick || 0) + 1;
     return showReview();
   }
   if (b.dataset.vmode != null) {
@@ -899,6 +908,20 @@ const STORAGE_ITEMS = [
   ["Full-text research library", /\/ai\/data\/depth\//, "Deep research downloads article text again as needed."],
   ["Saved illustrations", /\/user\/art\//, "They're drawn again the next time a video needs them."],
 ];
+// Draws a batch of illustrations for your niche ahead of time, in your style and colour, and saves them.
+async function drawMoreArt() {
+  if (state.drawingAhead) { state.drawingAhead = "stop"; return; }
+  const n = parseInt(state.accent.slice(1), 16), accent = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  const style = styleFor(state.art === "icons" ? "auto" : state.art, state.niche);
+  const specs = nextBatch(state.niche, style, accent);
+  if (!specs.length) { $("art-note").textContent = "Every set is already saved in this style and colour. Try another style or colour."; return; }
+  state.drawingAhead = true; $("art-more").textContent = "Stop drawing";
+  const made = await drawAhead(specs, state.niche, (k, total) => { $("art-note").textContent = `Drawing ${k} of ${total}…`; }, () => state.drawingAhead === "stop");
+  state.drawingAhead = false;
+  $("art-note").textContent = made ? `Drew and saved ${made} new illustration${made === 1 ? "" : "s"} (${MOTIFS_COUNT} subjects to draw from). Tap again for more.` : "Stopped.";
+  renderStorage();
+}
+
 async function renderStorage() {
   const fmt = (b) => (b > 1e9 ? (b / 1e9).toFixed(1) + " GB" : Math.round(b / 1e6) + " MB");
   try {
@@ -922,6 +945,8 @@ async function renderStorage() {
       gallery.innerHTML = state.artUrls.map((u) => `<img src="${u}" alt="" loading="lazy">`).join("");
       gallery.classList.toggle("hidden", !state.artUrls.length);
     }
+    const more = $("art-more");
+    if (more && !state.drawingAhead) more.textContent = "Draw 36 more";
     $("storage-items").onclick = async (e) => {
       const b = e.target.closest("[data-free]"); if (!b) return;
       const [label, re, note] = STORAGE_ITEMS[+b.dataset.free];
@@ -1061,6 +1086,7 @@ async function init() {
   $("sound-test").addEventListener("click", soundTest);
   $("version-line").textContent = `Version ${APP_VERSION} · ${UPDATES[0].title}`;
   $("whats-new").addEventListener("click", () => showWhatsNew(APP_VERSION - 3));
+  $("art-more").addEventListener("click", drawMoreArt);
   checkWhatsNew();
   $("ai-check").addEventListener("click", aiCheck);
   $("wipe").addEventListener("click", async () => { if (confirm("Delete every reel stored on this phone?")) { await clearReels(); renderLibrary(); toast("Deleted"); } });

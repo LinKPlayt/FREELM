@@ -227,17 +227,22 @@ export default async function ({ t, newPage }) {
   t.section("Features: What's new, storage, make-time, Library covers");
   try {
     // a returning user who last saw version 29 (the window shows the newest three updates)
-    await page.evaluate(() => localStorage.setItem("seenVersion", "31"));
+    await page.evaluate(() => localStorage.setItem("seenVersion", "32"));
     await page.reload(); await until(page, () => window.__ready, null, 60000);
     t.ok(await page.locator("#news-sheet").count() === 1 && /What's new/.test(await page.innerText("#news-sheet")), "What's new appears after an update");
     const news = await page.innerText("#news-sheet");
-    t.ok(/Illustrations drawn/.test(news) && /takes a stand/.test(news) && !/Scripts that tell/.test(news), "it lists only the updates since the last one seen", news.slice(0, 200));
+    t.ok(/Many more illustrations/.test(news) && /Illustrations drawn/.test(news) && !/hook and land/.test(news), "it lists only the updates since the last one seen", news.slice(0, 200));
     await page.click('[data-news="close"]');
     t.ok(await page.locator("#news-sheet").count() === 0, "Got it closes it");
     await page.reload(); await until(page, () => window.__ready, null, 60000);
     t.ok(await page.locator("#news-sheet").count() === 0, "it stays closed after a restart");
     await page.click('nav [data-tab="about"]'); await until(page, () => /uses/.test(document.getElementById("storage-total").textContent), null, 20000);
     t.ok(await page.locator("#storage-items .store-row").count() === 5 && /Natural voice[\s\S]*Classic voice[\s\S]*Ideas AI[\s\S]*Full-text[\s\S]*Saved illustrations/.test(await page.innerText("#storage-items")), "Storage card lists the voices, AI, research library and saved illustrations", await page.innerText("#storage-items"));
+    await page.click("#art-more");
+    await until(page, () => /Drew and saved|already saved|Stopped/.test(document.getElementById("art-note").textContent), null, 180000);
+    const artNote = await page.innerText("#art-note");
+    await until(page, () => !document.getElementById("art-gallery").classList.contains("hidden"), null, 20000).catch(() => {});
+    t.ok(/Drew and saved 36 new/.test(artNote) && await page.locator("#art-gallery img").count() >= 6, "Draw more draws and saves a batch of illustrations, shown in Storage", artNote);
     await page.click("#whats-new"); t.ok(await page.locator("#news-sheet").count() === 1, "What's new can be reopened from About"); await page.click('[data-news="close"]');
     await page.click('nav [data-tab="create"]').catch(() => {});
     await page.click('#modes .chip >> text="Explainer"'); await page.click("#go"); await page.waitForSelector("#review:not(.hidden)", { timeout: 180000 });

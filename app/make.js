@@ -7,7 +7,7 @@ import { generateMusic, mix, resample, SR } from "./music.js";
 import { loadFonts, renderReel } from "./render.js";
 import { analyzeLine, iconFor } from "./visuals.js";
 import { dramatize } from "./hook.js";
-import { artFor, conceptsOf, styleFor } from "./illustrator.js";
+import { artFor, motifsFor, artOptions, drawAhead, styleFor } from "./illustrator.js";
 const accentOf = (hex = "#FFD60A") => { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
 import { deepen, addSoundEffects, makeSrt, makeCover } from "./extras.js";
 import { polish, insertIndex } from "./story.js";
@@ -492,7 +492,7 @@ export async function produceReel(plan, opts, ui) {
       else if (opts.artStyle !== "icons") {
         // Drawn for this line (or reused if this idea was drawn before), in the reel's art style.
         try {
-          const art = await artFor({ motifs: conceptsOf(line.text, script.topicTitle || script.title), style: styleFor(opts.artStyle, script.niche), accent: accentOf(opts.accent) }, script.topicTitle || script.title);
+          const art = await artFor({ motifs: motifsFor(line, script.topicTitle || script.title), style: styleFor(opts.artStyle, script.niche), accent: accentOf(opts.accent) }, script.topicTitle || script.title);
           sc.kind = "image"; sc.bitmap = art.bitmap; sc.art = true; sc.relevant = true;
         } catch (e) { console.warn("illustration", e); sc.kind = "illus"; sc.icon = v.icon; sc.label = v.label; }
       }
@@ -579,7 +579,7 @@ export function releasePlan(plan) {
 // Photos are found again when a draft is opened (your own photos aren't kept, to save space).
 export function draftFromPlan(plan, label) {
   const strip = (l) => ({ text: l.text, visual: l.visual, query: l.query, kind: l.kind, chart: l.chart || null, vmode: l.vmode, concrete: l.concrete,
-    source: l.source, hold: l.hold, items: l.items, num: l.num, label: l.label, section: l.section, tip: l.tip, claim: l.claim, pace: l.pace, payoff: l.payoff, question: l.question, optional: l.optional, stance: l.stance, role: l.role,
+    source: l.source, hold: l.hold, items: l.items, num: l.num, label: l.label, section: l.section, tip: l.tip, claim: l.claim, pace: l.pace, payoff: l.payoff, artPick: l.artPick, question: l.question, optional: l.optional, stance: l.stance, role: l.role,
     check: l.check ? { status: l.check.status, kind: l.check.kind, sources: l.check.sources, live: l.check.live,
       evidence: (l.check.evidence || []).slice(0, 2).map((e) => ({ text: e.text, source: e.source, section: e.section })) } : undefined,
     mine: l.asset && !l.asset.credit ? true : undefined });
@@ -601,3 +601,12 @@ export async function planFromDraft(draft, ui) {
 
 // For the automated tests (tests/web): internal helpers, no app behaviour depends on this.
 export const _test = { timings, pausesIn, limitAndLevel, gapAfter };
+
+// After a video is made: draw the other ways each of its scenes could be illustrated, and save them,
+// so a better picture is ready (and instant) if you remix it or the same idea comes up again.
+export async function drawAlternatives(script, opts, limit = 12) {
+  const topic = script.topicTitle || script.title, style = styleFor(opts.artStyle, script.niche), accent = accentOf(opts.accent);
+  const specs = [];
+  for (const l of script.lines) if (l.kind === "media") for (const motifs of artOptions(l.text, topic).slice(0, 3)) specs.push({ motifs, style, accent });
+  return drawAhead(specs.slice(0, limit), topic);
+}

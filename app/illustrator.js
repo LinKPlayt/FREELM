@@ -10,6 +10,7 @@
 // so it's free, offline and instant.
 
 import { ICON_DRAW } from "./graphics.js";
+import { MORE_MOTIFS } from "./motifs.js";
 
 const W = 1080, H = 1920;
 const rgba = (c, a = 1) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
@@ -84,41 +85,111 @@ const MORE = {
   arrowUp(c) { poly(c, [[0, -230], [170, -40], [70, -40], [70, 210], [-70, 210], [-70, -40], [-170, -40]], GREEN); },
   arrowDown(c) { poly(c, [[0, 230], [170, 40], [70, 40], [70, -210], [-70, -210], [-70, 40], [-170, 40]], RED); },
 };
-export const MOTIFS = { ...ICON_DRAW, ...MORE };
+export const MOTIFS = { ...ICON_DRAW, ...MORE, ...MORE_MOTIFS };
 
-// What a sentence is about -> what to draw. First match in the sentence wins the main spot.
+// What a sentence is about -> what to draw. The earliest mention in the sentence wins the main spot;
+// when two terms start at the same place, the one listed first (more specific) wins.
 const TERMS = [
-  ["bitcoin", "bitcoin"], ["ethereum|ether|stablecoin|token|crypto\\w*|coin", "bitcoin"], ["blockchain|ledger|smart contract", "chain"],
-  ["credit card|card", "card"], ["credit score|credit report|lender|borrow\\w*", "document"],
-  ["insurance|insured|protect\\w*|safety net|emergency fund", "umbrella"], ["scam\\w*|fraud|hack\\w*|security|password|recovery phrase", "lock"],
-  ["warning|risk\\w*|danger|catch|lose|loss|fail\\w*", "warning"], ["tax\\w*|irs|fee|fees|bill|bills|expense ratio|receipt", "receipt"],
-  ["piggy|savings?|save", "piggy"], ["wallet|spend\\w*|purchase|buy", "wallet"],
-  ["mortgage|house|home|housing|rent|landlord|property|real estate", "house"], ["city|cities|downtown|building", "skyline"],
-  ["bank|deposit|fdic|federal reserve|central bank|fed\\b", "bank"], ["crash\\w*|recession|decline|bear market|fell|drop\\w*|plunge\\w*", "chartDown"],
-  ["inflation|prices?|grocer\\w*|shopping", "cart"], ["retire\\w*|pension|401", "hourglass"], ["clock|hours?|minutes?|deadline|late", "clock"],
-  ["student|college|tuition|education|university|school", "cap"], ["job|jobs|employ\\w*|career|salary|paycheck|workers?|hiring", "briefcase"],
-  ["factory|factories|manufactur\\w*|industr\\w*|production|oil company", "factory"], ["oil|crude|opec|gas prices|energy", "oil"],
-  ["gold|silver|precious metal", "goldbars"], ["car|cars|vehicle|auto loan|tesla", "car"], ["phone|app|apps|mobile", "phone"],
-  ["online|internet|website|e-?commerce|laptop|computer|software|ai\\b|artificial intelligence|tech\\w*", "laptop"],
-  ["global|world|countries|international|trade|tariff\\w*|import\\w*|export\\w*", "globe"], ["contract|law|legal|rule|rules|regulat\\w*|policy|form", "document"],
-  ["people|consumers|households|families|investors|customers|population", "people"], ["idea|innovation|invent\\w*|founded|startup|entrepreneur\\w*", "bulb"],
-  ["research|analy\\w*|study|studies|check|compare|search", "magnifier"], ["rich\\w*|wealth\\w*|billionaire|fortune|king|magnate", "crown"],
-  ["growth|grow\\w*|compound\\w*|dividend\\w*|interest", "plant"], ["soar\\w*|surge\\w*|record high|rally|rocket\\w*|boom", "rocket"],
-  ["rose|rise|rising|gain\\w*|up\\b|increase\\w*", "arrowUp"], ["stock\\w*|market\\w*|invest\\w*|index fund|fund|etf|portfolio|shares", "chartUp"],
-  ["vs|versus|difference|diversif\\w*|choice|balance", "scale"], ["budget|goal|plan|target", "target"], ["month\\w*|annual|schedule|automat\\w*|every week|year\\w*", "calendar"],
-  ["money|cash|income|pay|payment|debt|loan|dollars?|\\$", "coins"],
+  // crypto
+  ["bitcoin", "bitcoin"], ["ethereum|ether|stablecoin|token|crypto\\w*|altcoin|nft|defi|coinbase|binance", "bitcoin"], ["blockchain|ledger|smart contracts?|mining|miners?", "chain"],
+  ["wallet address|private key|recovery phrase|seed phrase", "key"],
+  // cards, credit, debt
+  ["credit cards?", "card"], ["debit card|card", "card"], ["credit score|credit report|fico|credit history", "document"], ["lenders?|borrow\\w*|loan|loans", "handCoin"],
+  ["checks?|cheques?", "check"], ["atms?|cash machine", "atm"],
+  // protection and risk
+  ["insurance|insured|insurer|premium|safety net|emergency fund|rainy day", "umbrella"], ["scam\\w*|fraud\\w*|hack\\w*|security|password|identity theft|phishing", "lock"],
+  ["vault|safe deposit|safe haven", "vault"], ["bankrupt\\w*|default\\w*|collapse\\w*|blow up|implod\\w*", "bomb"], ["burn\\w*|fire\\b|on fire|hot\\b", "fire"],
+  ["bubble|bubbles|mania|hype|overvalued", "bubble"], ["gambl\\w*|bet|bets|betting|lottery|casino|speculat\\w*", "dice"], ["warning|risk\\w*|danger\\w*|catch|volatil\\w*", "warning"],
+  ["lose|loss|losses|lost|fail\\w*|worst|mistake\\w*", "thumbsDown"], ["recover\\w*|heal\\w*|repair\\w*", "bandage"], ["stable|stability|steady|anchor\\w*|peg|pegged", "anchor"],
+  ["soft landing|cushion|parachute|backup", "parachute"],
+  // costs and spending
+  ["tax\\w*|irs|deduction\\w*|refund", "receipt"], ["fee|fees|bill|bills|expense ratio|receipt|charges?|commission", "receipt"], ["price tag|discount|sale|deal|deals|coupon\\w*", "priceTag"],
+  ["shopping|shop|retail\\w*|store|stores|consumer spending", "bag"], ["inflation|prices?|grocer\\w*|cost of living", "cart"], ["gift\\w*|bonus|bonuses|free\\b", "gift"],
+  ["cut|cuts|cutting|trim\\w*|slash\\w*|reduce\\w*", "scissors"], ["gas prices|gasoline|fuel|petrol", "gasPump"], ["calculat\\w*|math|formula|interest rate", "calculator"],
+  ["percent|percentage|rate|rates|yield|apr|apy", "percent"],
+  // saving and wealth
+  ["piggy|piggy bank", "piggy"], ["nest egg", "nestEgg"], ["eggs in one basket|diversif\\w*", "basket"], ["savings?|save|saving", "piggy"], ["wallet|spend\\w*|purchase|buy|buying", "wallet"],
+  ["cash|bills|banknotes?|dollars?|\\$\\d", "cash"], ["coins?|stack", "coinStack"], ["rich\\w*|wealth\\w*|billionaire\\w*|millionaire\\w*|fortune|magnate|tycoon", "crown"],
+  ["winners?|win|wins|won|award\\w*|best", "trophy"], ["first place|champion\\w*|top spot|number one", "medal"], ["lottery ticket|ticket|tickets|raffle", "ticket"],
+  // homes and places
+  ["mortgage|house|houses|home|homes|housing|homeowner\\w*|property|real estate", "house"], ["rent|renting|renters?|landlord\\w*|tenant\\w*|apartment\\w*|lease", "skyline"],
+  ["city|cities|downtown|building\\w*|office\\w*|skyscraper\\w*", "skyline"], ["keys?|unlock\\w*|access", "key"], ["map|location\\w*|where|region\\w*|state\\b|states\\b", "map"],
+  ["direction|strategy|navigat\\w*|guide", "compass"],
+  // banks and markets
+  ["bank|banks|banking|deposit\\w*|fdic|federal reserve|central bank|fed\\b", "bank"], ["crash\\w*|recession\\w*|decline\\w*|bear market|fell|fall|drop\\w*|plunge\\w*|slump\\w*", "chartDown"],
+  ["soar\\w*|surge\\w*|record high|rally|rallies|skyrocket\\w*|boom\\w*|moon", "rocket"], ["rose|rise|rising|gain\\w*|increase\\w*|climb\\w*|higher", "arrowUp"],
+  ["dividend\\w*", "tree"], ["compound\\w*|snowball\\w*", "snowball"], ["grow|grows|growth|growing|seed|start small|early", "seedling"], ["interest", "plant"],
+  ["share of|split|portion|allocation|breakdown|slice", "pie"], ["stock\\w*|market\\w*|invest\\w*|index fund|funds?|etf|portfolio|shares|s&p|nasdaq|dow", "chartUp"], ["data|chart\\w*|statistic\\w*|numbers", "bars"],
+  // time and goals
+  ["retire\\w*|pension|401|ira", "beach"], ["sleep|passive|while you sleep|rest", "bed"], ["clock|hours?|minutes?|deadline|late|overnight", "clock"], ["alarm|wake-up call|urgent|now", "alarm"],
+  ["long term|long-term|decades?|patience|patient|years", "hourglass"], ["month\\w*|annual\\w*|schedule\\w*|automat\\w*|every week|weekly|calendar|dates?", "calendar"],
+  ["goal|goals|target\\w*|aim", "target"], ["budget\\w*|plan|plans|planning", "target"], ["climb|career ladder|ladder|promotion\\w*|level up", "ladder"], ["step\\w*|stairs|one at a time|progress", "stairs"],
+  ["peak|summit|mountain|challenge\\w*|hard", "mountain"], ["milestone\\w*|finish\\w*|achieve\\w*|reach\\w*", "flag"], ["fit\\w* together|piece\\w*|puzzle|missing", "puzzle"],
+  // people
+  ["famil\\w*|kids|children|parents|household\\w*", "family"], ["deal\\b|agreement\\w*|partner\\w*|merger\\w*|acquisition\\w*|negotiat\\w*", "handshake"],
+  ["graduat\\w*|degree\\w*|diploma", "graduate"], ["student\\w*|college|tuition|education|university|school|books?|learn\\w*|study", "cap"],
+  ["people|consumers|individuals|families|investors|customers|population|public|citizens", "people"], ["love|loved|favorite|care\\w*|health\\w*", "heart"],
+  ["think\\w*|mind\\w*|psycholog\\w*|habit\\w*|smart|brain", "brain"], ["watch\\w*|see|look\\w*|notice\\w*|track\\w*|monitor\\w*", "eye"], ["good|great|recommend\\w*|approve\\w*|yes", "thumbsUp"],
+  // work and industry
+  ["job|jobs|employ\\w*|career\\w*|salary|salaries|paycheck\\w*|workers?|hiring|wages?|income", "briefcase"], ["side hustle\\w*|freelanc\\w*|gig\\w*|self-employed", "laptop"],
+  ["factory|factories|manufactur\\w*|industr\\w*|production", "factory"], ["build\\w*|construct\\w*|auction\\w*|court|judge|ruling", "hammer"], ["oil|crude|opec|barrel\\w*", "oil"],
+  ["solar|renewable\\w*|clean energy|green energy", "solar"], ["wind power|wind farm|turbine\\w*", "windmill"], ["energy|power|electric\\w*|battery|batteries|ev\\b|evs\\b", "battery"],
+  ["gold|silver|precious metals?|bullion", "goldbars"], ["cars?|vehicles?|auto loan|automaker\\w*|tesla", "car"], ["truck\\w*|deliver\\w*|supply chain|logistics|shipping", "truck"],
+  ["ships?|ports?|containers?|cargo", "ship"], ["travel\\w*|flight\\w*|airline\\w*|vacation\\w*|trip\\w*", "plane"], ["robot\\w*|automation|ai\\b|artificial intelligence|machine learning", "robot"],
+  ["chip\\w*|semiconductor\\w*|nvidia|processor\\w*", "chip"], ["data center\\w*|cloud|server\\w*", "server"], ["phone|phones|app|apps|mobile|smartphone\\w*", "phone"],
+  ["online|internet|website\\w*|e-?commerce|laptop|computer\\w*|software|tech\\w*|digital", "laptop"], ["system\\w*|process\\w*|engine|machine\\w*|mechanism\\w*|how it works", "gear"],
+  ["global|world|countries|country|international|trade|tariff\\w*|import\\w*|export\\w*|foreign", "globe"], ["contract\\w*|law|laws|legal|rule|rules|regulat\\w*|policy|policies|form|forms|paperwork", "document"],
+  ["news|headline\\w*|report\\w*|announce\\w*", "newspaper"], ["podcast\\w*|interview\\w*|said|says|speech", "mic"], ["advertis\\w*|marketing|promot\\w*|brand\\w*", "megaphone"],
+  ["photo\\w*|camera|video\\w*|creator\\w*|influencer\\w*|content", "camera"], ["idea\\w*|innovat\\w*|invent\\w*|founded|founder\\w*|startup\\w*|entrepreneur\\w*", "bulb"],
+  ["research\\w*|analy\\w*|stud\\w*|check\\w*|compare\\w*|search\\w*|find|found", "magnifier"], ["attract\\w*|draw\\w* in|pull\\w*", "magnet"],
+  ["vs|versus|difference|choice|choose|balance\\w*|trade-?off", "scale"],
+  ["money|pay|pays|paid|payment\\w*|debt\\w*|earn\\w*|profit\\w*|revenue", "coins"],
 ].map(([t, m]) => [new RegExp("(?:^|[^a-z])(?:" + t + ")(?:s|es)?(?![a-z])", "i"), m]);
 
-export function conceptsOf(text, topic = "") {
+// Other ways to show each subject, so a scene has alternatives ("Another illustration").
+export const RELATED = {
+  house: ["key", "skyline", "map", "handCoin"], skyline: ["house", "key", "map"], bitcoin: ["chain", "chip", "bubble", "rocket"], chain: ["bitcoin", "lock", "server"],
+  card: ["wallet", "receipt", "percent"], document: ["magnifier", "check", "calculator"], handCoin: ["coins", "percent", "document"], umbrella: ["shield", "parachute", "piggy"],
+  lock: ["shield", "key", "vault"], vault: ["safe", "lock", "goldbars"], bomb: ["warning", "fire", "chartDown"], fire: ["bomb", "warning", "rocket"], bubble: ["balloon", "warning", "chartDown"],
+  dice: ["warning", "ticket", "scale"], warning: ["bomb", "magnifier", "thumbsDown"], thumbsDown: ["warning", "chartDown"], receipt: ["calculator", "percent", "scissors"],
+  priceTag: ["bag", "cart", "percent"], bag: ["cart", "priceTag", "wallet"], cart: ["priceTag", "bag", "receipt"], piggy: ["nestEgg", "coinStack", "safe", "seedling"],
+  nestEgg: ["piggy", "beach", "hourglass"], cash: ["coinStack", "wallet", "atm"], coins: ["cash", "coinStack", "handCoin"], crown: ["trophy", "goldbars", "rocket"],
+  bank: ["vault", "percent", "atm"], chartDown: ["arrowDown", "bomb", "warning"], chartUp: ["bars", "arrowUp", "rocket", "pie"], rocket: ["arrowUp", "chartUp", "trophy"],
+  arrowUp: ["chartUp", "rocket", "stairs"], tree: ["seedling", "plant", "coinStack"], seedling: ["tree", "plant", "snowball"], snowball: ["seedling", "chartUp", "hourglass"],
+  pie: ["bars", "scale", "basket"], beach: ["nestEgg", "hourglass", "bed"], hourglass: ["clock", "calendar", "seedling"], calendar: ["clock", "alarm", "target"],
+  target: ["flag", "compass", "calendar"], ladder: ["stairs", "mountain", "flag"], briefcase: ["laptop", "handshake", "people"], laptop: ["phone", "camera", "bulb"],
+  factory: ["truck", "ship", "gear"], oil: ["gasPump", "factory", "globe"], car: ["gasPump", "battery", "truck"], robot: ["chip", "server", "brain"], chip: ["robot", "server", "laptop"],
+  globe: ["ship", "plane", "map"], people: ["family", "handshake", "megaphone"], bulb: ["rocket", "brain", "laptop"], magnifier: ["eye", "document", "bars"], scale: ["pie", "compass", "magnifier"],
+  cap: ["graduate", "student", "ladder"], newspaper: ["megaphone", "mic", "eye"], goldbars: ["vault", "crown", "coinStack"],
+};
+
+// Every way to illustrate a line, best first: what it mentions (each one as the main subject in turn),
+// then related ways to show the same idea. A scene's "Another illustration" steps through these.
+export function artOptions(text, topic = "") {
+  const found = conceptsOf(text, topic, 6), out = [], seen = new Set();
+  const add = (hero, rest) => { const k = hero; if (seen.has(k) || !MOTIFS[hero]) return; seen.add(k); out.push([hero, ...rest.filter((m) => m !== hero)].slice(0, 3)); };
+  found.forEach((m) => add(m, found));
+  for (const m of found) for (const r of RELATED[m] || []) add(r, [m, ...found]);
+  return out.length ? out : [["coins", "chartUp", "bulb"]];
+}
+export const motifsFor = (line, topic = "") => { const opts = artOptions(line.text, topic); return opts[(line.artPick || 0) % opts.length]; };
+
+const WEAK = /^(now|see|look\w*|watch\w*|notice\w*|track\w*|monitor\w*|find|found|good|great|best|yes|hard|early|years?|decades?|where|states?|regions?|free|power|rates?|said|says|reports?|reported|data|numbers|process\w*|systems?|think\w*|smart|cares?|caring|love\w*|steps?|progress|reach\w*|finish\w*|achiev\w*|pieces?|missing|aim|plans?|planning|deal|check\w*|compar\w*|stud\w*|cuts?|cutting|reduc\w*|stack|higher|fall|falls|bets?|hot|stable|access|keys?|win|wins|won|start small|seed|grow|growing|share of|split|portion|slice|people|public|engine|machines?|digital|online|content|brand\w*|promot\w*|choice|choose|balance\w*|interest|money|pay|pays|paid|earn\w*|guide|direction|strategy|map|where|location\w*|search\w*|find|research\w*|analy\w*|learn\w*|books?|study|sale|deals?|attract\w*|pull\w*|rest|passive|urgent|challeng\w*|health\w*|mind\w*|habit\w*|brain|form|forms|rule|rules|recommend\w*|approve\w*)$/;
+
+export function conceptsOf(text, topic = "", max = 3) {
   const found = [];
   for (const src of [text, topic]) {
     const low = String(src || "").toLowerCase().replace(/take[- ]home pay/g, "paycheck");
     const hits = [];
-    for (const [re, m] of TERMS) { const k = low.search(re); if (k >= 0) hits.push([k, m]); }
+    for (const [re, m] of TERMS) {
+      const hit = low.match(re); if (!hit) continue;
+      // Everyday words ("now", "best", "years") only count when nothing more specific is mentioned.
+      hits.push([hit.index + (WEAK.test(hit[0].replace(/^[^a-z$]+/, "")) ? 10000 : 0), m]);
+    }
     hits.sort((a, b) => a[0] - b[0]);
     for (const [, m] of hits) if (!found.includes(m)) found.push(m);
   }
-  return (found.length ? found : ["coins"]).slice(0, 3);
+  return (found.length ? found : ["coins"]).slice(0, max);
 }
 
 /* ---------------------------------------------------------------- styles */
@@ -255,7 +326,7 @@ export function drawArt(ctx, { motifs = ["coins"], style = "flat", accent = [255
 
 /* ---------------------------------------------------------------- saved illustrations */
 export const ART_CACHE = "reelbot-user-art", ART_PATH = "/user/art/";
-const INDEX = "artIndex", KEEP = 150;
+const INDEX = "artIndex", KEEP = 300;
 const hex = (c) => c.map((v) => v.toString(16).padStart(2, "0")).join("");
 export const artKey = ({ motifs, style, accent }) => `${style}-${motifs.join("_")}-${hex(accent)}`;
 function index() { try { return JSON.parse(localStorage.getItem(INDEX) || "[]"); } catch { return []; } }
@@ -264,14 +335,14 @@ export const savedArt = () => index();
 export function forgetArt() { saveIndex([]); }
 
 // The illustration for a spec: the saved one if this idea was drawn before, else drawn now and saved.
-export async function artFor(spec, topic = "") {
+export async function artFor(spec, topic = "", { keep = true } = {}) {
   const key = artKey(spec), url = new URL(ART_PATH + key + ".jpg", location.href).href;
   let cache = null;
   try { cache = await caches.open(ART_CACHE); } catch { /* no Cache Storage (private mode) */ }
   const hit = cache && (await cache.match(url).catch(() => null));
   if (hit) {
     try {
-      const bmp = await createImageBitmap(await hit.blob());
+      const bmp = keep ? await createImageBitmap(await hit.blob()) : null;
       saveIndex([...index().filter((e) => e.key !== key), { ...(index().find((e) => e.key === key) || { key, motifs: spec.motifs, style: spec.style }), used: Date.now(), uses: ((index().find((e) => e.key === key) || {}).uses || 0) + 1 }]);
       return { bitmap: bmp, reused: true };
     } catch { /* drawn again below */ }
@@ -279,7 +350,7 @@ export async function artFor(spec, topic = "") {
   const c = canvas(W, H);
   drawArt(c.getContext("2d"), { ...spec, seed: key });
   const blob = await new Promise((res) => (c.toBlob ? c.toBlob(res, "image/jpeg", 0.86) : res(null)));
-  const bitmap = await createImageBitmap(c);
+  const bitmap = keep ? await createImageBitmap(c) : null;
   c.width = c.height = 0;
   if (cache && blob) {
     try {
@@ -292,4 +363,47 @@ export async function artFor(spec, topic = "") {
     } catch { /* storage full: the picture is still used in this video */ }
   }
   return { bitmap, reused: false };
+}
+
+/* ---------------------------------------------------------------- drawing ahead */
+// Subjects each niche talks about most, so their illustrations are ready (and saved) before a video needs them.
+export const NICHE_SETS = {
+  crypto: ["bitcoin", "chain", "lock", "key", "rocket", "chartDown", "bubble", "dice", "warning", "server", "chip", "vault", "anchor", "bomb", "phone", "coins", "globe", "people"],
+  investing: ["chartUp", "bars", "pie", "basket", "seedling", "tree", "snowball", "hourglass", "rocket", "chartDown", "receipt", "percent", "scale", "crown", "trophy", "bull", "nestEgg", "magnifier"],
+  "personal finance": ["piggy", "wallet", "umbrella", "card", "receipt", "calculator", "target", "calendar", "cash", "coinStack", "nestEgg", "cart", "priceTag", "document", "handCoin", "alarm", "family", "scissors"],
+  economy: ["bank", "cart", "globe", "factory", "ship", "truck", "oil", "gasPump", "briefcase", "people", "chartDown", "arrowUp", "percent", "newspaper", "goldbars", "skyline", "document", "robot"],
+  "side hustles": ["laptop", "phone", "camera", "bulb", "briefcase", "megaphone", "rocket", "ladder", "stairs", "handshake", "bag", "truck", "coins", "calendar", "target", "trophy", "mic", "magnet"],
+  "real estate": ["house", "skyline", "key", "map", "handCoin", "document", "percent", "calculator", "hammer", "bank", "family", "umbrella", "compass", "chartUp", "receipt", "flag", "puzzle", "anchor"],
+};
+// Draws and saves illustrations that aren't saved yet, one at a time (gentle on the phone's memory).
+// specs: [{ motifs, style, accent }]. Returns how many were newly drawn.
+export async function drawAhead(specs, topic = "", onProgress, shouldStop = () => false) {
+  const have = new Set(index().map((e) => e.key));
+  const todo = specs.filter((s) => !have.has(artKey(s)));
+  let made = 0;
+  for (const s of todo) {
+    if (shouldStop()) break;
+    try { await artFor(s, topic, { keep: false }); made++; } catch { /* skip one that fails */ }
+    onProgress?.(made, todo.length);
+    await new Promise((r) => setTimeout(r, 30));   // let the screen breathe between drawings
+  }
+  return made;
+}
+// A set of illustrations for a niche: each subject as the main one, with two related ones beside it.
+// Two versions of each: with its closest related subjects, and with the next ones along.
+export function nicheSpecs(niche, style, accent) {
+  const set = (NICHE_SETS[niche] || NICHE_SETS["personal finance"]).filter((m) => MOTIFS[m]);
+  const out = [];
+  for (const v of [0, 1]) for (const hero of set) {
+    const pool = [...(RELATED[hero] || []), ...set].filter((m, i, a) => m !== hero && MOTIFS[m] && a.indexOf(m) === i);
+    out.push({ motifs: [hero, ...pool.slice(v * 2, v * 2 + 2)], style, accent });
+  }
+  return out;
+}
+// Unsaved illustrations for your niche first, then the other niches, a batch at a time.
+export function nextBatch(niche, style, accent, size = 36) {
+  const have = new Set(index().map((e) => e.key));
+  const order = [niche, ...Object.keys(NICHE_SETS).filter((n) => n !== niche)];
+  const specs = order.flatMap((n) => nicheSpecs(n, style, accent)).filter((s, i, a) => !have.has(artKey(s)) && a.findIndex((x) => artKey(x) === artKey(s)) === i);
+  return specs.slice(0, size);
 }

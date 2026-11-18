@@ -1,9 +1,16 @@
 // The app's version and its update notes, shown once in a "What's new" window after each update.
 // When you deploy: bump APP_VERSION, add an entry at the top of UPDATES, and set the same number in
 // sw.js (VERSION = "reelbot-v<APP_VERSION>"). A test checks the two match.
-export const APP_VERSION = 34;
+export const APP_VERSION = 35;
 
 export const UPDATES = [
+  { version: 35, title: "Many more illustrations", items: [
+    "The illustrator can now draw 108 subjects (up from 41): cash, a safe, an ATM, a calculator, a pie chart, a nest egg, a trophy, a ladder, a mountain, fire, a robot, a chip, ships, planes, solar panels, a newspaper and many more.",
+    "Each scene has 8 or more alternative illustrations. Tap “Another illustration” on the review screen to step through them.",
+    "After each video, the app quietly draws and saves the other ways its scenes could be shown, so a better picture is ready next time.",
+    "About → Storage → “Draw 36 more” draws a batch for your niche ahead of time (tap again for the next batch, then other niches). Up to 300 are kept.",
+    "Everyday words like “now” or “best” no longer decide the picture; the real subject of the line does.",
+  ] },
   { version: 34, title: "Illustrations drawn for your video", items: [
     "When no photo fits, the app now draws a full-screen illustration of what's being said: a house for mortgages, a falling chart for a crash, an umbrella for an emergency fund, and 40 more subjects.",
     "Five art styles: Flat, Neon, Paper cut, Blueprint and Pop art. Auto picks one per niche so your channel keeps one look (Style → Illustration style).",

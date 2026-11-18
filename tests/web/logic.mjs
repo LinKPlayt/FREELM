@@ -128,6 +128,11 @@ export default async function ({ t, newPage }) {
     out.art = [a1.reused, a2.reused, a1.bitmap.width, a1.bitmap.height, IL.savedArt().length, IL.savedArt()[0].uses];
     out.allStyles = Object.keys(IL.ART_STYLES).map((style) => { try { const c = document.createElement("canvas"); c.width = 1080; c.height = 1920; IL.drawArt(c.getContext("2d"), { motifs: Object.keys(IL.MOTIFS).slice(0, 3), style, accent: [10, 200, 120] }); return "ok"; } catch (e) { return String(e); } });
     out.allMotifs = Object.keys(IL.MOTIFS).filter((m) => { try { const c = document.createElement("canvas"); c.width = c.height = 600; const x = c.getContext("2d"); x.translate(300, 300); IL.MOTIFS[m](x, [255, 214, 10], 0.3); return false; } catch { return true; } });
+    const optsA = IL.artOptions("Mortgage rates rose again, pushing home prices up.");
+    out.alts = [Object.keys(IL.MOTIFS).length, optsA.length, new Set(optsA.map((o) => o[0])).size, optsA[0][0], IL.motifsFor({ text: "Gold hit a record high.", artPick: 1 })[0],
+      IL.conceptsOf("Now, inflation is eating your paycheck.")[0], IL.conceptsOf("Nvidia chips power the AI boom.")[0]];
+    const batch = IL.nextBatch("crypto", "neon", [255, 214, 10]);
+    out.batch = [batch.length, batch[0].motifs[0], await IL.drawAhead(batch.slice(0, 2), "test"), IL.nextBatch("crypto", "neon", [255, 214, 10]).length, IL.savedArt().length];
     await caches.delete(IL.ART_CACHE); IL.forgetArt();
     // platform captions
     out.caps = S.platformCaptions({ title: "Test #Shorts", description: "Desc", script: "Line one.\nLine two.\nFollow.", niche: "investing", handle: "@me" });
@@ -201,6 +206,9 @@ export default async function ({ t, newPage }) {
   t.ok(r.styles.join() === "neon,pop,flat", "illustration style: auto matches the niche, or your choice", r.styles.join());
   t.ok(r.art.join() === "false,true,1080,1920,1,2", "an illustration is saved and reused the next time the same idea comes up", r.art.join());
   t.ok(r.allStyles.every((x) => x === "ok") && !r.allMotifs.length, "every art style and every drawn subject renders", JSON.stringify([r.allStyles, r.allMotifs]));
+  t.ok(r.alts[0] >= 100 && r.alts[1] >= 8 && r.alts[2] === r.alts[1] && r.alts[3] === "house" && r.alts[4] !== "goldbars", "each scene has many alternative illustrations to step through", JSON.stringify(r.alts));
+  t.ok(r.alts[5] === "cart" && r.alts[6] === "chip", "everyday words don't take the main spot from the real subject", JSON.stringify(r.alts.slice(5)));
+  t.ok(r.batch[0] === 36 && r.batch[1] === "bitcoin" && r.batch[2] === 2 && r.batch[3] === 36 && r.batch[4] === 3, "Draw more: draws a batch for your niche, saves it, and the next batch skips what's saved", JSON.stringify(r.batch));
   t.ok(r.insert.join() === "1,2", "a spare definition goes after the hook; other spares go before the takeaway", JSON.stringify(r.insert));
   t.ok(r.caps.youtube && r.caps.tiktok && r.caps.instagram && !/undefined/.test(JSON.stringify(r.caps)), "platform captions are complete", "");
   t.ok(!/undefined/.test(JSON.stringify(r.capsOld)) && r.capsOld.youtube.length > 5, "captions work for old reels with missing fields", JSON.stringify(r.capsOld).slice(0, 120));
