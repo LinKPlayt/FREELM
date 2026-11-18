@@ -58,7 +58,7 @@ async function drawStylePreview() {
     const handle = cleanHandle($("handle").value);
     const words = ["Fifty", "percent", "goes"].map((t, i) => ({ text: t, start: i * 0.4, end: i * 0.4 + 0.4 }));
     previewFrame({ title: "Your reel title here", brand: $("brand").value.trim() || "Money Minute", accent: state.accent,
-      captionStyle: state.capStyle, captionPos: state.capPos, artStyle: state.art, handle, audio: new Float32Array(1),
+      captionStyle: state.capStyle, captionPos: state.capPos, artStyle: state.art, handle, audio: new Float32Array(1), hookTitle: false,
       scenes: [{ start: 0, end: 3, kind: "image", bitmap: sampleBitmap, stat: $("pops").checked ? "50%" : null }], words }, $("style-preview"), 0.55);
   } catch (e) { console.warn("preview", e); }
 }
@@ -312,7 +312,7 @@ function options() {
     music: state.mood, accent: state.accent, voiceSpeed: SPEEDS[state.speed] || 1, length: state.length,
     voiceEngine: voiceOpts(state.voice).engine, voice: voiceOpts(state.voice).voice, musicVolume: MUSIC_VOLUMES[state.musicVol] ?? 1,
     captionStyle: state.capStyle, captionPos: state.capPos, pops: $("pops").checked, offline: $("offline").checked,
-    sfx: $("sfx").checked, cuts: $("cuts").checked, showSources: $("sources").checked,
+    sfx: $("sfx").checked, cuts: $("cuts").checked, hookTitle: $("hooktitle").checked, showSources: $("sources").checked,
     depth: Number(state.depth) || 2, factCheck: $("factcheck").checked, strict: $("factcheck").checked && $("strict").checked,
     forceEncoder: params.get("encoder") || undefined,
   };
@@ -1077,7 +1077,7 @@ async function init() {
   prefChips("depths", DEPTH_LABELS, "depth", "2", depthNote); depthNote();
   $("handle").value = store.get("handle") || "";
   $("handle").addEventListener("change", () => { $("handle").value = cleanHandle($("handle").value); store.set("handle", $("handle").value); });
-  for (const [id, key] of [["sfx", "sfx"], ["cuts", "cuts"], ["sources", "sources"], ["factcheck", "factcheck"], ["strict", "strict"]]) {
+  for (const [id, key] of [["sfx", "sfx"], ["cuts", "cuts"], ["hooktitle", "hookTitle"], ["sources", "sources"], ["factcheck", "factcheck"], ["strict", "strict"]]) {
     $(id).checked = store.get(key) !== "0";
     $(id).addEventListener("change", () => store.set(key, $(id).checked ? "1" : "0"));
   }

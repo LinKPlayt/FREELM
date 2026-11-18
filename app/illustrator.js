@@ -207,8 +207,8 @@ export const styleFor = (choice, niche) => (ART_STYLES[choice] ? choice : NICHE_
 
 // A motif drawn once on its own transparent canvas; the styles below tint, outline and glow it.
 function sprite(name, accent, size = 1) {
-  const c = canvas(560, 560), x = c.getContext("2d");
-  x.translate(280, 280); x.scale(size, size);
+  const px = Math.ceil(560 * size), c = canvas(px, px), x = c.getContext("2d");
+  x.translate(px / 2, px / 2); x.scale(size, size);
   try { (MOTIFS[name] || MOTIFS.coins)(x, accent, 0.4); } catch { /* a bad drawing never stops a video */ }
   return c;
 }
@@ -218,14 +218,35 @@ function tint(src, color) {
   return c;
 }
 // An outline of any shape: its silhouette stamped in a ring around it.
+// Thin outlines need fewer stamps to look solid: 8 directions up to 8 px, 12 beyond.
 function outline(src, color, w) {
-  const sil = tint(src, color), c = canvas(src.width + w * 2, src.height + w * 2), x = c.getContext("2d");
-  for (let k = 0; k < 16; k++) { const a = (k / 16) * Math.PI * 2; x.drawImage(sil, w + Math.cos(a) * w, w + Math.sin(a) * w); }
+  const sil = tint(src, color), c = canvas(src.width + w * 2, src.height + w * 2), x = c.getContext("2d"), n = w <= 8 ? 8 : 12;
+  for (let k = 0; k < n; k++) { const a = (k / n) * Math.PI * 2; x.drawImage(sil, w + Math.cos(a) * w, w + Math.sin(a) * w); }
+  sil.width = sil.height = 0;
+  return c;
+}
+// A soft glow without canvas shadows (slow on phones): the silhouette shrunk small, then scaled back up.
+function glow(src, color) {
+  const sil = tint(src, color), small = canvas(src.width / 8, src.height / 8), sx = small.getContext("2d");
+  sx.imageSmoothingQuality = "high"; sx.drawImage(sil, 0, 0, small.width, small.height);
+  const c = canvas(src.width + 160, src.height + 160), x = c.getContext("2d");
+  x.imageSmoothingEnabled = true; x.imageSmoothingQuality = "high";
+  for (const [d, a] of [[0, 0.9], [40, 0.6], [80, 0.35]]) { x.globalAlpha = a; x.drawImage(small, 80 - d, 80 - d, src.width + d * 2, src.height + d * 2); }
+  sil.width = sil.height = small.width = small.height = 0;
   return c;
 }
 function place(ctx, img, cx, cy, scale = 1, rot = 0, alpha = 1) {
   ctx.save(); ctx.globalAlpha = alpha; ctx.translate(cx, cy); ctx.rotate(rot); ctx.scale(scale, scale);
   ctx.drawImage(img, -img.width / 2, -img.height / 2); ctx.restore();
+}
+
+// Paper grain: one small tile, made once and repeated.
+let grainTile = null;
+function grain() {
+  if (grainTile) return grainTile;
+  grainTile = canvas(256, 256); const g = grainTile.getContext("2d"), r = rng("grain");
+  for (let i = 0; i < 260; i++) { g.fillStyle = `rgba(90,70,40,${0.03 + r() * 0.05})`; g.fillRect(r() * 256, r() * 256, 2, 2); }
+  return grainTile;
 }
 
 const BACKGROUNDS = {
@@ -245,31 +266,34 @@ const BACKGROUNDS = {
     for (let k = 0; k < 7; k++) ctx.clearRect(0, 900 + k * 40, W, 8 + k * 3);
     ctx.restore();
     ctx.fillStyle = "rgba(40,10,70,0.6)"; ctx.fillRect(0, 900, W, 300);
-    ctx.save(); ctx.strokeStyle = rgba(a, 0.8); ctx.shadowColor = rgba(a); ctx.shadowBlur = 18; ctx.lineWidth = 3;
-    for (let k = 0; k < 14; k++) { const y = 1180 + Math.pow(k / 13, 2) * 740; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
-    for (let k = -10; k <= 10; k++) { ctx.beginPath(); ctx.moveTo(W / 2 + k * 30, 1180); ctx.lineTo(W / 2 + k * 260, H); ctx.stroke(); }
+    // The glowing grid: each line drawn wide and faint, then thin and bright (canvas shadows are slow on phones).
+    ctx.save();
+    for (const [w, al] of [[12, 0.12], [3, 0.85]]) {
+      ctx.lineWidth = w; ctx.strokeStyle = rgba(a, al); ctx.beginPath();
+      for (let k = 0; k < 14; k++) { const y = 1180 + Math.pow(k / 13, 2) * 740; ctx.moveTo(0, y); ctx.lineTo(W, y); }
+      for (let k = -10; k <= 10; k++) { ctx.moveTo(W / 2 + k * 30, 1180); ctx.lineTo(W / 2 + k * 260, H); }
+      ctx.stroke();
+    }
     ctx.restore();
   },
   paper(ctx, a, r) {
     ctx.fillStyle = "rgb(243,234,216)"; ctx.fillRect(0, 0, W, H);
     // layered paper bands with wavy edges, each casting a soft shadow
     [[0.18, 1350, mix(a, 0.85)], [0.12, 1520, lighten(a, 0.35)], [0.1, 1700, mix(a, 0.6)]].forEach(([amp, y, col], k) => {
-      ctx.save(); ctx.shadowColor = "rgba(0,0,0,0.25)"; ctx.shadowBlur = 24; ctx.shadowOffsetY = -6;
-      ctx.beginPath(); ctx.moveTo(0, H); ctx.lineTo(0, y);
-      for (let x = 0; x <= W; x += 40) ctx.lineTo(x, y + Math.sin(x / 120 + k * 2) * 60 * amp * 5);
-      ctx.lineTo(W, H); ctx.closePath(); ctx.fillStyle = rgba(col); ctx.fill(); ctx.restore();
+      // Each band casts a soft shadow upward: the same shape, darker and a little higher, drawn first.
+      const band = (dy) => { ctx.beginPath(); ctx.moveTo(0, H); ctx.lineTo(0, y + dy); for (let x = 0; x <= W; x += 40) ctx.lineTo(x, y + dy + Math.sin(x / 120 + k * 2) * 60 * amp * 5); ctx.lineTo(W, H); ctx.closePath(); };
+      ctx.fillStyle = "rgba(0,0,0,0.07)"; band(-14); ctx.fill(); band(-7); ctx.fill();
+      ctx.fillStyle = rgba(col); band(0); ctx.fill();
     });
     circle(ctx, 860, 330, 110, rgba(lighten(a, 0.5)));
-    for (let i = 0; i < 2600; i++) { ctx.fillStyle = `rgba(90,70,40,${0.03 + r() * 0.05})`; ctx.fillRect(r() * W, r() * H, 2, 2); }
+    ctx.fillStyle = ctx.createPattern(grain(), "repeat"); ctx.fillRect(0, 0, W, H);
   },
   blueprint(ctx, a) {
     ctx.fillStyle = "rgb(16,58,112)"; ctx.fillRect(0, 0, W, H);
     ctx.strokeStyle = "rgba(255,255,255,0.08)"; ctx.lineWidth = 2;
-    for (let x = 0; x <= W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
-    for (let y = 0; y <= H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
-    ctx.strokeStyle = "rgba(255,255,255,0.2)"; ctx.lineWidth = 3;
-    for (let x = 0; x <= W; x += 200) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
-    for (let y = 0; y <= H; y += 200) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+    const grid = (step) => { ctx.beginPath(); for (let x = 0; x <= W; x += step) { ctx.moveTo(x, 0); ctx.lineTo(x, H); } for (let y = 0; y <= H; y += step) { ctx.moveTo(0, y); ctx.lineTo(W, y); } ctx.stroke(); };
+    grid(40);
+    ctx.strokeStyle = "rgba(255,255,255,0.2)"; ctx.lineWidth = 3; grid(200);
     // measurement marks around the subject
     ctx.strokeStyle = "rgba(255,255,255,0.7)"; ctx.setLineDash([14, 10]);
     ctx.beginPath(); ctx.arc(W / 2, 820, 400, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
@@ -281,8 +305,16 @@ const BACKGROUNDS = {
     ctx.save(); ctx.translate(W / 2, 820);
     for (let k = 0; k < 24; k++) { ctx.rotate(Math.PI / 12); poly(ctx, [[0, 0], [1400, -120], [1400, 120]], k % 2 ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.04)"); }
     ctx.restore();
-    for (let y = 0; y < H; y += 34) for (let x = (y / 34) % 2 ? 17 : 0; x < W; x += 34) {
-      const d = Math.hypot(x - W / 2, y - 820) / 1100; circle(ctx, x, y, 3 + 9 * Math.min(1, d), "rgba(12,16,34,0.12)");
+    // Halftone dots, bigger further from the middle: one path per size, not one fill per dot.
+    ctx.fillStyle = "rgba(12,16,34,0.12)";
+    for (let band = 0; band < 5; band++) {
+      ctx.beginPath();
+      for (let y = 0; y < H; y += 34) for (let x = (y / 34) % 2 ? 17 : 0; x < W; x += 34) {
+        const d = Math.min(1, Math.hypot(x - W / 2, y - 820) / 1100);
+        if (Math.min(4, Math.floor(d * 5)) !== band) continue;
+        const rad = 3 + 9 * ((band + 0.5) / 5); ctx.moveTo(x + rad, y); ctx.arc(x, y, rad, 0, Math.PI * 2);
+      }
+      ctx.fill();
     }
     // a comic "burst" behind the subject
     ctx.save(); ctx.translate(W / 2, 820); ctx.beginPath();
@@ -294,7 +326,7 @@ const BACKGROUNDS = {
 // How each style treats a drawn subject.
 function stamp(ctx, style, spr, cx, cy, scale, rot, a) {
   if (style === "neon") {
-    const glow = tint(spr, rgba(a)); ctx.save(); ctx.shadowColor = rgba(a); ctx.shadowBlur = 50; place(ctx, glow, cx, cy, scale, rot, 0.9); ctx.restore();
+    place(ctx, glow(spr, rgba(a)), cx, cy, scale, rot, 0.9);
     place(ctx, outline(spr, "rgb(255,255,255)", 6), cx, cy, scale, rot); place(ctx, spr, cx, cy, scale, rot);
   } else if (style === "paper") {
     place(ctx, tint(spr, "rgba(60,40,20,0.35)"), cx + 18 * scale, cy + 24 * scale, scale, rot);
@@ -318,7 +350,8 @@ export function drawArt(ctx, { motifs = ["coins"], style = "flat", accent = [255
   // Two supporting subjects, smaller, up and to the sides; the main subject big in the middle.
   const side = motifs.slice(1, 3);
   if (side.length < 2) side.push(...["coins", "chartUp", "bulb", "target"].filter((m) => !motifs.includes(m)).slice(0, 2 - side.length));
-  [[230, 470, -0.18], [860, 560, 0.16]].forEach(([x, y, rot], k) => stamp(ctx, style, sprite(side[k], accent), x, y, 0.55 + r() * 0.08, rot, accent));
+  // (Drawn at the size they're shown, which is much quicker than drawing big and shrinking.)
+  [[230, 470, -0.18], [860, 560, 0.16]].forEach(([x, y, rot], k) => { const s = 0.55 + r() * 0.08; stamp(ctx, style, sprite(side[k], accent, s), x, y, 1, rot, accent); });
   stamp(ctx, style, sprite(motifs[0], accent), W / 2, 830, 1.32, (r() - 0.5) * 0.12, accent);
   // A little life around it: sparkles (flat, neon), confetti dots (paper, pop), plus-marks (blueprint).
   for (let i = 0; i < 14; i++) {

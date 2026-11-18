@@ -1,9 +1,14 @@
 // The app's version and its update notes, shown once in a "What's new" window after each update.
 // When you deploy: bump APP_VERSION, add an entry at the top of UPDATES, and set the same number in
 // sw.js (VERSION = "reelbot-v<APP_VERSION>"). A test checks the two match.
-export const APP_VERSION = 38;
+export const APP_VERSION = 39;
 
 export const UPDATES = [
+  { version: 39, title: "A stronger opening, faster drawing", items: [
+    "Hook title: the first line now appears big on screen, word by word, over the dimmed opening picture, so viewers read it in the first second (Style → Hook title).",
+    "Illustrations draw up to twice as fast, so videos with many drawn scenes are made sooner.",
+    "Labels like WHY IT MATTERS no longer overlap a two-line title.",
+  ] },
   { version: 38, title: "Sharper videos, tighter scripts", items: [
     "Quick cuts: a long line now cuts to a second picture of the same idea halfway through, like an edited video (Style → Quick cuts).",
     "Illustrations no longer repeat the subject that was just on screen.",

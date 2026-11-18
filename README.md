@@ -116,6 +116,8 @@ After the storyteller, every script gets an emotion layer (`app/hook.js`). It ne
 - **Sound design.** A bass hit on the first frame; a riser, hit and camera shake into the payoff, with
   the music dropping away just before it; coins for money figures; a falling tone for risks; a bell for
   the takeaway; a bloop for the question; a sparkle on the ending. Music fades out at the end.
+- **Hook title.** The opening line appears big on screen, word by word, over the dimmed opening picture
+  (captions are hidden for it). Turn off under Style → Hook title.
 - **Quick cuts.** A line longer than about five seconds cuts, at a word near its middle, to a second
   picture of the same idea (an illustration that isn't the one just shown). Turn off under Style → Quick cuts.
 - **Length-aware extras.** The bottom line and the comment question are added only when the script still

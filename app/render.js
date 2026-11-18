@@ -155,8 +155,8 @@ class TypeBg {
 // Big words that appear as they're spoken: for the moments that matter (the bottom line, the question
 // for the comments, a quiz question). The captions are hidden on these scenes: the words ARE the scene.
 class KineticBg {
-  constructor(words, accent, seed = 0, { top = 900, size = 108, label = "" } = {}) {
-    this.words = words; this.accent = accent; this.t = 0; this.label = label;
+  constructor(words, accent, seed = 0, { top = 900, size = 108, label = "", transparent = false } = {}) {
+    this.words = words; this.accent = accent; this.t = 0; this.label = label; this.transparent = transparent;
     const bg = canvas(W, H), c = bg.getContext("2d");
     const g = c.createLinearGradient(0, 0, W, H); g.addColorStop(0, "rgb(12,14,32)"); g.addColorStop(1, rgba(accent.map((v) => Math.round(v * 0.28))));
     c.fillStyle = g; c.fillRect(0, 0, W, H);
@@ -174,7 +174,7 @@ class KineticBg {
   }
   setTime(t) { this.t = t; }
   draw(ctx, p) {
-    ctx.drawImage(this.bg, 0, 0);
+    if (!this.transparent) ctx.drawImage(this.bg, 0, 0);
     if (this.label) { ctx.save(); ctx.font = "800 46px Montserrat"; ctx.textAlign = "center"; ctx.fillStyle = rgba(this.accent); ctx.fillText(this.label, W / 2, this.top - this.size * 1.1); ctx.restore(); }
     ctx.save(); ctx.font = `${this.size}px Anton`; ctx.textBaseline = "middle"; ctx.textAlign = "left"; ctx.lineJoin = "round";
     this.rows.forEach((row, r) => {
@@ -413,12 +413,12 @@ class Captions {
 }
 
 // A label for the moment ("THE CATCH", "WHAT TO DO"): it pops in under the title, tilted like a sticker.
-function drawChip(ctx, text, into, left, accent, tone) {
+function drawChip(ctx, text, into, left, accent, tone, y = 360) {
   const a = Math.min(1, into / 0.12) * Math.min(1, Math.max(0, left / 0.2));
   if (a <= 0) return;
   const s = into < 0.25 ? 0.6 + 0.4 * ease(into / 0.25) + 0.08 * Math.sin(Math.PI * Math.min(1, into / 0.25)) : 1;
   ctx.save();
-  ctx.globalAlpha = a; ctx.translate(W / 2, 360); ctx.rotate(-0.04); ctx.scale(s, s);
+  ctx.globalAlpha = a; ctx.translate(W / 2, y); ctx.rotate(-0.04); ctx.scale(s, s);
   ctx.font = "800 54px Montserrat"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
   const w = ctx.measureText(text).width + 70, h = 92;
   ctx.shadowColor = "rgba(0,0,0,0.45)"; ctx.shadowBlur = 24; ctx.shadowOffsetY = 8;
@@ -458,6 +458,9 @@ class Painter {
     this.accent = hexToRgb(job.accent || "#FFD60A");
     this.total = job.scenes[job.scenes.length - 1].end;
     this.header = overlay(job.title, job.brand, this.accent, job.handle, job.logo);
+    // Moment labels sit just under the title, which takes one or two lines.
+    const m = canvas(10, 10).getContext("2d"); m.font = "800 60px Montserrat";
+    this.chipY = job.title ? 250 + (Math.min(2, wrap(m, job.title, W - 140).length) - 1) * 76 + 110 : 360;
     this.plain = overlay("", "", this.accent, "", job.logo);
     this.captions = new Captions(job.words, this.accent, job.captionStyle);
     this.captionY = job.captionPos === "middle" ? 1000 : 1440;
@@ -508,14 +511,21 @@ class Painter {
     // A white flash on the payoff, so the moment the video promised feels like one.
     if (sc.payoff && into < 0.18) { ctx.fillStyle = `rgba(255,255,255,${0.35 * (1 - into / 0.18)})`; ctx.fillRect(0, 0, W, H); }
     if (this.hasSnap && idx > 0 && into < 0.25) { ctx.globalAlpha = 1 - ease(into / 0.25); ctx.drawImage(this.snap, 0, 0); ctx.globalAlpha = 1; }
+    // The hook as a title: big words over the dimmed opening picture, as they're spoken.
+    const hookTitle = idx === 0 && this.job.hookTitle !== false && ["image", "illus", "fallback", "stat"].includes(sc.kind);
+    if (hookTitle) { ctx.fillStyle = `rgba(0,0,0,${0.42 * Math.min(1, into / 0.2)})`; ctx.fillRect(0, 0, W, H); }
     ctx.drawImage(sc.kind === "outro" ? this.plain : this.header, 0, 0);
     if (sc.stat && !["outro", "chart", "stat"].includes(sc.kind)) drawStatPop(ctx, sc.stat, into, sc.end - t, this.popY, this.accent);
-    if (sc.chip) drawChip(ctx, sc.chip, into, sc.end - t, this.accent, sc.tone);
+    if (sc.chip) drawChip(ctx, sc.chip, into, sc.end - t, this.accent, sc.tone, this.chipY);
+    if (hookTitle) {
+      this.hookWords ??= new KineticBg(this.job.words.filter((w) => w.start < sc.end), this.accent, 0, { transparent: true, top: 860, size: 116 });
+      this.hookWords.setTime(t); this.hookWords.draw(ctx, 0);
+    }
     if (sc.source) drawSource(ctx, sc.source, Math.min(1, into / 0.3) * Math.min(1, (sc.end - t) / 0.2));
-    if (!["recap", "kinetic", "quiz"].includes(sc.kind)) this.captions.draw(ctx, t, sc.kind === "outro" ? 1180 : sc.kind === "section" ? 1520 : this.captionY);
+    if (!["recap", "kinetic", "quiz"].includes(sc.kind) && !hookTitle) this.captions.draw(ctx, t, sc.kind === "outro" ? 1180 : sc.kind === "section" ? 1520 : this.captionY);
     ctx.fillStyle = rgba(this.accent); ctx.fillRect(0, H - 12, W * (t / this.total), 12);
   }
-  dispose() { this.bg?.dispose(); for (const c of [this.header, this.plain, this.snap]) c.width = c.height = 0; }
+  dispose() { this.bg?.dispose(); this.hookWords?.dispose(); for (const c of [this.header, this.plain, this.snap]) c.width = c.height = 0; }
 }
 
 // Draws a single frame of a job onto a canvas (used for the style preview).
