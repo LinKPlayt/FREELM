@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ReelBot</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b0f1e;color:#f4f6fb;font:16px/1.5 -apple-system,system-ui,sans-serif;text-align:center;padding:24px}a{color:#ffd60a;font-weight:800}</style>
+</head>
+<body>
+<p>This page has moved. <a id="go" href="/FREELM/">Open ReelBot</a></p>
+<script>
+  // Any old or mistyped ReelBot address (an older version's link, a bookmark) opens the current app.
+  // On GitHub Pages the first folder is the project, e.g. /FREELM/.
+  const base = "/" + (location.pathname.split("/")[1] || "") + "/";
+  document.getElementById("go").href = base;
+  if (location.pathname !== base) location.replace(base);
+</script>
+</body>
+</html>

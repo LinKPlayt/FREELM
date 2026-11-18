@@ -134,6 +134,14 @@ export default async function ({ t, newPage }) {
     const batch = IL.nextBatch("crypto", "neon", [255, 214, 10]);
     out.batch = [batch.length, batch[0].motifs[0], await IL.drawAhead(batch.slice(0, 2), "test"), IL.nextBatch("crypto", "neon", [255, 214, 10]).length, IL.savedArt().length];
     await caches.delete(IL.ART_CACHE); IL.forgetArt();
+    // the proofreader
+    const WD = await import("./app/wording.js");
+    out.words = ["an ETF is a the the fund ,that tracks a index", "Plan A is simple. a 8% return and a 18 year loan", "You could of saved alot more then you think",
+      "Stocks, bonds etc. are assets [3]", "So here's what to do: The takeaway: pay on time", "In the U.S. economy, an university and a hour", "iPhone sales rose:", "less people buy/sell now",
+      "It's 50/30/20 and 24/7.", "Class A shares and a HSA"].map((x) => WD.checkWording(x).text);
+    const ps = { lines: [{ text: "the the fund grows", kind: "media" }, { text: "Follow for more", kind: "outro" }, { text: "PART 1", kind: "section" }], extras: [] };
+    out.proof = [WD.proofread(ps).fixed, ps.lines.map((l) => l.text), ps.lines[0].claim, WD.proofread(ps).fixed];
+    out.warn = WD.checkWording('He said "this is one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twentyone twentytwo twentythree twentyfour twentyfive twentysix twentyseven twentyeight twentynine thirty thirtyone').warnings;
     // platform captions
     out.caps = S.platformCaptions({ title: "Test #Shorts", description: "Desc", script: "Line one.\nLine two.\nFollow.", niche: "investing", handle: "@me" });
     out.capsOld = S.platformCaptions({ script: "Only line.\nFollow." });
@@ -209,6 +217,11 @@ export default async function ({ t, newPage }) {
   t.ok(r.alts[0] >= 100 && r.alts[1] >= 8 && r.alts[2] === r.alts[1] && r.alts[3] === "house" && r.alts[4] !== "goldbars", "each scene has many alternative illustrations to step through", JSON.stringify(r.alts));
   t.ok(r.alts[5] === "cart" && r.alts[6] === "chip", "everyday words don't take the main spot from the real subject", JSON.stringify(r.alts.slice(5)));
   t.ok(r.batch[0] === 36 && r.batch[1] === "bitcoin" && r.batch[2] === 2 && r.batch[3] === 36 && r.batch[4] === 3, "Draw more: draws a batch for your niche, saves it, and the next batch skips what's saved", JSON.stringify(r.batch));
+  t.ok(JSON.stringify(r.words) === JSON.stringify(["An ETF is a fund, that tracks an index.", "Plan A is simple. An 8% return and an 18 year loan.", "You could have saved a lot more than you think.",
+    "Stocks, bonds, and so on are assets.", "So here's what to do: pay on time.", "In the U.S. economy, a university and an hour.", "iPhone sales rose.", "Fewer people buy or sell now.",
+    "It's 50/30/20 and 24/7.", "Class A shares and an HSA."]), "the proofreader fixes grammar and wording the narrator would say wrong", JSON.stringify(r.words));
+  t.ok(r.proof[0] === 2 && r.proof[1].join("|") === "The fund grows.|Follow for more.|PART 1" && r.proof[2] === "the the fund grows" && r.proof[3] === 0, "proofreading fixes a script in place once, keeps the original for the fact check, and leaves chapter cards alone", JSON.stringify(r.proof));
+  t.ok(r.warn.length === 2 && /long sentence/.test(r.warn[0]) && /quotation/.test(r.warn[1]), "long sentences and unclosed quotes are flagged for you to look at", JSON.stringify(r.warn));
   t.ok(r.insert.join() === "1,2", "a spare definition goes after the hook; other spares go before the takeaway", JSON.stringify(r.insert));
   t.ok(r.caps.youtube && r.caps.tiktok && r.caps.instagram && !/undefined/.test(JSON.stringify(r.caps)), "platform captions are complete", "");
   t.ok(!/undefined/.test(JSON.stringify(r.capsOld)) && r.capsOld.youtube.length > 5, "captions work for old reels with missing fields", JSON.stringify(r.capsOld).slice(0, 120));

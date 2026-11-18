@@ -7,6 +7,7 @@ import { generateMusic, mix, resample, SR } from "./music.js";
 import { loadFonts, renderReel } from "./render.js";
 import { analyzeLine, iconFor } from "./visuals.js";
 import { dramatize } from "./hook.js";
+import { proofread } from "./wording.js";
 import { artFor, motifsFor, artOptions, drawAhead, styleFor } from "./illustrator.js";
 const accentOf = (hex = "#FFD60A") => { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
 import { deepen, addSoundEffects, makeSrt, makeCover } from "./extras.js";
@@ -308,6 +309,7 @@ export async function planReel(opts, ui) {
   const fact = await checkFacts(script, opts, say);
   polish(script);                    // the storyteller's last pass: no repeats, one definition, in order
   dramatize(script, opts);           // the emotion layer: a hook with a promise, its payoff, pacing, a question
+  script.wording = proofread(script);   // the proofreader: grammar, spacing and wording the narrator will say
   return { ...(await attachPhotos(script, generic, opts, say)), fact };
 }
 
@@ -371,6 +373,7 @@ export async function planFromIdea(idea, opts, ui) {
   const fact = await checkFacts(script, opts, say);
   polish(script);                    // the storyteller's last pass: no repeats, one definition, in order
   dramatize(script, opts);           // the emotion layer: a hook with a promise, its payoff, pacing, a question
+  script.wording = proofread(script);   // the proofreader: grammar, spacing and wording the narrator will say
   return { ...(await attachPhotos(script, generic, opts, say)), fact };
 }
 
@@ -441,6 +444,7 @@ export async function produceReel(plan, opts, ui) {
   if (script.lines[0] && !script.lines[0].hold) script.lines[0].hold = 0.22;
   const outroAt = script.lines.findIndex((l) => l.kind === "outro");
   if (outroAt > 1 && !script.lines[outroAt - 1].hold) script.lines[outroAt - 1].hold = 0.15;
+  proofread(script);                 // last check of every line (including your edits) before it's spoken
   setVoice({ engine: opts.voiceEngine || "natural", voice: opts.voice });
   const msg = () => `Getting the voice ready (one-time download, about ${voiceDownloadMB()} MB; then it's on your phone)…`;
   say(msg());

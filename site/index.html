@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ReelBot has moved</title>
+<meta name="theme-color" content="#0b0f1e">
+<link rel="manifest" href="manifest.webmanifest">
+<!-- This was ReelBot's old address. It sends you to the current app, which updates itself from now on. -->
+<meta http-equiv="refresh" content="2; url=../">
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0b0f1e; color: #f4f6fb; font: 16px/1.5 -apple-system, system-ui, sans-serif; text-align: center; padding: 24px; box-sizing: border-box; }
+  a { display: inline-block; margin-top: 16px; padding: 14px 22px; border-radius: 14px; background: #ffd60a; color: #0b0f1e; font-weight: 800; text-decoration: none; }
+  small { display: block; margin-top: 18px; color: #9aa3bd; max-width: 340px; }
+</style>
+</head>
+<body>
+<div>
+  <h1 style="margin:0 0 6px">ReelBot has moved</h1>
+  <p style="margin:0">Opening the latest version…</p>
+  <a href="../">Open ReelBot</a>
+  <small>If you added the old ReelBot to your Home Screen, open the new one, tap Share → Add to Home Screen, then delete the old icon. Your videos and settings stay on this phone.</small>
+</div>
+<script>
+  // Remove the old app's offline copy (its service worker) so this address can't show an outdated app again.
+  if ("serviceWorker" in navigator) navigator.serviceWorker.getRegistrations().then((regs) => regs.forEach((r) => { if (/\/site\/$/.test(r.scope)) r.unregister(); })).catch(() => {});
+  setTimeout(() => location.replace("../" + location.search), 600);
+</script>
+</body>
+</html>

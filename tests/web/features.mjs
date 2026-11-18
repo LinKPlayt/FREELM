@@ -2,7 +2,7 @@
 // videos, so it takes a while and needs the internet (photos, headlines, Wikipedia).
 const until = (page, fn, arg, timeout = 600000) => page.waitForFunction(fn, arg, { timeout, polling: 500 });
 
-export default async function ({ t, newPage }) {
+export default async function ({ t, newPage, BASE }) {
   const page = await newPage();
   const toastLog = () => page.evaluate(() => { window.__toasts = []; const el = document.getElementById("toast"); new MutationObserver(() => window.__toasts.push(el.textContent)).observe(el, { childList: true, characterData: true, subtree: true }); });
   await toastLog();
@@ -227,11 +227,11 @@ export default async function ({ t, newPage }) {
   t.section("Features: What's new, storage, make-time, Library covers");
   try {
     // a returning user who last saw version 29 (the window shows the newest three updates)
-    await page.evaluate(() => localStorage.setItem("seenVersion", "32"));
+    await page.evaluate(() => localStorage.setItem("seenVersion", "33"));
     await page.reload(); await until(page, () => window.__ready, null, 60000);
     t.ok(await page.locator("#news-sheet").count() === 1 && /What's new/.test(await page.innerText("#news-sheet")), "What's new appears after an update");
     const news = await page.innerText("#news-sheet");
-    t.ok(/Many more illustrations/.test(news) && /Illustrations drawn/.test(news) && !/hook and land/.test(news), "it lists only the updates since the last one seen", news.slice(0, 200));
+    t.ok(/proofreader/.test(news) && /Many more illustrations/.test(news) && !/takes a stand/.test(news), "it lists only the updates since the last one seen", news.slice(0, 200));
     await page.click('[data-news="close"]');
     t.ok(await page.locator("#news-sheet").count() === 0, "Got it closes it");
     await page.reload(); await until(page, () => window.__ready, null, 60000);
@@ -261,6 +261,17 @@ export default async function ({ t, newPage }) {
     t.ok(await page.locator("#reels [data-reel]").count() === before - 1, "Delete removes a reel");
     await page.context().close();
   } catch (e) { t.ok(false, "section crashed: Features: Library management", String(e.message || e).split("\n")[0]); await page.goto(page.url()).catch(() => {}); }
+
+  t.section("Features: old links open the current app");
+  try {
+    const p2 = await newPage();
+    await p2.goto(BASE + "site/");
+    await p2.waitForFunction(() => !/\/site\//.test(location.pathname) && window.__ready, null, { timeout: 60000 });
+    t.ok(!/\/site\//.test(p2.url()), "the old /site/ address opens the current app", p2.url());
+    const swOld = await (await fetch(BASE + "site/sw.js")).text();
+    t.ok(/unregister/.test(swOld) && /reelbot-v1/.test(swOld) && !/caches\.keys\(\)\.then\(\(keys\) => Promise\.all\(keys\.filter/.test(swOld), "the old address's offline copy removes itself without touching the app's own storage");
+    await p2.close();
+  } catch (e) { t.ok(false, "section crashed: Features: old links open the current app", String(e.message || e).split("\n")[0]); }
 
   t.section("Features: works offline after the first visit (service worker)");
   try {

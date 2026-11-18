@@ -1,9 +1,16 @@
 // The app's version and its update notes, shown once in a "What's new" window after each update.
 // When you deploy: bump APP_VERSION, add an entry at the top of UPDATES, and set the same number in
 // sw.js (VERSION = "reelbot-v<APP_VERSION>"). A test checks the two match.
-export const APP_VERSION = 35;
+export const APP_VERSION = 36;
 
 export const UPDATES = [
+  { version: 36, title: "A proofreader for the narrator", items: [
+    "Every line is proofread before it's spoken: “a” vs “an” (an ETF, an 8% return, a university), doubled words, spacing and punctuation, capitals, and slips like “could of”, “alot” or “more then”.",
+    "Written-only shorthand is said properly: “e.g.” becomes “for example”, “etc.” becomes “and so on”, and citation marks like [3] are removed.",
+    "Your own edits are proofread too, right before the voice is recorded.",
+    "The review screen shows a Wording check, flags long sentences or unclosed quotes, and has a “Fix wording now” button.",
+    "Every old ReelBot link (including the old /site/ address) now opens the latest app, and an app left open in the background updates itself when you come back to it.",
+  ] },
   { version: 35, title: "Many more illustrations", items: [
     "The illustrator can now draw 108 subjects (up from 41): cash, a safe, an ATM, a calculator, a pie chart, a nest egg, a trophy, a ladder, a mountain, fire, a robot, a chip, ships, planes, solar panels, a newspaper and many more.",
     "Each scene has 8 or more alternative illustrations. Tap “Another illustration” on the review screen to step through them.",

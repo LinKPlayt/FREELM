@@ -9,7 +9,7 @@ export default async function ({ t, newPage }) {
     const S = await import("./app/script.js"), V = await import("./app/visuals.js"), F = await import("./app/ai/factcheck.js");
     const R = await import("./app/research.js"), RA = await import("./app/ai/research.js"), X = await import("./app/extras.js");
     const K = await import("./app/kokoro-text.js"), MK = await import("./app/make.js");
-    const ST = await import("./app/story.js");
+    const ST = await import("./app/story.js"), WD = await import("./app/wording.js"), HK = await import("./app/hook.js"), IL = await import("./app/illustrator.js");
     let seed = SEED;
     const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
     const pick = (a) => a[Math.floor(rnd() * a.length)];
@@ -60,6 +60,13 @@ export default async function ({ t, newPage }) {
       await run("shortenHeadline", S.shortenHeadline, x || "x");
       await run("visualMatch", S.visualMatch, x);
       await run("simplify", ST.simplify, x);
+      // The proofreader: never throws, never empties a line, and a second pass changes nothing more.
+      await run("checkWording", (s) => { const a = WD.checkWording(s), b = WD.checkWording(a.text);
+        if (s.trim() && !a.text.trim()) throw new Error("emptied a line"); if (b.text !== a.text) throw new Error("not stable: " + JSON.stringify(a.text).slice(0, 60) + " -> " + JSON.stringify(b.text).slice(0, 60));
+        if (a.text.length > s.length * 1.6 + 40) throw new Error("grew too much"); return a.text; }, x);
+      await run("naturalize", HK.naturalize, x);
+      await run("conceptsOf", (s) => IL.conceptsOf(s, x.slice(0, 10)), x);
+      await run("artOptions", (s) => IL.artOptions(s).length, x);
       await run("fits", (s) => ST.fits(s, "Inflation"), x);
       await run("roleOf", (s) => ST.roleOf(s, x.slice(0, 12) || "Topic"), x);
       await run("cleanHeadline", ST.cleanHeadline, x);

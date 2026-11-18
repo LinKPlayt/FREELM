@@ -3,6 +3,7 @@ import { drawAlternatives, seriesTopics, appData, planReel, produceReel, release
 import { StatBg, IllusBg } from "./graphics.js";
 import { describeStat } from "./visuals.js";
 import { hookOptions, coach } from "./extras.js";
+import { checkWording, proofread } from "./wording.js";
 import { drawArt, motifsFor, styleFor, ART_STYLES, forgetArt, savedArt, drawAhead, nextBatch, MOTIFS } from "./illustrator.js";
 const MOTIFS_COUNT = Object.keys(MOTIFS).length;
 import { KOKORO_VOICES, setVoice, loadVoice, phonemize, synthesize, voiceRate, releaseVoice, voiceNotice, resetVoiceLevel, naturalFailed, lastVoiceError } from "./tts.js";
@@ -579,7 +580,12 @@ function updateEstimate() {
       · ${srcs} source${srcs === 1 ? "" : "s"}${r ? ` · ${r.read} articles researched (${DEPTH_LABELS[r.depth] || ""} depth)` : ""}
       ${plan.fact?.fixed?.replaced || plan.fact?.fixed?.removed ? `<br>Strict accuracy swapped ${plan.fact.fixed.replaced} and removed ${plan.fact.fixed.removed} unverified line${plan.fact.fixed.replaced + plan.fact.fixed.removed === 1 ? "" : "s"}.` : ""}</p>
       ${bad ? `<div class="mini"><button data-strict="1">Swap or remove ${bad} unverified</button></div>` : ""}` : "";
-  $("coach").innerHTML = `<div class="coach-score"><b style="color:${color}">${c.score}</b><span>/100 reel score</span></div>` + factLine +
+  // Proofreader: what it would fix (done automatically when the video is made) and what to look at.
+  const checks = plan.script.lines.map((l, i) => (l.kind === "section" || l.kind === "recap" || !l.text ? null : { i, ...checkWording(l.text), was: l.text })).filter(Boolean);
+  const fixable = checks.filter((x) => x.text !== x.was), warns = checks.flatMap((x) => x.warnings.map((w) => `${x.i === 0 ? "Hook" : `Scene ${x.i}`}: ${w}`));
+  const wordLine = `<p class="meta" style="margin:6px 0 0"><b style="color:${warns.length ? "var(--accent)" : "var(--good)"}">Wording: ${fixable.length ? `${fixable.length} line${fixable.length === 1 ? "" : "s"} to tidy` : "✓ reads correctly"}${warns.length ? ` · ${warns.length} to look at` : ""}</b>
+      ${warns.slice(0, 3).map((w) => `<br>${esc(w)}`).join("")}</p>${fixable.length ? `<div class="mini"><button data-wording="1">Fix wording now</button></div>` : ""}`;
+  $("coach").innerHTML = `<div class="coach-score"><b style="color:${color}">${c.score}</b><span>/100 reel score</span></div>` + factLine + wordLine +
     (c.tips.length ? `<ul class="steps" style="margin:6px 0 0">${c.tips.slice(0, 3).map((t) => `<li>${esc(t)}</li>`).join("")}</ul>` : `<p class="meta" style="margin:4px 0 0">Looks great. Ready to make.</p>`);
 }
 // Thumbnail of a generated chart or illustration (drawn with the real renderer at full size, then scaled).
@@ -689,6 +695,8 @@ async function setAsset(i, assetPromise, label) {
 $("scenes").addEventListener("change", (e) => { if (e.target.dataset.line != null) showReview(); });   // update visuals after editing
 // "Swap or remove unverified" in the score card.
 $("coach").addEventListener("click", async (e) => {
+  const w = e.target.closest("[data-wording]");
+  if (w && state.plan) { const r = proofread(state.plan.script); state.plan.edited = true; toast(`Tidied ${r.fixed} line${r.fixed === 1 ? "" : "s"}`); return showReview(); }
   const b = e.target.closest("[data-strict]"), plan = state.plan; if (!b || !plan) return;
   if (!plan.fact?.ctx) return toast("Fact check isn't available for this script.");
   const { enforceAccuracy } = await factModule();
@@ -1097,5 +1105,24 @@ async function init() {
   window.__ready = true;
 }
 
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).catch(() => {});
+
+// An app left open in the background (home-screen apps stay in memory) still gets every update: when
+// it comes back to the screen, it checks for a newer version and, if nothing is in progress, reloads.
+let lastUpdateCheck = 0;
+async function checkForUpdate() {
+  if (Date.now() - lastUpdateCheck < 5 * 60 * 1000) return;
+  lastUpdateCheck = Date.now();
+  try {
+    const text = await (await fetch("app/version.js", { cache: "no-store" })).text();
+    const latest = Number((text.match(/APP_VERSION\s*=\s*(\d+)/) || [])[1]);
+    if (!(latest > APP_VERSION)) return;
+    (await navigator.serviceWorker?.getRegistration())?.update().catch(() => {});
+    const idle = !state.busy && !state.plan && !state.drawingAhead && $("review").classList.contains("hidden") && $("job").classList.contains("hidden");
+    if (idle) location.reload();
+    else toast("A new version of ReelBot is ready. It loads when you finish this video.");
+  } catch { /* offline: check again next time */ }
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkForUpdate(); });
+setInterval(() => { if (document.visibilityState === "visible") checkForUpdate(); }, 30 * 60 * 1000);
 init().catch((e) => { console.error(e); toast("Couldn't start the app: " + e.message); });
