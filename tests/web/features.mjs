@@ -277,11 +277,11 @@ export default async function ({ t, newPage, BASE }) {
   t.section("Features: What's new, storage, make-time, Library covers");
   try {
     // a returning user who last saw version 29 (the window shows the newest three updates)
-    await page.evaluate(() => localStorage.setItem("seenVersion", "38"));
+    await page.evaluate(() => localStorage.setItem("seenVersion", "39"));
     await page.reload(); await until(page, () => window.__ready, null, 60000);
     t.ok(await page.locator("#news-sheet").count() === 1 && /What's new/.test(await page.innerText("#news-sheet")), "What's new appears after an update");
     const news = await page.innerText("#news-sheet");
-    t.ok(/made in one go/.test(news) && /Better covers/.test(news) && !/Sharper videos/.test(news), "it lists only the updates since the last one seen", news.slice(0, 200));
+    t.ok(/Smoother cuts/.test(news) && /made in one go/.test(news) && !/stronger opening/.test(news), "it lists only the updates since the last one seen", news.slice(0, 200));
     await page.click('[data-news="close"]');
     t.ok(await page.locator("#news-sheet").count() === 0, "Got it closes it");
     await page.reload(); await until(page, () => window.__ready, null, 60000);
@@ -306,6 +306,19 @@ export default async function ({ t, newPage, BASE }) {
   t.section("Features: Library management");
   try {
     await page.click('nav [data-tab="library"]'); await page.waitForSelector("#reels [data-reel]");
+    const total = await page.locator("#reels [data-reel]").count();
+    if (total >= 4) {
+      // Search and filters
+      const title = (await page.locator("#reels [data-reel] .reel-title").first().innerText()).split(/\s+/).slice(0, 2).join(" ");
+      await page.fill("#lib-q", title); await page.waitForTimeout(200);
+      const found = await page.locator("#reels [data-reel]").count();
+      await page.fill("#lib-q", "zzqq no such reel"); await page.waitForTimeout(200);
+      const none = await page.locator("#reels [data-reel]").count(), offer = await page.locator("[data-lib-clear]").count();
+      await page.click("[data-lib-clear]");
+      const quizChip = page.locator('#lib-kinds [data-lib-kind="quiz"]');
+      let quizzes = -1; if (await quizChip.count()) { await quizChip.click(); quizzes = await page.locator("#reels [data-reel]").count(); await page.click('#lib-kinds [data-lib-kind="all"]'); }
+      t.ok(found >= 1 && found <= total && none === 0 && offer === 1 && quizzes !== 0 && await page.locator("#reels [data-reel]").count() === total, "Library search and type filters work", JSON.stringify({ title, total, found, none, quizzes }));
+    }
     const before = await page.locator("#reels [data-reel]").count();
     await page.locator('#reels [data-act="delete"]').first().click(); await page.waitForTimeout(500);
     t.ok(await page.locator("#reels [data-reel]").count() === before - 1, "Delete removes a reel");

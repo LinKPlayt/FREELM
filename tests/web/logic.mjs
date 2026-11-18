@@ -8,6 +8,7 @@ export default async function ({ t, newPage }) {
     const K = await import("./app/kokoro-text.js"), M = await import("./app/music.js"), MK = await import("./app/make.js");
     const out = {};
     out.money = S.speakable("$1,000 at 7%");
+    out.say2 = ["Save 3-6 months at an APR of 24%.", "A HELOC, a 403(b) and a W-2.", "Rates hit 5.25%–5.5%, up 1.5x YTD."].map(S.speakable);
     out.k401 = S.speakable("Max your 401(k) match");
     out.handle = S.speakable("Follow @money.minute today");
     S.setPronunciations("Roth = rawth\nETF = E T F"); out.sayAs = S.speakable("A Roth IRA and an ETF"); S.setPronunciations("");
@@ -241,6 +242,7 @@ export default async function ({ t, newPage }) {
   t.ok(r.quiz.slice(0, 7).join() === "quiz,9,3,3,true,true,true" && r.quiz[7] === false, "a quiz: hook, 3 true-or-false questions with countdowns, 3 answers, a question and the ending; recent questions aren't repeated", JSON.stringify(r.quiz));
   t.ok(r.refine.slice(0, 5).join() === "true,true,true,false,true" && r.refine[5] === "tree" && r.refine[6] === "Freelance, freelancer, or freelance worker are terms often used for a person.",
     "definitions phrased as “terms for” are found; series and press-release headlines are skipped; illustrations don't repeat the last subject (unless you chose it)", JSON.stringify(r.refine));
+  t.ok(r.say2.join("|") === "Save 3 to 6 months at an A P R of 24 percent.|A hee lock, a four oh three b and a W 2.|Rates hit 5.25 percent to 5.5 percent, up 1.5 times year to date.", "ranges, multiples and finance acronyms are said the way people say them", r.say2.join(" | "));
   t.ok(r.insert.join() === "1,2", "a spare definition goes after the hook; other spares go before the takeaway", JSON.stringify(r.insert));
   t.ok(r.caps.youtube && r.caps.tiktok && r.caps.instagram && !/undefined/.test(JSON.stringify(r.caps)), "platform captions are complete", "");
   t.ok(!/undefined/.test(JSON.stringify(r.capsOld)) && r.capsOld.youtube.length > 5, "captions work for old reels with missing fields", JSON.stringify(r.capsOld).slice(0, 120));

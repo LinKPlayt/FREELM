@@ -118,6 +118,8 @@ After the storyteller, every script gets an emotion layer (`app/hook.js`). It ne
   the takeaway; a bloop for the question; a sparkle on the ending. Music fades out at the end.
 - **Hook title.** The opening line appears big on screen, word by word, over the dimmed opening picture
   (captions are hidden for it). Turn off under Style → Hook title.
+- **Transitions.** Scenes arrive with a whip (a fast slide with motion blur), a zoom-through or a fade:
+  mid-line cuts whip, chapter cards and the ending fade, payoffs fade under their flash, the rest take turns.
 - **Quick cuts.** A line longer than about five seconds cuts, at a word near its middle, to a second
   picture of the same idea (an illustration that isn't the one just shown). Turn off under Style → Quick cuts.
 - **Length-aware extras.** The bottom line and the comment question are added only when the script still
@@ -373,6 +375,11 @@ subject. The voice, music and video are always made on the phone anyway. News an
 recaps need the internet, so in Offline mode they switch to explainers. Combined with the Idea
 Lab, the whole flow (research, ideas, script, voice, video) works with the phone in airplane mode,
 once the app's files have been downloaded.
+
+### Library search
+
+With four or more reels, the Library shows a search box (title, topic or niche), type filters with counts,
+and a Newest / Most views sort (from the results you've added).
 
 ### Drafts
 

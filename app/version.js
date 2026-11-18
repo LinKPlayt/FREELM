@@ -1,9 +1,14 @@
 // The app's version and its update notes, shown once in a "What's new" window after each update.
 // When you deploy: bump APP_VERSION, add an entry at the top of UPDATES, and set the same number in
 // sw.js (VERSION = "reelbot-v<APP_VERSION>"). A test checks the two match.
-export const APP_VERSION = 41;
+export const APP_VERSION = 42;
 
 export const UPDATES = [
+  { version: 42, title: "Smoother cuts, smarter Library, clearer voice", items: [
+    "Transitions: scenes now arrive with a quick whip (with motion blur), a zoom-through or a fade, chosen to suit the moment, instead of the same crossfade every time.",
+    "Library: search your reels, filter by type (explainers, news, quizzes…), and sort by most views.",
+    "The narrator says ranges and multiples the way people do (“3 to 6 months”, “1.5 times”) and reads more finance terms correctly: HSA, APR, APY, HELOC, P/E, 403(b), W-2 and more.",
+  ] },
   { version: 41, title: "Your week, made in one go", items: [
     "Make all: the Library can now turn every draft into a video in one go, one after another, while you keep the app open.",
     "Today's video: when Plan my week has a draft for today, it shows at the top of Create with a one-tap “Make it now”.",

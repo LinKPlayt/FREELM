@@ -540,7 +540,7 @@ export async function produceReel(plan, opts, ui) {
         const recent = [...(sc.art ? [sc.hero] : []), ...out.slice(-3).map((x) => x.hero)].filter(Boolean);
         const motifs = pickMotifs({ text: line.text }, topic, recent);
         const art = await artFor({ motifs, style, accent }, topic);
-        const cut = { ...sc, hero: motifs[0], start: at.start - 0.04, bitmap: art.bitmap, art: true, payoff: false, chip: "", tone: "", stat: null, seed: (sc.seed || 0) + 100 };
+        const cut = { ...sc, hero: motifs[0], start: at.start - 0.04, bitmap: art.bitmap, art: true, payoff: false, chip: "", tone: "", stat: null, seed: (sc.seed || 0) + 100, trans: "whip" };
         sc.end = cut.start; out.push(cut);
       } catch (e) { console.warn("cut", e); }
     }

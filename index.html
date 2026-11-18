@@ -39,7 +39,7 @@
   .chip { border: 1px solid var(--line); background: var(--surface-2); color: var(--text); padding: 9px 14px; border-radius: 99px;
     font-size: 15px; font-weight: 600; cursor: pointer; }
   .chip.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-  input[type=text], select { width: 100%; background: var(--surface-2); color: var(--text);
+  input[type=text], input[type=search], select { width: 100%; background: var(--surface-2); color: var(--text);
     border: 1px solid var(--line); border-radius: 12px; padding: 12px; font-size: 16px; font-family: inherit; }
   .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; }
   .row > div:first-child { flex: 1; min-width: 0; }
@@ -124,6 +124,7 @@
   .job-steps li::before { content: "○ "; } .job-steps li.done::before { content: "✓ "; } .job-steps li.now::before { content: "● "; }
   .news h3 { margin: 12px 0 4px; font-size: 16px; } .news ul { margin: 0; padding-left: 18px; } .news li { margin: 4px 0; }
   .card.today { border: 2px solid var(--accent); }
+  .lib-tools { margin: 0 0 12px; } .lib-tools input { width: 100%; margin-bottom: 8px; }
   .card.today .btns { display: flex; gap: 8px; } .card.today .btns > * { flex: 1; }
   .art-gallery { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; padding: 8px 0 2px; }
   .art-gallery img { width: 100%; aspect-ratio: 9 / 16; object-fit: cover; border-radius: 8px; display: block; }
@@ -282,6 +283,10 @@
   <section id="tab-library" class="tab">
     <div id="drafts"></div>
     <div id="insights"></div>
+    <div id="lib-tools" class="lib-tools hidden">
+      <input id="lib-q" type="search" placeholder="Search your reels" autocomplete="off">
+      <div class="chips" id="lib-kinds"></div>
+    </div>
     <div id="reels"></div>
     <p class="meta" style="text-align:center">Stored only on this phone. The newest 8 are kept.</p>
   </section>

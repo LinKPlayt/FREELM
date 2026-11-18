@@ -503,14 +503,31 @@ class Painter {
     const z = punch && into < 0.35 ? 1 + punch * (1 - ease(into / 0.35)) : 1;
     // ...and a short shake when the payoff hits.
     const shake = sc.payoff && into < 0.22 ? 14 * (1 - into / 0.22) : 0;
-    const sx = shake * Math.sin(into * 97), sy = shake * Math.cos(into * 83);
+    let sx = shake * Math.sin(into * 97), sy = shake * Math.cos(into * 83);
+    // How this scene arrives: a whip (slides in fast with motion blur), a zoom through, or a fade.
+    // Mid-line cuts whip; chapter cards, recaps and the ending fade; the rest take turns.
+    const trans = idx === 0 || !this.hasSnap ? "none" : ["outro", "recap", "section"].includes(sc.kind) ? "fade"
+      : sc.trans || (sc.payoff ? "fade" : ["fade", "whip", "zoom"][(sc.seed || idx) % 3]);
+    const TT = trans === "whip" ? 0.2 : trans === "zoom" ? 0.28 : 0.25, k = into < TT ? ease(into / TT) : 1;
+    if (trans === "whip" && k < 1) sx += (1 - k) * W * 0.55;
     ctx.setTransform(this.k * z, 0, 0, this.k * z, this.k * (W * (1 - z) / 2 + sx), this.k * (H * (1 - z) / 2 + sy));
     this.bg.setTime?.(t);
     this.bg.draw(ctx, (t - sc.start) / Math.max(0.001, sc.end - sc.start));
     ctx.setTransform(this.k, 0, 0, this.k, 0, 0);
     // A white flash on the payoff, so the moment the video promised feels like one.
     if (sc.payoff && into < 0.18) { ctx.fillStyle = `rgba(255,255,255,${0.35 * (1 - into / 0.18)})`; ctx.fillRect(0, 0, W, H); }
-    if (this.hasSnap && idx > 0 && into < 0.25) { ctx.globalAlpha = 1 - ease(into / 0.25); ctx.drawImage(this.snap, 0, 0); ctx.globalAlpha = 1; }
+    if (this.hasSnap && idx > 0 && k < 1 && trans !== "none") {
+      if (trans === "whip") {
+        // The old scene leaves to the left, smeared: a few faint copies along its path read as motion blur.
+        const off = -k * W * 0.55;
+        for (const [d, a] of [[0, 1 - k], [60, 0.35 * (1 - k)], [120, 0.18 * (1 - k)]]) { ctx.globalAlpha = a; ctx.drawImage(this.snap, off + d, 0); }
+      } else if (trans === "zoom") {
+        // The old scene rushes toward the viewer and fades: the new one is revealed behind it.
+        const zs = 1 + 0.45 * k; ctx.globalAlpha = 1 - k;
+        ctx.drawImage(this.snap, (W - W * zs) / 2, (H - H * zs) / 2, W * zs, H * zs);
+      } else { ctx.globalAlpha = 1 - k; ctx.drawImage(this.snap, 0, 0); }
+      ctx.globalAlpha = 1;
+    }
     // The hook as a title: big words over the dimmed opening picture, as they're spoken.
     const hookTitle = idx === 0 && this.job.hookTitle !== false && ["image", "illus", "fallback", "stat"].includes(sc.kind);
     if (hookTitle) { ctx.fillStyle = `rgba(0,0,0,${0.42 * Math.min(1, into / 0.2)})`; ctx.fillRect(0, 0, W, H); }

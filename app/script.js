@@ -9,6 +9,10 @@ const ACRONYMS = {
   BTC: "bitcoin", ETH: "ether", Q1: "first quarter", Q2: "second quarter", Q3: "third quarter", Q4: "fourth quarter",
   YoY: "year over year", "vs.": "versus", vs: "versus", "approx.": "approximately", UK: "U K", EU: "E U",
   OPEC: "oh peck", REIT: "reet", REITs: "reets", FICO: "fyco", HYSA: "high yield savings",
+  HSA: "H S A", HSAs: "H S As", APR: "A P R", APY: "A P Y", FHA: "F H A", PMI: "P M I", HELOC: "hee lock", HELOCs: "hee locks",
+  "P/E": "P E", EPS: "E P S", YTD: "year to date", NYSE: "N Y S E", USDC: "U S D C", USDT: "U S D T", DeFi: "dee fye",
+  LLC: "L L C", LLCs: "L L Cs", KYC: "K Y C", QE: "Q E", ESG: "E S G", CD: "C D", CDs: "C Ds", ATM: "A T M", ATMs: "A T Ms",
+  "W-2": "W 2", "W-2s": "W 2s", "403(b)": "four oh three b", ROI: "R O I", GDP: "G D P", CPI: "C P I", APRs: "A P Rs",
 };
 const SCALE = { k: "thousand", m: "million", mn: "million", b: "billion", bn: "billion", t: "trillion", tn: "trillion" };
 
@@ -30,7 +34,10 @@ export function speakable(text) {
     return `${num} ${word} ${unit}`.replace("  ", " ");
   });
   t = t.replace(/(\d)\s?%/g, "$1 percent").replace(/(\d)\s?bps\b/g, "$1 basis points");
-  t = t.replaceAll("S&P", "S and P").replaceAll("&", " and ").replace(/\b401\(?k\)?/gi, "four oh one k");
+  // Ranges are said "3 to 6", and "1.5x" is "1.5 times".
+  t = t.replace(/(\d(?:[.,]\d+)?)((?: percent| dollars)?)\s?[–-]\s?(?=\$?\d)/g, "$1$2 to ").replace(/(\d)x\b/g, "$1 times");
+  t = t.replace(/\b1099s?\b(?= form|s\b| income|$|[.,;])/g, (m) => (m.endsWith("s") ? "ten ninety-nines" : "ten ninety-nine")).replace(/\b529 plan/g, "five twenty-nine plan");
+  t = t.replaceAll("S&P", "S and P").replaceAll("&", " and ").replace(/\b401\(?k\)?/gi, "four oh one k").replace(/\b403\(?b\)?/gi, "four oh three b").replace(/\b457\(?b\)?/gi, "four fifty-seven b");
   t = t.split(/\s+/).map((w) => {
     const core = w.replace(/^[,.!?;:"'()]+|[,.!?;:"'()]+$/g, "");
     return ACRONYMS[core] ? w.replace(core, ACRONYMS[core]) : w;

@@ -28,7 +28,7 @@ function article(word) {
   }
   if (/^[A-Z]{2,5}s?\b/.test(w) && !/^[A-Z][a-z]/.test(w)) {
     // An acronym said letter by letter, unless it's said as a word (NASA, FICO…): keep what's there.
-    if (/^(NASA|FICO|NATO|OPEC|REIT|SPAC|ROTH|NAFTA|UNESCO|AIDS|IKEA|ESPN?)\b/.test(w)) return /^[AEIOU]/.test(w) ? "an" : "a";
+    if (/^(NASA|FICO|NATO|OPEC|REIT|SPAC|ROTH|NAFTA|UNESCO|AIDS|IKEA|ESPN?|HELOC|HYSA)\b/.test(w)) return /^[AEIOU]/.test(w) ? "an" : "a";
     return VOWEL_LETTER.test(w) ? "an" : "a";
   }
   if (AN_BEFORE.test(w)) return "an";

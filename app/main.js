@@ -314,9 +314,27 @@ $("reels").addEventListener("change", (e) => {
 });
 async function renderLibrary() {
   renderDrafts();
-  const list = await listReels();
+  state.lib = await listReels();
   renderInsights();
-  $("reels").innerHTML = list.length ? list.map((r) => { try { return reelCard(r); } catch (e) { console.warn("reel card", e); return ""; } }).join("") : `<div class="empty">No reels yet.<br>Make your first one in Create.</div>`;
+  renderReelList();
+}
+// The Library list: search by title or topic, filter by type, newest or most-viewed first.
+const LIB_KINDS = { evergreen: "Explainers", news: "News", market: "Markets", custom: "Your topics", idea: "Ideas", quiz: "Quizzes" };
+function renderReelList() {
+  const all = state.lib || [], f = (state.libFilter ??= { q: "", kind: "all", sort: "new" });
+  const kinds = [...new Set(all.map((r) => r.kind).filter((k) => LIB_KINDS[k]))];
+  $("lib-tools").classList.toggle("hidden", all.length < 4);
+  if (all.length >= 4) {
+    $("lib-kinds").innerHTML = [["all", `All (${all.length})`], ...kinds.map((k) => [k, `${LIB_KINDS[k]} (${all.filter((r) => r.kind === k).length})`])]
+      .map(([k, label]) => `<button class="chip${f.kind === k ? " on" : ""}" data-lib-kind="${k}">${esc(label)}</button>`).join("")
+      + `<button class="chip" data-lib-sort="1">${f.sort === "views" ? "Most views first" : "Newest first"}</button>`;
+  }
+  const q = f.q.trim().toLowerCase();
+  let list = all.filter((r) => (f.kind === "all" || r.kind === f.kind) && (!q || `${r.title} ${r.topic || ""} ${r.niche || ""}`.toLowerCase().includes(q)));
+  if (f.sort === "views") list = list.slice().sort((a, b) => (getResult(b.id)?.stats?.views || 0) - (getResult(a.id)?.stats?.views || 0));
+  $("reels").innerHTML = !all.length ? `<div class="empty">No reels yet.<br>Make your first one in Create.</div>`
+    : !list.length ? `<div class="empty">No reels match. <button class="btn" data-lib-clear="1" style="margin-top:8px">Show all</button></div>`
+    : list.map((r) => { try { return reelCard(r); } catch (e) { console.warn("reel card", e); return ""; } }).join("");
 }
 document.addEventListener("click", async (ev) => {
   const btn = ev.target.closest("[data-act]"); if (!btn) return;
@@ -1170,6 +1188,13 @@ async function init() {
   $("version-line").textContent = `Version ${APP_VERSION} · ${UPDATES[0].title}`;
   $("whats-new").addEventListener("click", () => showWhatsNew(APP_VERSION - 3));
   $("art-more").addEventListener("click", drawMoreArt);
+  $("lib-q").addEventListener("input", () => { (state.libFilter ??= { q: "", kind: "all", sort: "new" }).q = $("lib-q").value; renderReelList(); });
+  $("lib-tools").addEventListener("click", (e) => {
+    const f = (state.libFilter ??= { q: "", kind: "all", sort: "new" }), k = e.target.closest("[data-lib-kind]"), s = e.target.closest("[data-lib-sort]");
+    if (k) f.kind = k.dataset.libKind; else if (s) f.sort = f.sort === "views" ? "new" : "views"; else return;
+    renderReelList();
+  });
+  $("reels").addEventListener("click", (e) => { if (e.target.closest("[data-lib-clear]")) { state.libFilter = { q: "", kind: "all", sort: "new" }; $("lib-q").value = ""; renderReelList(); } });
   $("insights").addEventListener("click", (e) => { if (e.target.closest("[data-use-best]")) useBest(); });
   renderToday();
   $("today").addEventListener("click", async (e) => {
