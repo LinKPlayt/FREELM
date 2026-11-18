@@ -320,8 +320,9 @@ export default async function ({ t, newPage, BASE }) {
       t.ok(found >= 1 && found <= total && none === 0 && offer === 1 && quizzes !== 0 && await page.locator("#reels [data-reel]").count() === total, "Library search and type filters work", JSON.stringify({ title, total, found, none, quizzes }));
     }
     const before = await page.locator("#reels [data-reel]").count();
-    await page.locator('#reels [data-act="delete"]').first().click(); await page.waitForTimeout(500);
-    t.ok(await page.locator("#reels [data-reel]").count() === before - 1, "Delete removes a reel");
+    await page.locator('#reels [data-act="delete"]').first().click();
+    await until(page, (n) => document.querySelectorAll("#reels [data-reel]").length === n, before - 1, 15000).catch(() => {});
+    t.ok(await page.locator("#reels [data-reel]").count() === before - 1, "Delete removes a reel", `${before} → ${await page.locator("#reels [data-reel]").count()}`);
     await page.context().close();
   } catch (e) { t.ok(false, "section crashed: Features: Library management", String(e.message || e).split("\n")[0]); await page.goto(page.url()).catch(() => {}); }
 
