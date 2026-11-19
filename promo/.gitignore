@@ -1,0 +1,15 @@
+# Generated media stays out of the repo (it can all be remade with the scripts here).
+reels/
+frames/
+frames_wide/
+frames_tall/
+ui/
+assets/
+profile/
+stills/
+out/
+*.wav
+*.mp4
+*.mov
+*.png
+*.log

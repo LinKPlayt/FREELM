@@ -1,0 +1,39 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>ReelBot thumbnail</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { width: 1280px; height: 720px; overflow: hidden; background: #05060a; font-family: "Inter"; color: #eceef4; -webkit-font-smoothing: antialiased; }
+.bg { position: absolute; inset: 0; background:
+  radial-gradient(closest-side at 72% 55%, rgba(250,204,21,.30), rgba(250,204,21,0) 70%),
+  radial-gradient(closest-side at 18% 20%, rgba(99,102,241,.30), rgba(99,102,241,0) 70%),
+  radial-gradient(closest-side at 30% 95%, rgba(6,182,212,.18), rgba(6,182,212,0) 70%),
+  radial-gradient(ellipse 130% 95% at 50% 115%, #141828 0%, #080a12 55%, #040509 100%); }
+.rays { position: absolute; width: 1700px; height: 1700px; left: 920px; top: 400px; transform: translate(-50%, -50%) rotate(8deg); border-radius: 50%;
+  background: repeating-conic-gradient(from 0deg, rgba(250,204,21,0) 0deg, rgba(250,204,21,.16) 3deg, rgba(250,204,21,0) 9deg, rgba(250,204,21,0) 15deg);
+  -webkit-mask-image: radial-gradient(closest-side, #000 10%, rgba(0,0,0,.5) 40%, transparent 72%); }
+.left { position: absolute; left: 64px; top: 70px; width: 600px; }
+.brand { display: flex; align-items: center; gap: 18px; }
+.brand svg { width: 84px; height: 84px; filter: drop-shadow(0 10px 24px rgba(0,0,0,.6)) drop-shadow(0 0 30px rgba(250,204,21,.3)); }
+.word { font-family: "Inter Display"; font-weight: 900; font-size: 64px; letter-spacing: -0.045em; }
+.y { color: #facc15; }
+h1 { font-family: "Inter Display"; font-weight: 900; font-size: 116px; line-height: .94; letter-spacing: -0.045em; margin-top: 46px; text-shadow: 0 6px 30px rgba(0,0,0,.5); }
+.pill { display: inline-flex; align-items: center; gap: 12px; margin-top: 40px; padding: 14px 24px; border-radius: 99px; background: rgba(21,24,36,.92); border: 1.5px solid rgba(255,255,255,.16); font-weight: 700; font-size: 30px; }
+.dot { width: 14px; height: 14px; border-radius: 50%; background: #34d399; box-shadow: 0 0 0 6px rgba(52,211,153,.18); }
+.card { position: absolute; width: 250px; height: 444px; border-radius: 22px; overflow: hidden; box-shadow: 0 0 0 2px rgba(255,255,255,.18), 0 40px 70px -20px rgba(0,0,0,.95); }
+.card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+</style></head><body>
+<div class="bg"></div><div class="rays"></div>
+<div class="card" style="left:652px;top:170px;transform:rotate(-14deg)"><img src="reels/topic_cover.jpg"></div>
+<div class="card" style="left:1010px;top:170px;transform:rotate(13deg)"><img src="reels/explainer_cover.jpg"></div>
+<div class="card" style="left:770px;top:118px;transform:rotate(-5deg);width:270px;height:480px"><img src="reels/market_cover.jpg"></div>
+<div class="card" style="left:890px;top:104px;transform:rotate(5deg);width:286px;height:508px;box-shadow:0 0 0 3px #facc15,0 40px 80px -20px rgba(0,0,0,.95),0 0 80px rgba(250,204,21,.35)"><img src="reels/quiz_cover.jpg"></div>
+<div class="left">
+  <div class="brand"><svg viewBox="0 0 32 32"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#22306a"/><stop offset="1" stop-color="#0b1022"/></linearGradient></defs>
+    <rect width="32" height="32" rx="9" fill="url(#g)"/><rect x=".5" y=".5" width="31" height="31" rx="8.5" fill="none" stroke="rgba(255,255,255,.18)"/>
+    <circle cx="11.5" cy="12" r="4.6" fill="#FACC15"/><path d="M10.2 9.7v4.6l3.6-2.3z" fill="#0b1022"/>
+    <path d="M6.5 24.5l5.6-4.8 3.6 2.8 8.4-8.6" fill="none" stroke="#FACC15" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M19.6 13.9h4.6v4.6" fill="none" stroke="#FACC15" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span class="word">Reel<span class="y">Bot</span></span></div>
+  <h1>Type a topic.<br><span class="y">Get a reel.</span></h1>
+  <div class="pill"><span class="dot"></span>Free · Runs on your phone</div>
+</div>
+</body></html>
