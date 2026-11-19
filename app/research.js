@@ -3,6 +3,7 @@
 //   background  - Wikipedia page summaries (fetched directly)
 //   market data - a small JSON snapshot this repository's scheduled job publishes (numbers only),
 //                 because market-data sites don't allow direct calls from a web page.
+import { sentencesOf } from "./newswriter.js";
 
 const FEEDS = {
   "personal finance": ["https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=21324812"],
@@ -115,7 +116,7 @@ export async function wikipediaDefinition(title, maxWords = 30) {
     const data = await res.json();
     if (data.type === "disambiguation") return "";
     let text = (data.extract || "").replace(/\s*\([^)]*\)/g, "").replace(/\s*\[[^\]]*\]/g, "").trim();
-    let sent = (text.split(/(?<=[.!?])\s+(?=[A-Z])/)[0] || "").trim();
+    let sent = (sentencesOf(text)[0] || "").trim();      // "The U.S. Securities and Exchange Commission…" stays whole
     sent = sent.replace(/^([A-Z][\w '-]{2,40}?),? (?:or|also known as|also called) [\w' -]{2,30}?,? (is|are|refers to)\b/, "$1 $2");
     const wc = sent.split(/\s+/).length;
     return wc >= 6 && wc <= maxWords ? sent : "";
@@ -158,7 +159,7 @@ export async function wikipediaTopic(query) {
     const text = (page?.extract || "").replace(/\n+[A-Z][^.\n]{0,60}\n/g, "\n").replace(/\s+/g, " ");
     const text2 = dropParentheticals(text).replace(/\s*\[[^\]]*\]/g, "").replace(/\s+/g, " ").trim();
     if (!text2 || /may refer to/i.test(text)) continue;
-    const all = text2.split(/(?<=[.!?])\s+(?=[A-Z])/).map((x) => x.trim());
+    const all = sentencesOf(text2).map((x) => x.trim());
     const sentences = [];
     let prevKept = false;
     all.forEach((x, i) => {

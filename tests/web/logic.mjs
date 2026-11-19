@@ -321,5 +321,54 @@ export default async function ({ t, newPage }) {
   t.ok(v.coach.join() === "false,false,false", "the reel coach doesn't ask a quiz for numbers, mixed pictures or more points", JSON.stringify(v.coach));
   t.ok(v.tone.join() === "-1,1,0", "a key figure is a loss, a gain or neither, even at the end of a sentence", JSON.stringify(v.tone));
   t.ok(v.cover.join() === "true,true,true", "a market cover's \"Down 0.2%\" is red, even with a green brand colour", JSON.stringify(v.cover));
+
+  // The newsroom: real headlines from the feeds, said the way a newsreader would.
+  t.section("Logic: the newsroom (v50)");
+  const n = await page.evaluate(async () => {
+    const N = await import("./app/newswriter.js"), S = await import("./app/script.js");
+    const say = (title, summary = "", source = "") => N.spokenStory({ title, summary, source })?.text ?? null;
+    const out = {};
+    out.sentences = [N.sentencesOf("The rules require data centers in Southeast Asia to seek U.S. Approval to buy chips. It could slow a build-out.").length,
+      N.sentencesOf("Shares of Apple Inc. Rose 3% on Monday. Then they fell.").length, N.sentencesOf("Prices rose. Rates fell!").length];
+    out.strip = [N.stripSource("Fed Poised to Raise Rates Further to Stem Inflation | Economy | U.S. News", "U.S. News & World Report"),
+      N.stripSource("Stocks slide as yields climb - Yahoo Finance", "Yahoo Finance"), N.stripSource("Stocks Rally - Dow Jumps 500 Points"),
+      N.stripSource("Kicking the housing market while it's down': US home sales fall to 16-year low")];
+    out.seo = [N.seoPage("Today's top high-yield savings rates: Up to 4.70% on Nov. 19, 2026"), N.seoPage("Current New York Mortgage And Refinance Rates"),
+      N.seoPage("Homes for Sale in New York and New Jersey"), N.seoPage("Mortgage rates hit 7% for the first time since 2023")];
+    out.told = [
+      say("Anthropic's IPO poses this big risk to an already shaky stock market", "Investors are worried that a flood of equity issuance could overwhelm demand."),
+      say("Josh Brown says the breakout potential in this stock is staring investors in the face", "This name made Josh Brown's Best Stocks in the Market list earlier this fall."),
+      say("Thursday's big stock stories: What's likely to move the market in the next trading session", "The S&P 500 fell for a fifth consecutive session on Wednesday, notching its longest losing streak since June."),
+      say("Bonds are causing trouble again — here's where to invest now", "Rising bond yields and Federal Reserve rate hikes are making for a tricky environment for bond investors. Here's how to play it."),
+      say("Big bets against AI debt, from CoreWeave to Oracle and the Mag 7, could soon hit the ETF market"),
+      say("I live in Alaska and built a second home in Hawaii. The outlying states have way more in common than I expected."),
+      say("Debunking 7 Social Security retirement myths"),
+      say("Column | Her credit card debt was double what she thought it was. Here's why."),
+      say("Anthropic's IPO is set to create a new class of tech billionaires. See who stands to gain the most."),
+    ];
+    // A whole news script from teasing, site-stamped feed items: nothing teased, stamped or cut is said.
+    const items = [
+      { title: "Fed Poised to Raise Rates Further to Stem Inflation | Economy | U.S. News", summary: "", source: "U.S. News & World Report" },
+      { title: "This closely watched investing guru just sold all of his stocks", summary: "Strategist Joachim Klement had his retirement portfolio fully invested in stocks for years.", source: "MarketWatch" },
+      { title: "Josh Brown says the breakout potential in this stock is staring investors in the face", summary: "This name made the list.", source: "CNBC" },
+      { title: "Treasury yields inch higher as investors weigh the state of the U.S. economy", summary: "The rules require lenders to seek U.S. approval for new loans, threatening to slow growth.", source: "CNBC" },
+    ];
+    const news = S.buildNews(items, [], { niche: "economy", generic: ["money"], cta: "Follow for more." });
+    const said = [...news.lines, ...news.extras].map((l) => l.text).join(" ");
+    out.news = [/\|/.test(said), /\bthis (?:stock|closely)\b/i.test(said), /seek U\.S\.$|U\.S\.\s*$/.test(said.trim()), /Klement/.test(said), /Josh Brown/.test(said)];
+    return out;
+  });
+  t.ok(n.sentences.join() === "2,2,2", "sentences aren't broken after \"U.S.\" or \"Inc.\"", JSON.stringify(n.sentences));
+  t.ok(n.strip[0] === "Fed Poised to Raise Rates Further to Stem Inflation" && n.strip[1] === "Stocks slide as yields climb" && n.strip[2] === "Stocks Rally - Dow Jumps 500 Points" && n.strip[3] === "US home sales fall to 16-year low",
+    "site names and section labels aren't read out; a headline's own words are kept", JSON.stringify(n.strip));
+  t.ok(n.seo.join() === "true,true,true,false", "rate tables and listings aren't news; a real rates story is", JSON.stringify(n.seo));
+  t.ok(n.told[0] === "Anthropic's IPO poses a big risk to an already shaky stock market. Investors are worried that a flood of equity issuance could overwhelm demand."
+    && n.told[1] === null && n.told[2] === "The S&P 500 fell for a fifth consecutive session on Wednesday, notching its longest losing streak since June."
+    && n.told[3] === "Bonds are causing trouble again. Rising bond yields and Federal Reserve rate hikes are making for a tricky environment for bond investors.",
+    "a teaser is told with its own summary's answer, or not told at all", JSON.stringify(n.told.slice(0, 4)));
+  t.ok(n.told[4] === "Big bets against AI debt, from CoreWeave to Oracle and the Mag 7, could soon hit the ETF market." && n.told[5] === null && n.told[6] === null && n.told[7] === null
+    && n.told[8] === "Anthropic's IPO is set to create a new class of tech billionaires.",
+    "headlines aren't cut into fragments; essays, columns and unanswered lists are skipped", JSON.stringify(n.told.slice(4)));
+  t.ok(n.news.join() === "false,false,false,true,false", "a news script says no site names, teasers or broken sentences", JSON.stringify(n.news));
   await page.context().close();
 }

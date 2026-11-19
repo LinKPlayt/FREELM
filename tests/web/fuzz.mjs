@@ -10,6 +10,7 @@ export default async function ({ t, newPage }) {
     const R = await import("./app/research.js"), RA = await import("./app/ai/research.js"), X = await import("./app/extras.js");
     const K = await import("./app/kokoro-text.js"), MK = await import("./app/make.js");
     const ST = await import("./app/story.js"), WD = await import("./app/wording.js"), HK = await import("./app/hook.js"), IL = await import("./app/illustrator.js");
+    const NW = await import("./app/newswriter.js");
     let seed = SEED;
     const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
     const pick = (a) => a[Math.floor(rnd() * a.length)];
@@ -70,6 +71,10 @@ export default async function ({ t, newPage }) {
       await run("fits", (s) => ST.fits(s, "Inflation"), x);
       await run("roleOf", (s) => ST.roleOf(s, x.slice(0, 12) || "Topic"), x);
       await run("cleanHeadline", ST.cleanHeadline, x);
+      // The newsroom: never throws, and a story it tells is never empty.
+      await run("spokenStory", (s) => { const r = NW.spokenStory({ title: s, summary: x.slice(0, 200), source: x.slice(0, 12) }); if (r && !r.text.trim()) throw new Error("empty story"); return r?.text ?? null; }, x);
+      await run("sentencesOf", (s) => NW.sentencesOf(s).join(" "), x);
+      await run("stripSource", (s) => NW.stripSource(s, x.slice(0, 10)), x);
       await run("composeStory", (s) => ST.composeStory(s.slice(0, 15) || "Topic", "investing", s.split(/(?<=[.!?])\s+/).concat([s])).lines, x);
     }
     // structured inputs

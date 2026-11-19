@@ -1,9 +1,14 @@
 // The app's version and its update notes, shown once in a "What's new" window after each update.
 // When you deploy: bump APP_VERSION, add an entry at the top of UPDATES, and set the same number in
 // sw.js (VERSION = "reelbot-v<APP_VERSION>"). A test checks the two match.
-export const APP_VERSION = 49;
+export const APP_VERSION = 50;
 
 export const UPDATES = [
+  { version: 50, title: "News that sounds like a newsreader", items: [
+    "News reels tell each story completely: a headline that teases (\u201cthis stock\u201d, \u201chere's why\u201d) is told with the answer from the article's own summary, or left out. Nothing is made up.",
+    "No more site names, section labels or cut-off sentences in the narration (\u201c| Economy | U.S. News\u201d, \u201c\u2026to seek U.S.\u201d).",
+    "Rate tables, home listings, columns and first-person essays aren't read out as news.",
+  ] },
   { version: 49, title: "Videos that make sense, and look the part", items: [
     "Market recaps open on the day's board (every index with its price and today's move in red or green) and lead with what really moved. Their cover shows the real chart.",
     "Charts show the same month the voice talks about, with Today and This month pills that pop in as they're said, so the numbers always agree.",

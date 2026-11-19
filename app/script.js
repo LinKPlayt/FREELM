@@ -1,4 +1,5 @@
 import { composeStory, cleanHeadline, headlineThread, marketMood, isDefinition, junkHeadline, fits } from "./story.js";
+import { spokenStory, sentencesOf, stripSource, teaserIn } from "./newswriter.js";
 // Script writer: turns research into a short spoken script (hook -> points -> call to action).
 // A JavaScript port of reelbot/script.py so reels can be written on the phone.
 
@@ -131,8 +132,9 @@ export function buildNews(headlines, markets, opts) {
   // they have in common and why it matters to the viewer.
   const distinct = [];
   for (const h of headlines) {
-    const t = cleanHeadline(h.title);
-    if (t.split(/\s+/).length < 4 || junkHeadline(t)) continue;
+    // The newsroom's line: a teaser resolved from the item's own summary (or the story skipped), no site names.
+    const story = spokenStory(h), t = story?.text || "";
+    if (!story || t.split(/\s+/).length < 4) continue;
     const key = (x) => new Set(x.toLowerCase().match(/[a-z]{4,}/g) || []);
     const a = key(t);
     if (distinct.some((d) => { const b = key(d.said); let n = 0; for (const w of a) if (b.has(w)) n++; return n / Math.max(1, Math.min(a.size, b.size)) > 0.6; })) continue;
@@ -161,7 +163,7 @@ export function buildNews(headlines, markets, opts) {
     const s = markets[0];
     extras.push(line(`Meanwhile, ${subject(s, false).replace(/^(Gold|Oil)$/, (m) => m.toLowerCase())} is ${s.day_pct >= 0 ? "up" : "down"} ${pct(s.day_pct)} today.`, "", "chart", s));
   }
-  const sent = (picks[0].summary || "").split(/(?<=[.!?])\s+/)[0] || "";
+  const sent = sentencesOf(stripSource(picks[0].summary || "")).find((x) => !teaserIn(x) && !/…$/.test(x) && !picks[0].said.includes(x.replace(/\.$/, ""))) || "";
   const wc = sent.split(/\s+/).filter(Boolean).length;
   if (wc >= 6 && wc <= 24) extras.push(line(sent, visualFor(sent, g)));
   if (distinct.length > 3) extras.push(line(`And one more: ${distinct[3].said}`, visualFor(distinct[3].title, g)));
@@ -214,10 +216,10 @@ export function buildMarket(markets, headlines, opts) {
     lines.push(line(text, "", "chart", s));
   }
   const extras = [];
-  headlines = headlines.filter((h) => !junkHeadline(cleanHeadline(h.title)));
-  if (headlines.length) {
-    lines.push(line(`In the news: ${shortenHeadline(headlines[0].title)}`, visualFor(headlines[0].title, g)));
-    if (headlines.length > 1) extras.push(line(`Also: ${shortenHeadline(headlines[1].title)}`, visualFor(headlines[1].title, g)));
+  const stories = headlines.map((h) => ({ h, said: spokenStory(h)?.text })).filter((x) => x.said);
+  if (stories.length) {
+    lines.push(line(`In the news: ${stories[0].said}`, visualFor(stories[0].h.title, g)));
+    if (stories.length > 1) extras.push(line(`Also: ${stories[1].said}`, visualFor(stories[1].h.title, g)));
   }
   lines.push(line(mood.closing, "coins stack growth"));
   lines.push(line(opts.cta, "", "outro"));

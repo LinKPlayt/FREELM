@@ -122,6 +122,12 @@ Every script, whatever the type, goes through the same storyteller before you se
 - **News and markets.** Up to three distinct headlines, ordered so related ones sit together, with one
   line naming the thread that links them. Market recaps open and close to match the day ("flat" for
   tiny moves).
+- **Written for the ear (the newsroom, `app/newswriter.js`).** Each headline becomes a line a newsreader would
+  say. A teaser clause ("— here's why") is cut; a headline that hides the news itself ("this stock", "7 myths")
+  is told with the answer from the article's own summary, or not told. Site names and section labels
+  ("| Economy | U.S. News") aren't read out, sentences don't break after "U.S.", headlines are never cut
+  into fragments, and rate tables, listings, columns and first-person essays aren't treated as news.
+  What changed and how it was measured is in [docs/quality-log.md](docs/quality-log.md).
 - **Always a takeaway.** If the research has no practical advice, a safe general tip for the topic closes the video.
 
 ### Hooks, tension and payoff
