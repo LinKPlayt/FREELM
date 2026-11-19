@@ -5,9 +5,9 @@ export const APP_VERSION = 48;
 
 export const UPDATES = [
   { version: 48, title: "A new address: linkplayt.github.io/ReelBot", items: [
-    "ReelBot is moving to linkplayt.github.io/ReelBot, a link that matches its name.",
-    "Nothing gets locked away: a copy opened from the old address keeps working, and once the new one is live it shows you how to bring your drafts and settings along (Back up here, Restore there).",
-    "At the new address, voices and AI models you already downloaded are reused instead of downloaded again.",
+    "ReelBot now lives at linkplayt.github.io/ReelBot, a link that matches its name. Add it to your Home Screen from here.",
+    "Used ReelBot in this browser before? Your videos, drafts and settings are already here, and the voices and AI models you downloaded are reused instead of downloaded again.",
+    "An icon added from the old address (…/FREELM) no longer opens: delete it and add this one. If you have a backup file, Settings → Restore brings your drafts and settings back.",
   ] },
   { version: 47, title: "A redesigned ReelBot", items: [
     "A new look throughout: a refined dark theme, clearer type, consistent spacing, and smooth, subtle animation.",

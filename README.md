@@ -21,9 +21,10 @@ on your phone:  research ──► script ──► voice ──► photos ─�
 
 ## Use it
 
-> **New address.** ReelBot used to live at `linkplayt.github.io/FREELM`. A copy installed from there keeps
-> working and shows how to move: **Settings → Backup** in the old copy, then add the new address to your
-> Home Screen and **Settings → Restore** (drafts, settings and results; save any videos you want first).
+> **New address.** ReelBot moved from `linkplayt.github.io/FREELM` (that address no longer opens) to
+> **https://linkplayt.github.io/ReelBot/**. In the same browser, your videos, drafts and settings are already there
+> and downloaded voices are reused. A Home Screen icon from the old address no longer opens: delete it and add
+> the new one (**Settings → Restore** brings back drafts and settings from a backup file).
 
 1. Open **https://linkplayt.github.io/ReelBot/** in **Safari** on your iPhone.
 2. Tap **Share → Add to Home Screen** so it opens like an app.
