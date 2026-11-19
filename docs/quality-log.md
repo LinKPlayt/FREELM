@@ -56,6 +56,10 @@ Examples, before → after:
 - "A sluggish housing market has held back Home Depot. Here's Cramer's advice on the stock now." → "…held back
   Home Depot. Cramer said Home Depot's latest earnings report strengthened his confidence in the retailer."
 
+Found on the live feed right after release and added: a trailing fragment that promises the story
+("The stock market could be headed for more turbulence. *How one investor is preparing.*"). A real question
+("What happens if it's 3.5%?") is kept.
+
 **Tests.** `tests/web/logic.mjs` → "Logic: the newsroom (v50)" (real headline cases and a whole news script);
 `tests/web/fuzz.mjs` runs the newsroom functions on random and hostile text.
 

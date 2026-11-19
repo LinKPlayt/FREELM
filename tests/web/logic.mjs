@@ -345,6 +345,8 @@ export default async function ({ t, newPage }) {
       say("Debunking 7 Social Security retirement myths"),
       say("Column | Her credit card debt was double what she thought it was. Here's why."),
       say("Anthropic's IPO is set to create a new class of tech billionaires. See who stands to gain the most."),
+      say("The stock market could be headed for more turbulence. How one investor is preparing."),
+      say("Your retirement plan may assume 2% inflation. What happens if it's 3.5%?"),
     ];
     // A whole news script from teasing, site-stamped feed items: nothing teased, stamped or cut is said.
     const items = [
@@ -367,8 +369,9 @@ export default async function ({ t, newPage }) {
     && n.told[3] === "Bonds are causing trouble again. Rising bond yields and Federal Reserve rate hikes are making for a tricky environment for bond investors.",
     "a teaser is told with its own summary's answer, or not told at all", JSON.stringify(n.told.slice(0, 4)));
   t.ok(n.told[4] === "Big bets against AI debt, from CoreWeave to Oracle and the Mag 7, could soon hit the ETF market." && n.told[5] === null && n.told[6] === null && n.told[7] === null
-    && n.told[8] === "Anthropic's IPO is set to create a new class of tech billionaires.",
-    "headlines aren't cut into fragments; essays, columns and unanswered lists are skipped", JSON.stringify(n.told.slice(4)));
+    && n.told[8] === "Anthropic's IPO is set to create a new class of tech billionaires." && n.told[9] === "The stock market could be headed for more turbulence."
+    && n.told[10] === "Your retirement plan may assume 2% inflation. What happens if it's 3.5%?",
+    "headlines aren't cut into fragments; essays, columns and unanswered lists are skipped; a real question stays", JSON.stringify(n.told.slice(4)));
   t.ok(n.news.join() === "false,false,false,true,false", "a news script says no site names, teasers or broken sentences", JSON.stringify(n.news));
   await page.context().close();
 }

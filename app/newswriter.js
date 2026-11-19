@@ -50,6 +50,7 @@ const TRAILING = [
   /^what (?:to|you need to|investors need to) (?:know|watch|do|expect)\b/i,
   /^(?:you won'?t believe|it may surprise you)\b/i,
   /^(?:see|find out|learn|discover|read on to see) (?:who|what|how|why|where|which|if)\b/i,
+  /^(?:how|why|what|who)\b[^?]*$/i,                 // a fragment that promises the story: "How one investor is preparing."
 ];
 const HIDDEN = /\b(?:this|these)\s+(?:[\w'-]+\s+){0,3}?(?:stocks?|names?|risks?|reasons?|mistakes?|moves?|tricks?|things?|sectors?|compan(?:y|ies)|charts?|signals?|numbers?|funds?|etfs?|coins?|tokens?|strateg(?:y|ies)|rules?|tips?|analysts?|investors?|gurus?|experts?|ways?|picks?|plays?|trades?|states?|cities|habits?|signs?|investments?|assets?|millionaires?|billionaires?)\b/i;
 const NOT_HIDDEN = /\b(?:this|these)\s+(?:week|month|year|quarter|fall|spring|summer|winter|morning|afternoon|evening|time|season)(?:'s)?\b/i;
