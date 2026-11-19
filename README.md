@@ -49,8 +49,10 @@ Six pages, in a sidebar on computers, an icon rail on tablets and a tab bar on p
 | **Settings** | What's new, backup, storage, diagnostics, help and privacy. |
 
 While a video is being made you can browse other pages: the sidebar and Home show its progress, and
-tapping either brings you back to it. The look is defined in `app/styles.css` (design tokens at the top:
-colours, type, spacing, radius, motion); it respects the phone's reduced-motion setting.
+tapping either brings you back to it. When it finishes, the page you're on catches up and a message says
+it's ready (or what went wrong). The look is defined in `app/styles.css` (design tokens at the top:
+colours, type, spacing, radius, motion); it respects the phone's reduced-motion setting, keeps text at
+WCAG AA contrast, and works with a keyboard (visible focus, a "Skip to content" link).
 
 ### Niches and types
 

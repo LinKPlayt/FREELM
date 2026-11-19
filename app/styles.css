@@ -16,7 +16,7 @@
   /* text */
   --text: #eceef4;
   --text-2: #a4abbf;
-  --text-3: #6f778d;
+  --text-3: #80889e;            /* 4.5:1 or better on every surface (WCAG AA for small text) */
   /* brand and status */
   --accent: #facc15;            /* the icon's yellow, used for primary actions and what's selected */
   --accent-2: #fde047;
@@ -57,6 +57,10 @@ p { margin: 0; }
 svg { flex: none; }
 ::selection { background: rgba(250, 204, 21, .3); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+/* "Skip to content": the first thing a keyboard reaches, hidden until it's focused */
+.skip-link { position: fixed; left: 12px; top: -60px; z-index: 100; background: var(--accent); color: var(--accent-ink); padding: 9px 14px; border-radius: 10px; font-weight: 700; font-size: 14px; text-decoration: none; transition: top var(--fast) var(--ease); }
+.skip-link:focus { top: 12px; }
+.app-main:focus { outline: none; }
 button { font-family: inherit; }
 .hidden { display: none !important; }
 .center { text-align: center; }

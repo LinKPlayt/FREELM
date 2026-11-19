@@ -683,26 +683,33 @@ function screen(name) {   // form | job | review
   if (state.tab === "create") window.scrollTo(0, 0);
   mirrorJob();
 }
+// Sets text only when it changed: progress ticks many times a second, and a live region re-reads every change.
+const setText = (el, s) => { if (el && el.textContent !== s) el.textContent = s; };
 const say = (text, f) => {
-  $("job-step").textContent = text;
-  if (f != null) { $("bar").style.width = Math.round(f * 100) + "%"; jobProgress(f); }
-  mirrorJob(text, f);
+  setText($("job-step"), text);
+  if (f != null) { const pct = Math.round(f * 100); $("bar").style.width = pct + "%"; $("bar").parentElement.setAttribute("aria-valuenow", pct); jobProgress(f); }
+  mirrorJob(f);
 };
 // While something is being made, the sidebar and Home show it too, so you can look around meanwhile.
 let lastJobF = 0, jobWasBusy = false;
-function mirrorJob(text, f) {
-  if (f != null) lastJobF = f;
+function mirrorJob(f) {
   const busy = state.busy && !$("job").classList.contains("hidden");
+  if (busy && !jobWasBusy && f == null) lastJobF = 0;   // a new job starts from zero
+  if (f != null) lastJobF = f;
   if (jobWasBusy && !busy) setTimeout(jobEnded, 0);   // after the result card is filled in
   jobWasBusy = busy;
-  $("nav-job").classList.toggle("hidden", !busy);
-  if (busy) $("nav-job-text").textContent = `${$("job-title").textContent.replace(/…$/, "")} · ${Math.round(lastJobF * 100)}%`;
   const hs = $("home-status");
-  if (hs) {
-    hs.classList.toggle("hidden", !busy);
-    if (busy) hs.innerHTML = `<span class="spinner" aria-hidden="true"></span><div><b>${esc($("job-title").textContent)}</b><span class="meta">${esc(text || "")}</span>
-      <div class="progress"><div style="width:${Math.round(lastJobF * 100)}%"></div></div></div><span class="badge accent">${Math.round(lastJobF * 100)}%</span>`;
-  }
+  $("nav-job").classList.toggle("hidden", !busy); hs.classList.toggle("hidden", !busy);
+  if (!busy) return;
+  // Built once, then only what changed is updated, so the spinner keeps turning and the page stays light while it renders.
+  if (!hs.firstChild) hs.innerHTML = `<span class="spinner" aria-hidden="true"></span><div><b data-hs="title"></b><span class="meta" data-hs="step" aria-live="polite"></span>
+      <div class="progress"><div data-hs="bar"></div></div></div><span class="badge accent" data-hs="pct"></span>`;
+  const pct = Math.round(lastJobF * 100) + "%", title = $("job-title").textContent;
+  setText($("nav-job-text"), `${title.replace(/…$/, "")} · ${pct}`);
+  setText(hs.querySelector('[data-hs="title"]'), title);
+  setText(hs.querySelector('[data-hs="step"]'), $("job-step").textContent);
+  setText(hs.querySelector('[data-hs="pct"]'), pct);
+  hs.querySelector('[data-hs="bar"]').style.width = pct;
 }
 
 // When a job ends while you're on another page, that page catches up and a toast says how it went.

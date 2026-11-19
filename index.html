@@ -25,6 +25,7 @@
   </defs>
 </svg>
 
+<a class="skip-link" href="#main">Skip to content</a>
 <div class="shell">
 <nav class="nav" aria-label="Main">
   <div class="nav-brand"><svg class="logo-mark" aria-hidden="true"><use href="#logo"/></svg><span class="logo-word">Reel<span>Bot</span></span></div>
@@ -43,7 +44,7 @@
   </div>
 </nav>
 
-<main class="app-main" id="main">
+<main class="app-main" id="main" tabindex="-1">
   <header class="topbar">
     <svg class="logo-mark topbar-logo" aria-hidden="true"><use href="#logo"/></svg>
     <div class="topbar-title"><h1 id="page-title">Studio</h1><p id="page-sub">Make a video in five steps</p></div>
@@ -53,7 +54,7 @@
 
   <!-- HOME: your channel at a glance (everything here comes from what's on this phone) -->
   <section id="tab-home" class="tab" aria-labelledby="page-title">
-    <div class="status-card hidden" id="home-status" data-go="create" role="button" tabindex="0" aria-live="polite"></div>
+    <div class="status-card hidden" id="home-status" data-go="create" role="button" tabindex="0" aria-label="Video in progress: open the Studio"></div>
     <div class="stats" id="home-stats">
       <div class="stat skeleton"></div><div class="stat skeleton"></div><div class="stat skeleton"></div><div class="stat skeleton"></div>
     </div>
@@ -73,11 +74,11 @@
         <div class="job-info">
           <span class="eyebrow">In progress</span>
           <h2 id="job-title">Working…</h2>
-          <div class="progress"><div id="bar"></div></div>
-          <div class="meta" id="job-step"></div>
+          <div class="progress" role="progressbar" aria-label="Progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="bar"></div></div>
+          <div class="meta" id="job-step" aria-live="polite"></div>
           <ol class="job-steps hidden" id="job-steps"></ol>
           <div class="meta" id="job-eta"></div>
-          <p class="note">Keep this screen open until it finishes.</p>
+          <p class="note">Keep ReelBot open until it finishes. You can look at other pages meanwhile.</p>
         </div>
       </div>
     </div>
