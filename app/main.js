@@ -716,9 +716,11 @@ function mirrorJob(f) {
 function jobEnded() {
   if (state.busy || state.tab === "create") return;
   if (state.tab === "home") renderHome(); else if (state.tab === "library") renderLibrary(); else if (state.tab === "auto") renderAuto(); else if (state.tab === "about") renderStorage();
-  const title = !$("result").classList.contains("hidden") && $("result").querySelector("h2")?.textContent;
-  if (!$("review").classList.contains("hidden")) toast("Your script is ready to review in the Studio", "ok");
-  else if (title) { const bad = /couldn't|stopped|didn't|wrong/i.test(title); toast(`${title}. ${bad ? "Details are" : "See it"} in the Studio`, bad ? "err" : "ok"); }
+  // A failed video goes back to its review with the error above it, so the error is checked first.
+  const title = (!$("result").classList.contains("hidden") && $("result").querySelector("h2")?.textContent) || "";
+  if (/couldn't|stopped|didn't|wrong/i.test(title)) toast(`${title}. Details are in the Studio`, "err");
+  else if (!$("review").classList.contains("hidden")) toast("Your script is ready to review in the Studio", "ok");
+  else if (title) toast(`${title}. See it in the Studio`, "ok");
 }
 
 // While a video is made: a checklist of the steps, and how long is left (from this phone's past reels).
