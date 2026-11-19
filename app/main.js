@@ -27,7 +27,7 @@ const MUSIC_VOLUMES = { low: 0.55, medium: 1, high: 1.5 };
 // Narrators: the natural voices (Kokoro) and the classic fast voice (Piper).
 const VOICE_LABELS = { ...Object.fromEntries(Object.entries(KOKORO_VOICES).map(([id, v]) => [id, v.name])), classic: "Classic (fast)" };
 const voiceOpts = (id) => (id === "classic" ? { engine: "fast" } : { engine: "natural", voice: id });
-const CAPTION_STYLES = { bold: "Bold", boxed: "Boxed", clean: "Clean" };
+const CAPTION_STYLES = { bold: "Bold", punch: "Punch (1–2 big words)", boxed: "Boxed", clean: "Clean" };
 const CAPTION_POS = { low: "Low", middle: "Middle" };
 const MOODS = { auto: "Auto (fits the video)", lofi: "Lo-fi", upbeat: "Upbeat", bright: "Bright", cinematic: "Cinematic", calm: "Calm", suspense: "Suspense", mine: "My music", none: "None" };
 const COVER_STYLES = { bold: "Bold title", number: "Big number", question: "Question" };
@@ -59,7 +59,7 @@ async function drawStylePreview() {
     const handle = cleanHandle($("handle").value);
     const words = ["Fifty", "percent", "goes"].map((t, i) => ({ text: t, start: i * 0.4, end: i * 0.4 + 0.4 }));
     previewFrame({ title: "Your reel title here", brand: $("brand").value.trim() || "Money Minute", accent: state.accent,
-      captionStyle: state.capStyle, captionPos: state.capPos, artStyle: state.art, handle, audio: new Float32Array(1), hookTitle: false,
+      captionStyle: state.capStyle, captionPos: state.capPos, artStyle: state.art, quality: state.quality, handle, audio: new Float32Array(1), hookTitle: false,
       scenes: [{ start: 0, end: 3, kind: "image", bitmap: sampleBitmap, stat: $("pops").checked ? "50%" : null }], words }, $("style-preview"), 0.55);
   } catch (e) { console.warn("preview", e); }
 }
@@ -238,6 +238,28 @@ function renderInsights() {
       ${ins.rows.some((x) => x.setting) ? `<button class="btn" data-use-best="1" style="width:100%;margin-top:6px">Use what works (${ins.rows.filter((x) => x.setting).map((x) => x.name.toLowerCase()).join(", ")})</button>` : ""}
       <p class="meta" style="margin-top:8px">Make more of what wins. More results make this more reliable.</p></div>`
     : `<div class="card"><h2>What works for you</h2><p class="meta">Add the views (and likes, comments, saves) of ${ins.count ? "one more reel" : "two or more reels"} under “Add results” and this shows which niche, length, narrator, ending and music get you the most views.</p></div>`;
+}
+
+// Autosave: an iPhone often reloads an app left in the background, which used to lose the script you
+// were reviewing. The script (not the photos) is saved as you go, and offered back when the app opens.
+const AUTOSAVE = "autosave";
+let autosaveTimer = null;
+function autosave(now = false) {
+  clearTimeout(autosaveTimer);
+  const run = () => {
+    if (!state.plan) return;
+    try { const d = draftFromPlan(state.plan); d.id = AUTOSAVE; d.draftId = state.draftId || null; localStorage.setItem(AUTOSAVE, JSON.stringify(d)); } catch { /* storage full or private */ }
+  };
+  if (now) run(); else autosaveTimer = setTimeout(run, 700);
+}
+function clearAutosave() { clearTimeout(autosaveTimer); try { localStorage.removeItem(AUTOSAVE); } catch { /* ignore */ } renderResume(); }
+function pendingAutosave() { try { const d = JSON.parse(localStorage.getItem(AUTOSAVE) || "null"); return d?.script?.lines?.length && Date.now() - d.saved < 3 * 86400e3 ? d : null; } catch { return null; } }
+function renderResume() {
+  const d = pendingAutosave(), el = $("resume"); if (!el) return;
+  const show = Boolean(d) && !state.plan && !state.busy;
+  el.classList.toggle("hidden", !show);
+  if (show) el.innerHTML = `<h2>Pick up where you left off</h2><p>${esc(d.label)} <span class="meta">· ${new Date(d.saved).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}</span></p>
+    <div class="btns" style="margin:0"><button class="primary" data-resume="open">Continue</button><button class="btn" data-resume="drop">Discard</button></div>`;
 }
 
 // Today's planned video (from Plan my week): one tap to make it, or open it to review first.
@@ -468,7 +490,7 @@ async function produce() {
     if (state.ideasUI) { say("Freeing memory…", 0); await state.ideasUI.unloadAI(); }   // rendering needs the memory
     const made = { script: { ...state.plan.script, lines: state.plan.script.lines.map((l) => ({ text: l.text, kind: l.kind })) }, opts: options() };
     const reel = await produceReel(state.plan, options(), { say, canvas: $("preview"), audioCtx: state.audioCtx, toast });
-    state.plan = null;
+    state.plan = null; clearAutosave();
     // Quietly draw other ways to illustrate this video's scenes, so they're saved and ready next time.
     if (made.opts.artStyle !== "icons") setTimeout(() => drawAlternatives(made.script, made.opts).then(() => { if (document.querySelector("#tab-about.active")) renderStorage(); }).catch(() => {}), 2500);
     if (state.draftId) { deleteDraft(state.draftId); state.draftId = null; }
@@ -521,7 +543,7 @@ async function produceSeries() {
       if (outro && i < total - 1) outro.text = `Follow for part ${i + 2}: ${next[i]}.`;
       const reel = await produceReel(plan, opts, { say: partSay, canvas: $("preview"), audioCtx: state.audioCtx, toast });
       await saveReel(reel); made.push(reel);
-      if (i === 0) { state.plan = null; if (state.draftId) { deleteDraft(state.draftId); state.draftId = null; } }
+      if (i === 0) { state.plan = null; clearAutosave(); if (state.draftId) { deleteDraft(state.draftId); state.draftId = null; } }
     }
     screen("form");
     store.set("voiceReady-" + voiceOpts(state.voice).engine, "1");
@@ -747,6 +769,7 @@ function showReview() {
   // A series follows a topic into related ones; news, market recaps and quizzes don't have one.
   $("series").classList.toggle("hidden", ["news", "market", "quiz"].includes(script.kind));
   screen("review");
+  autosave(true); $("resume")?.classList.add("hidden");
   warmVoice();
 }
 // While you review, load the narrator's voice in the background (only if it was downloaded before),
@@ -764,6 +787,7 @@ $("scenes").addEventListener("input", (e) => {
   line.analysis = null;                                  // re-read numbers and concepts from the new text
   line.claim = null;                                     // your wording is now what gets fact-checked
   if (+i === 0) state.plan.script.hookKind = "written";
+  autosave();
   state.plan.edited = true; updateEstimate();
   // Re-check an edited fact against the evidence already gathered (instant, on the phone).
   if (line.check) line.check = { ...line.check, stale: true };
@@ -866,10 +890,12 @@ $("save-draft").addEventListener("click", () => {
   const d = draftFromPlan(state.plan);
   if (state.draftId) d.id = state.draftId;
   state.draftId = d.id;
-  toast(saveDraft(d) ? "Draft saved. Find it in the Library." : "Couldn't save the draft (storage full?)");
+  const ok = saveDraft(d);
+  if (ok) { clearTimeout(autosaveTimer); try { localStorage.removeItem(AUTOSAVE); } catch { /* ignore */ } }   // it's safe in Drafts now
+  toast(ok ? "Draft saved. Find it in the Library." : "Couldn't save the draft (storage full?)");
 });
-$("reroll").addEventListener("click", () => { if (state.plan) releasePlan(state.plan); state.plan = null; start(); });
-$("cancel-review").addEventListener("click", () => { if (state.plan) releasePlan(state.plan); state.plan = null; closeAudio(); screen("form"); });
+$("reroll").addEventListener("click", () => { if (state.plan) releasePlan(state.plan); state.plan = null; clearAutosave(); start(); });
+$("cancel-review").addEventListener("click", () => { if (state.plan) releasePlan(state.plan); state.plan = null; closeAudio(); clearAutosave(); screen("form"); });
 
 /* ---------- sound test (diagnostics) ---------- */
 // A beep straight through the speaker. "playback" makes it audible even with the Silent switch on,
@@ -1116,6 +1142,7 @@ async function init() {
   prefChips("music-vol", { low: "Low", medium: "Medium", high: "High" }, "musicVol", "medium");
   prefChips("ctas", CTA_LABELS, "cta", "follow");
   prefChips("covers", COVER_STYLES, "cover", "bold");
+  prefChips("quality", { high: "High (sharper)", standard: "Standard (smaller files)" }, "quality", "high");
   prefChips("art-styles", ART_CHOICES, "art", "auto", () => { if (state.plan && !$("review").classList.contains("hidden")) showReview(); });
   // Your own music: kept in the app's storage on the phone (not uploaded anywhere).
   const showMusic = () => {
@@ -1188,6 +1215,15 @@ async function init() {
   $("version-line").textContent = `Version ${APP_VERSION} · ${UPDATES[0].title}`;
   $("whats-new").addEventListener("click", () => showWhatsNew(APP_VERSION - 3));
   $("art-more").addEventListener("click", drawMoreArt);
+  renderResume();
+  $("resume").addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-resume]"), d = pendingAutosave(); if (!b || !d || state.busy) return;
+    if (b.dataset.resume === "drop") return clearAutosave();
+    screen("job"); $("job-title").textContent = "Opening your script…"; $("preview").classList.add("hidden"); say("Finding photos again…", 0);
+    try { state.plan = await planFromDraft(d, { say }); state.draftId = d.draftId || null; showReview(); }
+    catch (err) { screen("form"); showError(err, "The script couldn't be opened"); }
+  });
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden" && state.plan) autosave(true); });
   // Hear the chosen music: 8 seconds, made the same way as in a video (Auto plays a sample of each mood it picks from).
   let musicSrc = null;
   $("music-preview").addEventListener("click", async () => {

@@ -336,7 +336,8 @@ export function chunkWords(words, maxWords = 3, maxChars = 16) {
 // a coloured chip) and "clean" (sentence case with a soft shadow).
 class Captions {
   constructor(words, accent, style = "bold") {
-    this.words = words; this.accent = accent; this.style = style; this.chunks = chunkWords(words);
+    // "punch": one or two big words at a time, popping in (a popular short-video style).
+    this.words = words; this.accent = accent; this.style = style; this.chunks = style === "punch" ? chunkWords(words, 2, 12) : chunkWords(words);
     // Words that carry the meaning get a colour of their own: money and growth in green, risk in red.
     this.feel = words.map((w) => emphasisOf(w.text));
     this.times = this.chunks.map((ch, k) => {
@@ -354,8 +355,8 @@ class Captions {
     let lay = this.layout.get(k);
     if (!lay) {
       const texts = idxs.map((i) => { const x = this.words[i].text.replace(/["“”]/g, ""); return this.style === "clean" ? x : x.toUpperCase(); });
-      let size = { bold: 118, boxed: 100, clean: 92 }[this.style] || 118, widths, total;
-      const maxW = this.style === "bold" ? W - 120 : W - 200;
+      let size = { bold: 118, boxed: 100, clean: 92, punch: 160 }[this.style] || 118, widths, total;
+      const maxW = this.style === "bold" || this.style === "punch" ? W - 120 : W - 200;
       for (;;) {
         ctx.font = this.font(size);
         widths = texts.map((x) => ctx.measureText(x).width);
@@ -367,10 +368,12 @@ class Captions {
     }
     let active = idxs.find((i) => t >= this.words[i].start && t < this.words[i].end + 0.05);
     if (active === undefined) active = t >= this.words[idxs[idxs.length - 1]].start ? idxs[idxs.length - 1] : idxs[0];
-    const age = t - this.times[k][0], s = age < 0.12 ? 0.82 + 0.18 * ease(age / 0.12) : 1;
+    const age = t - this.times[k][0];
+    const s = this.style === "punch" ? (age < 0.08 ? 0.6 + 0.5 * (age / 0.08) : age < 0.16 ? 1.1 - 0.1 * ((age - 0.08) / 0.08) : 1)
+      : age < 0.12 ? 0.82 + 0.18 * ease(age / 0.12) : 1;
     const gap = lay.size * 0.32;
     ctx.save();
-    ctx.translate(W / 2, centerY); ctx.scale(s, s);
+    ctx.translate(W / 2, centerY); if (this.style === "punch") ctx.rotate((k % 2 ? 1 : -1) * 0.035); ctx.scale(s, s);
     ctx.font = this.font(lay.size); ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
     if (this.style === "boxed") {
       const padX = 34, h = lay.size * 1.35;
@@ -392,8 +395,8 @@ class Captions {
       const grow = on ? 1 + 0.05 * Math.min(1, (t - this.words[idxs[j]].start) / 0.08) : 1;
       ctx.save();
       if (grow !== 1) { const cx = x + lay.widths[j] / 2; ctx.translate(cx, 0); ctx.scale(grow, grow); ctx.translate(-cx, 0); }
-      if (this.style === "bold") {
-        ctx.lineWidth = 18; ctx.strokeStyle = "#000"; ctx.strokeText(txt, x, 0);
+      if (this.style === "bold" || this.style === "punch") {
+        ctx.lineWidth = this.style === "punch" ? 24 : 18; ctx.strokeStyle = "#000"; ctx.strokeText(txt, x, 0);
         ctx.fillStyle = on ? rgba(this.accent) : tone;
       } else if (this.style === "boxed") {
         if (on) {
@@ -554,13 +557,17 @@ export function previewFrame(job, target, t) {
 
 /* ------------------------------------------------------------------ encoders */
 
-async function pickVideoConfig(testCodec) {
+// Bit rates for 1080p and the 720p fallback. "high" keeps fast motion (whips, zooms, big words) crisp
+// after social apps re-compress the upload; "standard" makes smaller files.
+const BITRATES = { high: [8e6, 4.5e6], standard: [5e6, 3e6] };
+async function pickVideoConfig(testCodec, quality = "high") {
   if (typeof VideoEncoder === "undefined") return null;
+  const [b1080, b720] = BITRATES[quality] || BITRATES.high;
   // H.264 is what phones and every social app expect. ("vp9" exists only to test this code path
   // in browsers that ship without an H.264 encoder.)
-  const options = testCodec === "vp9" ? [[1080, 1920, "vp09.00.40.08", 5e6]]
-    : [[1080, 1920, "avc1.640028", 5e6], [1080, 1920, "avc1.4d0028", 5e6], [1080, 1920, "avc1.42002a", 5e6],
-       [720, 1280, "avc1.4d001f", 3e6], [720, 1280, "avc1.42001f", 3e6]];
+  const options = testCodec === "vp9" ? [[1080, 1920, "vp09.00.40.08", b1080]]
+    : [[1080, 1920, "avc1.640028", b1080], [1080, 1920, "avc1.4d0028", b1080], [1080, 1920, "avc1.42002a", b1080],
+       [720, 1280, "avc1.4d001f", b720], [720, 1280, "avc1.42001f", b720]];
   for (const [width, height, codec, bitrate] of options) {
     const cfg = { codec, width, height, bitrate, framerate: FPS, ...(codec.startsWith("avc") ? { avc: { format: "avc" } } : {}) };
     try { if ((await VideoEncoder.isConfigSupported(cfg)).supported) return cfg; } catch { /* try next */ }
@@ -678,7 +685,7 @@ async function encodeRecorder(job, target, audioCtx, onProgress) {
   stream.addTrack(track);
   const mime = ['video/mp4;codecs="avc1.640028,mp4a.40.2"', 'video/mp4;codecs="avc1.42E01E,mp4a.40.2"', "video/mp4;codecs=avc1", "video/mp4",
                 "video/webm;codecs=vp9,opus", "video/webm"].find((m) => MediaRecorder.isTypeSupported(m));
-  const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 5e6, audioBitsPerSecond: 128000 });
+  const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: (BITRATES[job.quality] || BITRATES.high)[0], audioBitsPerSecond: 128000 });
   const parts = []; rec.ondataavailable = (e) => { if (e.data.size) parts.push(e.data); };
   const done = new Promise((res, rej) => { rec.onstop = res; rec.onerror = (e) => rej(e.error || new Error("recording failed")); });
   rec.start(1000); src.start();
@@ -768,7 +775,7 @@ export async function hasSound(blob) {
 // Returns { blob, ext, how, sound: true | false | null }.
 export async function renderReel(job, target, audioCtx, onProgress, force) {
   const test = force === "vp9" ? "vp9" : undefined;
-  const [vcfg, acfg] = await Promise.all([pickVideoConfig(test), pickAudioConfig(test)]);
+  const [vcfg, acfg] = await Promise.all([pickVideoConfig(test, job.quality), pickAudioConfig(test)]);
   let silent = null;
   if (vcfg && vcfg.codec.startsWith("avc") && !["recorder", "aac"].includes(force)) {
     try {

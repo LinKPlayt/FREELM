@@ -59,6 +59,17 @@ export default async function ({ t, newPage, BASE }) {
     await page.click('[data-search="1"]').catch(() => {}); await page.waitForTimeout(4000);
     await page.click("#save-draft"); await page.waitForTimeout(300);
     t.ok(await page.evaluate(() => JSON.parse(localStorage.getItem("drafts") || "[]").length >= 1), "Save draft stores the script");
+    // Autosave: an edit, then the app is reloaded (as an iPhone does to apps left in the background).
+    await page.fill('[data-line="2"]', "This line was edited before the app reloaded."); await page.dispatchEvent('[data-line="2"]', "input");
+    await page.waitForTimeout(1200);
+    const title = await page.textContent("#review-title");
+    await page.reload(); await until(page, () => window.__ready, null, 60000); await toastLog();
+    const offered = await page.locator("#resume").isVisible() && /Pick up where you left off/.test(await page.innerText("#resume"));
+    await page.click('[data-resume="open"]'); await page.waitForSelector("#review:not(.hidden)", { timeout: 180000 });
+    t.ok(offered && (await page.textContent("#review-title")) === title && (await page.inputValue('[data-line="2"]')) === "This line was edited before the app reloaded.",
+      "after the app reloads, the script you were reviewing (with your edits) is offered back", JSON.stringify({ offered, title }));
+    await page.click("#cancel-review");
+    t.ok(await page.locator("#resume").isHidden() && await page.evaluate(() => !localStorage.getItem("autosave")), "Start over clears the saved script");
   } catch (e) { t.ok(false, "section crashed: Features: review screen", String(e.message || e).split("\n")[0]); await page.goto(page.url()).catch(() => {}); }
 
   t.section("Features: make a reel (natural voice) and the Library");
@@ -215,7 +226,7 @@ export default async function ({ t, newPage, BASE }) {
     await page.setInputFiles("#music-file", { name: "my-track.wav", mimeType: "audio/wav", buffer: wav });
     await until(page, () => /my-track/.test(document.getElementById("music-note").textContent), null, 15000);
     t.ok(await page.evaluate(() => document.querySelector("#moods .on")?.textContent) === "My music", "uploading a track selects My music");
-    await page.click('#covers .chip >> text="Big number"');
+    await page.click('#covers .chip >> text="Big number"'); await page.click('#cap-styles .chip >> text="Punch (1–2 big words)"');
     await page.click('#niches .chip >> text="Personal Finance"'); await page.click('#modes .chip >> text="Explainer"');
     await page.evaluate(() => { window.__lastReel = null; window.__lastError = null; });
     if (await page.isChecked("#review-on")) await page.click("#review-on + span");
@@ -223,7 +234,8 @@ export default async function ({ t, newPage, BASE }) {
     await until(page, () => window.__lastReel || window.__lastError);
     await page.click("#review-on + span");
     const r2 = await page.evaluate(() => ({ err: window.__lastError, sound: window.__lastReel?.sound, settings: window.__lastReel?.settings, cover: window.__lastReel?.cover?.size, id: window.__lastReel?.id }));
-    t.ok(!r2.err && r2.sound === true && r2.settings?.music === "mine", "a reel is made with your music", JSON.stringify(r2));
+    t.ok(!r2.err && r2.sound === true && r2.settings?.music === "mine" && r2.settings?.captions === "punch", "a reel is made with your music (and Punch captions)", JSON.stringify(r2));
+    await page.click('#cap-styles .chip >> text="Bold"');
     t.ok(r2.cover > 10000, "a cover is made in the chosen style");
     await page.click('nav [data-tab="library"]'); await page.waitForSelector("#reels [data-reel]");
     const card = page.locator(`#reels [data-reel="${r2.id}"]`);
@@ -284,11 +296,11 @@ export default async function ({ t, newPage, BASE }) {
   t.section("Features: What's new, storage, make-time, Library covers");
   try {
     // a returning user who last saw version 29 (the window shows the newest three updates)
-    await page.evaluate(() => localStorage.setItem("seenVersion", "40"));
+    await page.evaluate(() => localStorage.setItem("seenVersion", "41"));
     await page.reload(); await until(page, () => window.__ready, null, 60000);
     t.ok(await page.locator("#news-sheet").count() === 1 && /What's new/.test(await page.innerText("#news-sheet")), "What's new appears after an update");
     const news = await page.innerText("#news-sheet");
-    t.ok(/moves with the video/.test(news) && /Smoother cuts/.test(news) && !/Better covers/.test(news), "it lists only the updates since the last one seen", news.slice(0, 200));
+    t.ok(/nothing lost/.test(news) && /moves with the video/.test(news) && !/made in one go/.test(news), "it lists only the updates since the last one seen", news.slice(0, 200));
     await page.click('[data-news="close"]');
     t.ok(await page.locator("#news-sheet").count() === 0, "Got it closes it");
     await page.reload(); await until(page, () => window.__ready, null, 60000);

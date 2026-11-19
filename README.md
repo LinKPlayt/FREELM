@@ -109,6 +109,8 @@ After the storyteller, every script gets an emotion layer (`app/hook.js`). It ne
   catch:" or "Here's that number:" and lands with a punch-in, a white flash and a soft hit.
 - **Human pacing.** The hook is spoken a little faster, then a beat; another beat before the payoff.
 - **Captions with feeling.** Money and growth words in green, risk words in red; the spoken word grows.
+- **Caption styles.** Bold (big outlined words), Punch (one or two big words at a time, popping in with a
+  slight tilt), Boxed (words on a dark card) and Clean (sentence case on a soft backing).
 - **Plain spoken English.** Contractions and everyday words ("usually", not "typically"), and the
   definition said the way a person would ("Simply put, …"). Quotes are never touched, and the original
   sentence is kept for the fact check.
@@ -385,6 +387,18 @@ once the app's files have been downloaded.
 
 With four or more reels, the Library shows a search box (title, topic or niche), type filters with counts,
 and a Newest / Most views sort (from the results you've added).
+
+### Autosave
+
+While you review a script, it's saved on the phone as you go (the script and your edits, not the photos).
+If the phone reloads the app (iPhones often do this to apps left in the background), **Pick up where you
+left off** appears at the top of Create. Making the video, Start over, New script or Save draft clears it.
+
+### Video quality
+
+**High** (default) encodes 1080×1920 at 8 Mbps so fast motion stays crisp after social apps re-compress
+the upload; **Standard** uses 5 Mbps for smaller files. Full 2–3 minute stories always use Standard,
+because the file is assembled in memory.
 
 ### Drafts
 

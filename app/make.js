@@ -566,7 +566,9 @@ export async function produceReel(plan, opts, ui) {
   let logo = null;
   if (opts.logo) { try { logo = await createImageBitmap(await (await fetch(opts.logo)).blob()); } catch { logo = null; } }
   const job = { title: script.title, brand: opts.brand, accent: opts.accent || "#FFD60A", scenes, words, audio,
-    captionStyle: opts.captionStyle || "bold", captionPos: opts.captionPos || "low", handle: opts.handle || "", logo, hookTitle: opts.hookTitle !== false };
+    captionStyle: opts.captionStyle || "bold", captionPos: opts.captionPos || "low", handle: opts.handle || "", logo, hookTitle: opts.hookTitle !== false,
+    // High quality, except for 2–3 minute stories: their file is built in memory, and iPhones have little to spare.
+    quality: opts.quality === "standard" || opts.length === "full" ? "standard" : "high" };
   const result = await renderReel(job, ui.canvas, ui.audioCtx, (f) => ui.say("Rendering your reel on this device…", 0.6 + 0.4 * f), opts.forceEncoder);
   ui.say("Making the cover and captions…", 0.99);
   const accentRgb = (() => { const n = parseInt((opts.accent || "#FFD60A").slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; })();

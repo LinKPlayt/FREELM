@@ -1,9 +1,14 @@
 // The app's version and its update notes, shown once in a "What's new" window after each update.
 // When you deploy: bump APP_VERSION, add an entry at the top of UPDATES, and set the same number in
 // sw.js (VERSION = "reelbot-v<APP_VERSION>"). A test checks the two match.
-export const APP_VERSION = 43;
+export const APP_VERSION = 44;
 
 export const UPDATES = [
+  { version: 44, title: "Sharper videos, punchier captions, nothing lost", items: [
+    "Video quality: videos are now made at a higher bit rate (High), so fast moments like whips, zooms and big words stay crisp after TikTok, Reels or Shorts re-compress them. Choose Standard for smaller files (Style → Video quality).",
+    "New caption style: Punch shows one or two big words at a time, popping in with a slight tilt.",
+    "Autosave: if your phone reloads the app while you're reviewing a script, it's offered back with your edits (“Pick up where you left off”).",
+  ] },
   { version: 43, title: "Music that moves with the video", items: [
     "The beat now drops after the hook: the opening line plays over soft chords, a swell builds, and the drums land as the first point begins.",
     "Two new moods: Bright (light and plucky) and Suspense (ticking, minor key).",
