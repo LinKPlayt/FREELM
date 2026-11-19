@@ -68,8 +68,7 @@ export default async function ({ t, newPage, BASE }) {
     await page.click('[data-resume="open"]'); await page.waitForSelector("#review:not(.hidden)", { timeout: 180000 });
     t.ok(offered && (await page.textContent("#review-title")) === title && (await page.inputValue('[data-line="2"]')) === "This line was edited before the app reloaded.",
       "after the app reloads, the script you were reviewing (with your edits) is offered back", JSON.stringify({ offered, title }));
-    await page.click("#cancel-review");
-    t.ok(await page.locator("#resume").isHidden() && await page.evaluate(() => !localStorage.getItem("autosave")), "Start over clears the saved script");
+    // (The review stays open: the next section makes this video.)
   } catch (e) { t.ok(false, "section crashed: Features: review screen", String(e.message || e).split("\n")[0]); await page.goto(page.url()).catch(() => {}); }
 
   t.section("Features: make a reel (natural voice) and the Library");
@@ -81,6 +80,7 @@ export default async function ({ t, newPage, BASE }) {
     await until(page, () => window.__lastReel || window.__lastError);
     const reel = await page.evaluate(() => { const x = window.__lastReel; return { err: window.__lastError, sound: x?.sound, dur: x?.duration, srt: (x?.srt || "").split("-->").length - 1, cover: x?.cover?.size, script: x?.script }; });
     t.ok(!reel.err && reel.sound === true && reel.dur > 25, `reel made with sound (${Math.round(reel.dur || 0)} s)`, reel.err);
+    t.ok(await page.evaluate(() => !localStorage.getItem("autosave")) && await page.locator("#resume").isHidden(), "making the video clears the autosaved script");
     t.ok(reel.srt > 3 && reel.cover > 10000, "captions file and cover image are made", JSON.stringify({ srt: reel.srt, cover: reel.cover }));
     t.ok(/Save this/.test(reel.script || ""), "the chosen ending is used", (reel.script || "").split("\n").at(-1));
     const toasts = await page.evaluate(() => window.__toasts.join(" | "));
