@@ -23,7 +23,7 @@ on your phone:  research ──► script ──► voice ──► photos ─�
 
 1. Open **https://linkplayt.github.io/FREELM/** in **Safari** on your iPhone.
 2. Tap **Share → Add to Home Screen** so it opens like an app.
-3. Pick a niche and a type (or type **your own topic**), set your style (see the live preview), then tap **Make my reel**.
+3. In the **Studio**, pick a niche and a type (or type **your own topic**), set your style in the five steps (see the live preview), then tap **Make my reel**.
 4. **Review it:** every scene is listed with its line and photo. Edit any line, remove scenes, add researched lines, or change a photo. Then tap **Make the video**, and keep the screen open while it renders.
 5. Tap **Save / Share**. Choose **Save Video** to put it in Photos, or pick YouTube, TikTok or Instagram to post it.
 6. Tap **YouTube**, **TikTok** or **Instagram** to copy a caption formatted for that platform, and paste it into your post. It includes the photo credits that the licenses require.
@@ -34,6 +34,23 @@ that they stay on the phone.
 
 The app is served by GitHub Pages straight from the `main` branch
 (**Settings → Pages → Deploy from a branch → `main` / root**).
+
+### The app at a glance
+
+Six pages, in a sidebar on computers, an icon rail on tablets and a tab bar on phones:
+
+| Page | What it's for |
+|---|---|
+| **Home** | Your channel at a glance: videos made and posted, total and average views, the queue, what's up next (today's video, a script to continue, videos to post), recent videos, performance and activity. Everything comes from what's on this phone; nothing is estimated or invented. Returning users open here. |
+| **Studio** | Make a video in five steps (Topic, Voice & sound, Look, Length & research, Extras) with a live preview and a summary of the choices. On a phone, **Make my reel** stays at the bottom of the screen; on a computer it sits beside the preview. The review screen, the progress screen and the finished video also live here. |
+| **Ideas** | The Idea Lab: research and video ideas on the phone. |
+| **Library** | Finished videos as cards (badges, Save / Share, captions per platform, cover, captions file, remix, results, posted), search, filters and the space they use. |
+| **Automation** | Plan my week, today's video, the queue (Make all, calendar reminders) and how many videos are posted. |
+| **Settings** | What's new, backup, storage, diagnostics, help and privacy. |
+
+While a video is being made you can browse other pages: the sidebar and Home show its progress, and
+tapping either brings you back to it. The look is defined in `app/styles.css` (design tokens at the top:
+colours, type, spacing, radius, motion); it respects the phone's reduced-motion setting.
 
 ### Niches and types
 
