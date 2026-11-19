@@ -295,7 +295,7 @@ window.renderSoundtrack = async function (opts = {}) {
   // Sidechain: the music breathes with every kick.
   kicks.sort((a, b) => a - b).forEach((k) => { duck.gain.setValueAtTime(1, Math.max(0, k - 0.002)); duck.gain.linearRampToValueAtTime(0.35, k + 0.01); duck.gain.linearRampToValueAtTime(1, k + 0.24); });
   // A gentle fade at the very end.
-  master.gain.setValueAtTime(0.9, T.END - 1.2); master.gain.linearRampToValueAtTime(0.0001, T.END + 0.4);
+  master.gain.setValueAtTime(0.9, T.END - 1.5); master.gain.linearRampToValueAtTime(0.0001, T.END - 0.02);
 
   const out = await ctx.startRendering();
   // 32-bit float WAV
