@@ -45,7 +45,11 @@ export default async function ({ t, newPage, BASE }) {
     t.ok(await page.locator("#series").isVisible(), "an explainer offers a 3-part series");
     const n0 = await page.locator(".scene").count();
     await page.click("#add-line"); t.ok(await page.locator(".scene").count() === n0 + 1, "+ Add a line adds a scene");
-    await page.locator("[data-del]").first().click(); t.ok(await page.locator(".scene").count() === n0, "Remove deletes a scene");
+    const removedText = await page.inputValue('[data-line="1"]');
+    await page.locator('[data-del="1"]').click(); t.ok(await page.locator(".scene").count() === n0, "Remove deletes a scene");
+    await page.click("#undo-remove");
+    t.ok(await page.locator(".scene").count() === n0 + 1 && (await page.inputValue('[data-line="1"]')) === removedText && await page.locator("#undo-remove").isHidden(), "Undo remove puts the scene back");
+    await page.locator("[data-del]").last().click();
     const h0 = await page.inputValue('[data-line="0"]'); await page.click("[data-hook]");
     t.ok((await page.inputValue('[data-line="0"]')) !== h0, "Another hook changes the hook");
     const chips = await page.locator('[data-vmode^="1:"]').count();
@@ -59,6 +63,14 @@ export default async function ({ t, newPage, BASE }) {
     await page.click('[data-search="1"]').catch(() => {}); await page.waitForTimeout(4000);
     await page.click("#save-draft"); await page.waitForTimeout(300);
     t.ok(await page.evaluate(() => JSON.parse(localStorage.getItem("drafts") || "[]").length >= 1), "Save draft stores the script");
+    // My photo: a bright magenta picture on scene 1, kept on the phone with the script.
+    const png = Buffer.from((await page.evaluate(() => { const c = document.createElement("canvas"); c.width = 800; c.height = 800; const x = c.getContext("2d"); x.fillStyle = "#ff00ff"; x.fillRect(0, 0, 800, 800); return c.toDataURL("image/png"); })).split(",")[1], "base64");
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click('[data-mine="1"]')]);
+    await chooser.setFiles({ name: "mine.png", mimeType: "image/png", buffer: png });
+    const magenta = () => page.evaluate(() => { const c = document.querySelector('[data-thumb="1"]'); if (!c) return false; const d = c.getContext("2d").getImageData(c.width / 2, c.height / 2, 1, 1).data; return d[0] > 200 && d[1] < 60 && d[2] > 200; });
+    await until(page, () => /Photo/.test(document.querySelectorAll(".scene-tag")[1]?.textContent || ""), null, 15000).catch(() => {});
+    await page.waitForTimeout(500);
+    t.ok(await magenta(), "My photo puts your own picture on the scene");
     // Autosave: an edit, then the app is reloaded (as an iPhone does to apps left in the background).
     await page.fill('[data-line="2"]', "This line was edited before the app reloaded."); await page.dispatchEvent('[data-line="2"]', "input");
     await page.waitForTimeout(1200);
@@ -68,6 +80,8 @@ export default async function ({ t, newPage, BASE }) {
     await page.click('[data-resume="open"]'); await page.waitForSelector("#review:not(.hidden)", { timeout: 180000 });
     t.ok(offered && (await page.textContent("#review-title")) === title && (await page.inputValue('[data-line="2"]')) === "This line was edited before the app reloaded.",
       "after the app reloads, the script you were reviewing (with your edits) is offered back", JSON.stringify({ offered, title }));
+    await page.waitForTimeout(500);
+    t.ok(await magenta(), "…and your own photo comes back with it (kept on the phone)");
     // (The review stays open: the next section makes this video.)
   } catch (e) { t.ok(false, "section crashed: Features: review screen", String(e.message || e).split("\n")[0]); await page.goto(page.url()).catch(() => {}); }
 
@@ -296,17 +310,17 @@ export default async function ({ t, newPage, BASE }) {
   t.section("Features: What's new, storage, make-time, Library covers");
   try {
     // a returning user who last saw version 29 (the window shows the newest three updates)
-    await page.evaluate(() => localStorage.setItem("seenVersion", "41"));
+    await page.evaluate(() => localStorage.setItem("seenVersion", "42"));
     await page.reload(); await until(page, () => window.__ready, null, 60000);
     t.ok(await page.locator("#news-sheet").count() === 1 && /What's new/.test(await page.innerText("#news-sheet")), "What's new appears after an update");
     const news = await page.innerText("#news-sheet");
-    t.ok(/nothing lost/.test(news) && /moves with the video/.test(news) && !/made in one go/.test(news), "it lists only the updates since the last one seen", news.slice(0, 200));
+    t.ok(/photos kept/.test(news) && /nothing lost/.test(news) && !/Smoother cuts/.test(news), "it lists only the updates since the last one seen", news.slice(0, 200));
     await page.click('[data-news="close"]');
     t.ok(await page.locator("#news-sheet").count() === 0, "Got it closes it");
     await page.reload(); await until(page, () => window.__ready, null, 60000);
     t.ok(await page.locator("#news-sheet").count() === 0, "it stays closed after a restart");
     await page.click('nav [data-tab="about"]'); await until(page, () => /uses/.test(document.getElementById("storage-total").textContent), null, 20000);
-    t.ok(await page.locator("#storage-items .store-row").count() === 5 && /Natural voice[\s\S]*Classic voice[\s\S]*Ideas AI[\s\S]*Full-text[\s\S]*Saved illustrations/.test(await page.innerText("#storage-items")), "Storage card lists the voices, AI, research library and saved illustrations", await page.innerText("#storage-items"));
+    t.ok(await page.locator("#storage-items .store-row").count() === 6 && /Natural voice[\s\S]*Classic voice[\s\S]*Ideas AI[\s\S]*Full-text[\s\S]*Saved illustrations[\s\S]*Your photos/.test(await page.innerText("#storage-items")), "Storage card lists the voices, AI, research library, saved illustrations and your photos", await page.innerText("#storage-items"));
     await page.click("#art-more");
     await until(page, () => /Drew and saved|already saved|Stopped/.test(document.getElementById("art-note").textContent), null, 180000);
     const artNote = await page.innerText("#art-note");

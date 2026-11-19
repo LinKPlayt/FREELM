@@ -145,7 +145,8 @@ const GENERIC_HOOK = /explained in|here's what it actually means|really means, i
 
 // Applies the emotion layer to a finished script (once). Hand-written hooks (evergreen topics, ideas
 // you typed) are kept; only the generic "X, explained" openings are replaced.
-export function dramatize(script, { length = "standard", ctaKind = "follow" } = {}) {
+export function dramatize(script, opts = {}) {
+  const { length = "standard", ctaKind = "follow" } = opts;
   if (!script?.lines?.length || script.dramatized) return script;
   script.dramatized = true;
   script.hookKind = { quiz: "quiz", news: "news", market: "market" }[script.kind] || "written";
@@ -188,7 +189,9 @@ export function dramatize(script, { length = "standard", ctaKind = "follow" } = 
   // about 2.5 spoken words a second, less a little for the pauses between lines.
   const MAX_S = { short: 30, standard: 45, long: 60 }[length] || 45;
   const wordsIn = () => lines.reduce((n, l) => n + String(l.text || "").split(/\s+/).filter(Boolean).length, 0);
-  const fits = (text) => deep || wordsIn() + text.split(/\s+/).length <= MAX_S * 2.5 - lines.length * 0.6;
+  // Words a second: what this phone's narrator really manages (learned), a little under it to be safe.
+  const wps = Math.min(3.4, Math.max(2, (opts.speechRate || 2.75) * 0.92));
+  const fits = (text) => deep || wordsIn() + text.split(/\s+/).length <= MAX_S * wps - lines.length * 0.6;
   // 2c. A clear position before the takeaway ("Bottom line: …"), for subjects with a well-supported one.
   const stance = !script.person && !deep && script.kind !== "quiz" && length !== "short" && STANCES.find(([re]) => re.test(topicName))?.[1];
   if (stance && fits("Bottom line: " + stance) && !lines.some((l) => /^(bottom line|remember)\b/i.test(l.text))) {

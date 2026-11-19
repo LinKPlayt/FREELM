@@ -394,6 +394,18 @@ While you review a script, it's saved on the phone as you go (the script and you
 If the phone reloads the app (iPhones often do this to apps left in the background), **Pick up where you
 left off** appears at the top of Create. Making the video, Start over, New script or Save draft clears it.
 
+### Your photos
+
+Photos you choose with **My photo** are saved on the phone (JPEG, up to 1600 px) and come back with drafts,
+autosaved scripts and planned weeks. Ones no draft uses any more are removed automatically; About →
+Storage shows them. The review screen's **↶ Undo remove** puts back the last scene you removed.
+
+### Length estimates that learn
+
+After each video, the app records how fast the narrator actually spoke (words a second at normal speed,
+per voice type). The review screen's "about N seconds", the Make button's time estimate and the length
+check for the optional lines all use it.
+
 ### Video quality
 
 **High** (default) encodes 1080×1920 at 8 Mbps so fast motion stays crisp after social apps re-compress

@@ -122,6 +122,7 @@ async function voiceScript(script, say, base = 1.0) {
     script.lines.splice(drop, 1); clips.splice(drop, 1);
   }
   if (seconds(clips, script.lines) < MIN_S && speed > base * 0.92) { speed = base * 0.92; clips = await speak(script.lines); }
+  clips.speed = speed;                 // the speed it was really spoken at (for learning the narrator's pace)
   return clips;
 }
 
@@ -263,7 +264,35 @@ export async function userMusic(total) {
   for (let i = 0; i < n; i++) out[i] = (out[i] / (peak || 1)) * Math.min(1, i / fadeIn, (n - i) / fadeOut);
   return out;
 }
-export const USER_CACHE = "reelbot-user-v1", USER_MUSIC = "/user/music";
+export const USER_CACHE = "reelbot-user-v1", USER_MUSIC = "/user/music", USER_PHOTOS = "/user/photos/";
+
+// Photos you choose ("My photo") are kept on the phone, so drafts, autosaved scripts and planned weeks
+// bring them back instead of searching again. Stored as a JPEG up to 1600 px on the long side.
+export async function saveUserPhoto(file) {
+  const src = await createImageBitmap(file);
+  const k = Math.min(1, 1600 / Math.max(src.width, src.height)), w = Math.round(src.width * k), h = Math.round(src.height * k);
+  const c = document.createElement("canvas"); c.width = w; c.height = h; c.getContext("2d").drawImage(src, 0, 0, w, h); src.close?.();
+  const blob = await new Promise((res) => c.toBlob(res, "image/jpeg", 0.88));
+  const bitmap = await createImageBitmap(c); c.width = c.height = 0;
+  let path = null;
+  try {
+    path = `${USER_PHOTOS}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}.jpg`;
+    await (await caches.open(USER_CACHE)).put(new URL(path, location.href).href, new Response(blob, { headers: { "content-type": "image/jpeg" } }));
+  } catch { path = null; /* no storage: the photo is still used for this video */ }
+  return { bitmap, credit: "", title: "Your photo", photoPath: path };
+}
+export async function loadUserPhoto(path) {
+  const res = await (await caches.open(USER_CACHE)).match(new URL(path, location.href).href);
+  if (!res) return null;
+  return { bitmap: await createImageBitmap(await res.blob()), credit: "", title: "Your photo", photoPath: path, relevant: true };
+}
+// Removes your saved photos that no draft or autosaved script uses any more.
+export async function pruneUserPhotos(keep) {
+  try {
+    const cache = await caches.open(USER_CACHE), wanted = new Set([...keep].map((p) => new URL(p, location.href).pathname));
+    for (const req of await cache.keys()) { const p = new URL(req.url).pathname; if (p.includes(USER_PHOTOS) && !wanted.has(p)) await cache.delete(req); }
+  } catch { /* storage unavailable */ }
+}
 
 async function assembleAudio(clips, mood, lines, musicVolume = 1, spans = []) {
   const total = Math.max(seconds(clips, lines), MIN_S);
@@ -314,9 +343,17 @@ export function autoMood(script) {
 
 // Rough spoken length of a script, for the review screen.
 export function lengthRange(name) { return LENGTHS[name] || LENGTHS.standard; }
-export function estimateSeconds(lines, speed = 1.0) {
+// How fast each narrator really speaks (words a second at normal speed), learned from the videos you make.
+const RATE_KEY = (engine) => `speechRate-${engine === "fast" ? "fast" : "natural"}`;
+export function learnedRate(engine) { const v = Number(localStorage.getItem(RATE_KEY(engine))); return v > 1.2 && v < 5 ? v : 2.75; }
+function learnRate(engine, words, secondsSpoken, speed) {
+  if (!(words > 20) || !(secondsSpoken > 5)) return;
+  const now = words / secondsSpoken / (speed || 1), old = Number(localStorage.getItem(RATE_KEY(engine)));
+  try { localStorage.setItem(RATE_KEY(engine), String(old > 1.2 && old < 5 ? old * 0.6 + now * 0.4 : now)); } catch { /* private mode */ }
+}
+export function estimateSeconds(lines, speed = 1.0, engine = "natural") {
   const words = lines.reduce((n, l) => n + speakable(l.text).split(/\s+/).filter(Boolean).length, 0);
-  return words / (2.75 * speed) + lines.slice(0, -1).reduce((n, l) => n + gapAfter(l), 0) + TAIL;
+  return words / (learnedRate(engine) * speed) + lines.slice(0, -1).reduce((n, l) => n + gapAfter(l), 0) + TAIL;
 }
 
 // Step 1: research, write the script and find a photo for every scene.
@@ -491,6 +528,8 @@ export async function produceReel(plan, opts, ui) {
     clips = await voiceScript(script, stage(0.25, 0.55), opts.voiceSpeed || 1.0);
   }
   await releaseVoice();      // free the voice model's memory before the video is encoded
+  learnRate(voiceEngine(), script.lines.reduce((n, l) => n + speakable(l.text).split(/\s+/).filter(Boolean).length, 0),
+    clips.reduce((n, c) => n + c.length, 0) / voiceRate(), clips.speed);
   const { words, spans } = timings(script, clips);
   const mood = opts.music === "auto" ? autoMood(script) : opts.music;
   const { audio, total } = await assembleAudio(clips, mood, script.lines, opts.musicVolume ?? 1, spans);
@@ -650,6 +689,7 @@ export function decideVisual(line, i, topicTitle = "") {
 
 // Free the decoded photos (they hold a lot of memory on a phone).
 export function releasePlan(plan) {
+  plan.undo?.line?.asset?.bitmap?.close?.();
   for (const l of [...plan.script.lines, ...plan.script.extras]) {
     Promise.resolve(l.asset).then((a) => a?.bitmap?.close?.()).catch(() => {});
   }
@@ -662,7 +702,7 @@ export function draftFromPlan(plan, label) {
     source: l.source, hold: l.hold, items: l.items, num: l.num, label: l.label, section: l.section, tip: l.tip, claim: l.claim, pace: l.pace, payoff: l.payoff, artPick: l.artPick, question: l.question, optional: l.optional, stance: l.stance, quiz: l.quiz, answer: l.answer, role: l.role,
     check: l.check ? { status: l.check.status, kind: l.check.kind, sources: l.check.sources, live: l.check.live,
       evidence: (l.check.evidence || []).slice(0, 2).map((e) => ({ text: e.text, source: e.source, section: e.section })) } : undefined,
-    mine: l.asset && !l.asset.credit ? true : undefined });
+    mine: l.asset && !l.asset.credit ? true : undefined, photo: l.asset?.photoPath || undefined });
   const { script } = plan;
   return {
     id: "draft-" + Date.now(), saved: Date.now(), label: label || script.title, edited: plan.edited, generic: plan.generic,
@@ -674,7 +714,11 @@ export async function planFromDraft(draft, ui) {
   const script = { ...draft.script, lines: draft.script.lines.map((l) => ({ ...l })), extras: draft.script.extras.map((l) => ({ ...l })) };
   const shown = script.lines.filter((l) => l.kind === "media");
   let got = 0;
-  await Promise.all(shown.map(async (l) => { l.asset = await finder.find(l.query || draft.generic[0]).catch(() => null); ui?.say?.("Finding photos again…", ++got / shown.length); }));
+  // Your own photos come back from the phone; the rest are found again.
+  await Promise.all(shown.map(async (l) => {
+    l.asset = (l.photo && await loadUserPhoto(l.photo).catch(() => null)) || await finder.find(l.query || draft.generic[0]).catch(() => null);
+    ui?.say?.("Finding photos again…", ++got / shown.length);
+  }));
   for (const l of script.extras) if (l.kind === "media") l.asset = finder.find(l.query || draft.generic[0]).catch(() => null);
   return { script, finder, generic: draft.generic, edited: draft.edited };
 }

@@ -1,5 +1,5 @@
 // UI glue for the phone app.
-import { drawAlternatives, seriesTopics, appData, planReel, produceReel, releasePlan, estimateSeconds, lengthRange, draftFromPlan, planFromDraft, planFromIdea, decideVisual } from "./make.js";
+import { learnedRate, drawAlternatives, seriesTopics, appData, planReel, produceReel, releasePlan, estimateSeconds, lengthRange, draftFromPlan, planFromDraft, planFromIdea, decideVisual } from "./make.js";
 import { StatBg, IllusBg } from "./graphics.js";
 import { describeStat } from "./visuals.js";
 import { hookOptions, coach } from "./extras.js";
@@ -13,7 +13,7 @@ import { listReels, saveReel, deleteReel, clearReels, listDrafts, saveDraft, del
 import { platformCaptions, setPronunciations, visualMatch } from "./script.js";
 import { FIELDS, getResult, saveResult, insights } from "./results.js";
 import { APP_VERSION, UPDATES } from "./version.js";
-import { USER_CACHE, USER_MUSIC, userMusic } from "./make.js";
+import { USER_CACHE, USER_MUSIC, userMusic, saveUserPhoto, pruneUserPhotos } from "./make.js";
 import { encoderInfo, renderReel, loadFonts, previewFrame } from "./render.js";
 import { SR, generateMusic } from "./music.js";
 
@@ -59,7 +59,8 @@ async function drawStylePreview() {
     const handle = cleanHandle($("handle").value);
     const words = ["Fifty", "percent", "goes"].map((t, i) => ({ text: t, start: i * 0.4, end: i * 0.4 + 0.4 }));
     previewFrame({ title: "Your reel title here", brand: $("brand").value.trim() || "Money Minute", accent: state.accent,
-      captionStyle: state.capStyle, captionPos: state.capPos, artStyle: state.art, quality: state.quality, handle, audio: new Float32Array(1), hookTitle: false,
+      captionStyle: state.capStyle, captionPos: state.capPos, artStyle: state.art, quality: state.quality,
+    speechRate: learnedRate(voiceOpts(state.voice).engine) * (SPEEDS[state.speed] || 1), handle, audio: new Float32Array(1), hookTitle: false,
       scenes: [{ start: 0, end: 3, kind: "image", bitmap: sampleBitmap, stat: $("pops").checked ? "50%" : null }], words }, $("style-preview"), 0.55);
   } catch (e) { console.warn("preview", e); }
 }
@@ -482,7 +483,7 @@ async function produce() {
   unlockAudio();   // first thing, while we're still inside the tap
   state.busy = true;
   screen("job"); $("job-title").textContent = "Making your reel…"; $("preview").classList.remove("hidden");
-  jobStart(makeRate() * (state.plan ? estimateSeconds(state.plan.script.lines, SPEEDS[state.speed] || 1) : 0));
+  jobStart(makeRate() * (state.plan ? estimateSeconds(state.plan.script.lines, SPEEDS[state.speed] || 1, voiceOpts(state.voice).engine) : 0));
   say("Starting…", 0);
   let wake = null; try { wake = await navigator.wakeLock?.request("screen"); } catch { /* not supported */ }
   const t0 = performance.now();
@@ -667,7 +668,7 @@ function drawThumb(cv, asset) {
 }
 function updateEstimate() {
   const plan = state.plan; if (!plan) return;
-  const secs = Math.round(estimateSeconds(plan.script.lines, SPEEDS[state.speed] || 1));
+  const secs = Math.round(estimateSeconds(plan.script.lines, SPEEDS[state.speed] || 1, voiceOpts(state.voice).engine));
   const el = $("estimate");
   const spare = plan.edited ? 0 : plan.script.extras.length;
   const [lo, hi] = lengthRange(state.length);
@@ -764,12 +765,13 @@ function showReview() {
     else if (v.type === "stat" || v.type === "illus") drawGenerated(cv, v, l, recentArt);
   });
   updateEstimate();
-  const rate = makeRate(), secs = estimateSeconds(script.lines, SPEEDS[state.speed] || 1);
+  const rate = makeRate(), secs = estimateSeconds(script.lines, SPEEDS[state.speed] || 1, voiceOpts(state.voice).engine);
   $("produce").textContent = rate ? `Make the video (about ${fmtDuration(rate * secs)})` : "Make the video";
   // A series follows a topic into related ones; news, market recaps and quizzes don't have one.
   $("series").classList.toggle("hidden", ["news", "market", "quiz"].includes(script.kind));
   screen("review");
   autosave(true); $("resume")?.classList.add("hidden");
+  $("undo-remove").classList.toggle("hidden", !state.plan.undo);
   warmVoice();
 }
 // While you review, load the narrator's voice in the background (only if it was downloaded before),
@@ -849,16 +851,18 @@ $("scenes").addEventListener("click", async (e) => {
   }
   if (b.dataset.mine != null) { state.pickFor = +b.dataset.mine; $("photo-pick").value = ""; $("photo-pick").click(); }
   if (b.dataset.del != null) {
-    const [gone] = plan.script.lines.splice(+b.dataset.del, 1);
-    gone.asset?.bitmap?.close?.(); plan.edited = true; showReview();
+    // The removed scene (and its photo) is kept until the next removal, so it can be put back.
+    plan.undo?.line.asset?.bitmap?.close?.();
+    const at = +b.dataset.del, [gone] = plan.script.lines.splice(at, 1);
+    plan.undo = { line: gone, at }; plan.edited = true; showReview();
   }
 });
 $("photo-pick").addEventListener("change", async () => {
   const file = $("photo-pick").files[0], i = state.pickFor; if (!file || i == null) return;
-  try {
-    const bitmap = await createImageBitmap(file);
-    setAsset(i, Promise.resolve({ bitmap, credit: "", title: "Your photo" }), "Loading…");
-  } catch { toast("That photo couldn't be opened. Try a JPEG or PNG."); }
+  const btn = document.querySelector(`[data-mine="${i}"]`); if (btn) btn.textContent = "Saving…";
+  const asset = await saveUserPhoto(file).catch(() => null);
+  if (!asset) { if (btn) btn.textContent = "My photo"; return toast("That photo couldn't be opened. Try a JPEG or PNG."); }
+  setAsset(i, Promise.resolve(asset), "Loading…");
 });
 $("add-line").addEventListener("click", () => {
   const plan = state.plan, lines = plan.script.lines;
@@ -893,6 +897,11 @@ $("save-draft").addEventListener("click", () => {
   const ok = saveDraft(d);
   if (ok) { clearTimeout(autosaveTimer); try { localStorage.removeItem(AUTOSAVE); } catch { /* ignore */ } }   // it's safe in Drafts now
   toast(ok ? "Draft saved. Find it in the Library." : "Couldn't save the draft (storage full?)");
+});
+$("undo-remove").addEventListener("click", () => {
+  const plan = state.plan; if (!plan?.undo) return;
+  plan.script.lines.splice(Math.min(plan.undo.at, plan.script.lines.length), 0, plan.undo.line);
+  plan.undo = null; showReview(); toast("Scene put back");
 });
 $("reroll").addEventListener("click", () => { if (state.plan) releasePlan(state.plan); state.plan = null; clearAutosave(); start(); });
 $("cancel-review").addEventListener("click", () => { if (state.plan) releasePlan(state.plan); state.plan = null; closeAudio(); clearAutosave(); screen("form"); });
@@ -1034,6 +1043,7 @@ const STORAGE_ITEMS = [
   ["Ideas AI", /\/SmolLM2-135M-Instruct\//, "Download it again from the Ideas tab when you want it."],
   ["Full-text research library", /\/ai\/data\/depth\//, "Deep research downloads article text again as needed."],
   ["Saved illustrations", /\/user\/art\//, "They're drawn again the next time a video needs them."],
+  ["Your photos", /\/user\/photos\//, "Drafts that used them will find new photos instead."],
 ];
 // Draws a batch of illustrations for your niche ahead of time, in your style and colour, and saves them.
 async function drawMoreArt() {
@@ -1059,7 +1069,7 @@ async function renderStorage() {
     $("storage-items").innerHTML = STORAGE_ITEMS.map(([label, re, note], i) => {
       const n = keys.filter(([, r]) => re.test(new URL(r.url).pathname)).length;
       const art = label === "Saved illustrations", reuses = art ? savedArt().reduce((s, e) => s + Math.max(0, (e.uses || 1) - 1), 0) : 0;
-      const status = art ? (n ? `${n} drawn on this phone${reuses ? `, reused ${reuses} time${reuses === 1 ? "" : "s"}` : ""}` : "None yet: they're drawn as you make videos") : n ? "Saved on this phone" : "Not downloaded";
+      const status = art ? (n ? `${n} drawn on this phone${reuses ? `, reused ${reuses} time${reuses === 1 ? "" : "s"}` : ""}` : "None yet: they're drawn as you make videos") : label === "Your photos" ? (n ? `${n} photo${n === 1 ? "" : "s"} kept for your drafts` : "None yet: photos you choose with My photo are kept here") : n ? "Saved on this phone" : "Not downloaded";
       return `<div class="store-row"><div>${label}<small class="meta" style="display:block">${status}</small></div>${n ? `<button class="btn" data-free="${i}" style="flex:none">Delete</button>` : ""}</div>`;
     }).join("");
     // The newest saved illustrations, small.
@@ -1215,6 +1225,12 @@ async function init() {
   $("version-line").textContent = `Version ${APP_VERSION} · ${UPDATES[0].title}`;
   $("whats-new").addEventListener("click", () => showWhatsNew(APP_VERSION - 3));
   $("art-more").addEventListener("click", drawMoreArt);
+  // Tidy up: your saved photos that no draft or autosaved script uses any more.
+  setTimeout(() => {
+    const keep = [...listDrafts(), pendingAutosave()].filter(Boolean).flatMap((d) => d.script.lines.map((l) => l.photo).filter(Boolean));
+    if (state.plan) keep.push(...state.plan.script.lines.map((l) => l.asset?.photoPath).filter(Boolean));
+    pruneUserPhotos(keep);
+  }, 8000);
   renderResume();
   $("resume").addEventListener("click", async (e) => {
     const b = e.target.closest("[data-resume]"), d = pendingAutosave(); if (!b || !d || state.busy) return;
