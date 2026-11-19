@@ -387,6 +387,9 @@ export function hookOptions(script) {
 // a fast hook, readable lines, a concrete number, varied visuals, sources and a clear call to action.
 export function coach(lines, { estimate, range, visuals = [] }) {
   const media = lines.filter((l) => l.kind === "media");
+  // Tips fit the format: a quiz's content is its questions and its visuals are the quiz cards; a market
+  // recap's numbers are its charts.
+  const quiz = lines.filter((l) => l.kind === "quiz").length, charts = lines.some((l) => l.kind === "chart");
   const hook = lines[0]?.text || "";
   const checks = [];
   const add = (ok, points, tip) => checks.push({ ok, points, tip });
@@ -396,10 +399,11 @@ export function coach(lines, { estimate, range, visuals = [] }) {
   add(estimate >= range[0] - 2 && estimate <= range[1] + 2, 14, `Aim for ${range[0]}–${range[1]} seconds (now about ${Math.round(estimate)}).`);
   const long = media.filter((l) => l.text.split(/\s+/).length > 26);
   add(!long.length, 10, `Split long lines: ${long.length} line${long.length === 1 ? " is" : "s are"} over 26 words, which is hard to follow on screen.`);
-  add(media.some((l) => analyzeLine(l.text).stat), 12, "Add a concrete number (a percentage, amount or timeframe). Numbers make charts and stick in memory.");
+  add(quiz || charts || media.some((l) => analyzeLine(l.text).stat), 12, "Add a concrete number (a percentage, amount or timeframe). Numbers make charts and stick in memory.");
   const kinds = new Set(visuals.filter((v) => v && v.type).map((v) => v.type));
-  add(kinds.size >= 2, 8, "Mix visuals: switch a scene to a Chart or Picture so it isn't all one style.");
-  add(media.length >= 3, 8, "Add another point (+ Add a line) so the video delivers enough value.");
+  add(quiz || charts || kinds.size >= 2, 8, "Mix visuals: switch a scene to a Chart or Picture so it isn't all one style.");
+  if (quiz) add(quiz >= 2, 8, "Add another question so the quiz feels like a game.");
+  else add(media.length >= 3, 8, "Add another point (+ Add a line) so the video delivers enough value.");
   // Accuracy: every fact should be backed by a source (see the fact check badges).
   const facts = lines.map((l) => l.check).filter((c) => c && c.kind === "fact");
   const shaky = facts.filter((c) => c.status === "unverified" || c.status === "conflict").length;

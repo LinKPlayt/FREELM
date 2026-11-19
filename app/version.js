@@ -1,9 +1,19 @@
 // The app's version and its update notes, shown once in a "What's new" window after each update.
 // When you deploy: bump APP_VERSION, add an entry at the top of UPDATES, and set the same number in
 // sw.js (VERSION = "reelbot-v<APP_VERSION>"). A test checks the two match.
-export const APP_VERSION = 48;
+export const APP_VERSION = 49;
 
 export const UPDATES = [
+  { version: 49, title: "Videos that make sense, and look the part", items: [
+    "Market recaps open on the day's board (every index with its price and today's move in red or green) and lead with what really moved.",
+    "Charts show the same month the voice talks about, with Today and This month pills that pop in as they're said, so the numbers always agree.",
+    "Losses are red and gains are green, in captions, big words and number pops, whatever your brand colour.",
+    "Quizzes look like real quizzes: TRUE and FALSE buttons to play along, progress dots, and the right answer lit up. They fit the length you chose (2 questions for Standard, 3 for Long).",
+    "The bottom line and the question for the comments fill the screen with big words and a graphic. Charts and numbers drift slowly closer instead of sitting still, and a chart the next line keeps talking about carries on instead of redrawing.",
+    "A new ending: a button for your call to action (Follow, Save, Share or Comment) that gets tapped, under your brand and @handle.",
+    "Everything important stays clear of TikTok, Reels and Shorts buttons and captions.",
+    "Smarter checks: an amount in a book title isn't made into a money chart, timelines say how long ago, and the reel coach gives tips that fit quizzes and market recaps.",
+  ] },
   { version: 48, title: "A new address: linkplayt.github.io/ReelBot", items: [
     "ReelBot now lives at linkplayt.github.io/ReelBot, a link that matches its name. Add it to your Home Screen from here.",
     "Used ReelBot in this browser before? Your videos, drafts and settings are already here, and the voices and AI models you downloaded are reused instead of downloaded again.",

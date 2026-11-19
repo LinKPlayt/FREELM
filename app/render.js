@@ -1,7 +1,7 @@
 // Draws every frame on a canvas and encodes the MP4 on the device.
 //   Preferred: WebCodecs (H.264 + AAC) muxed with mp4-muxer: exact frames, usually faster than real time.
 //   Fallback:  MediaRecorder, which records the canvas in real time.
-import { emphasisOf } from "./hook.js";
+import { emphasisOf, directionsOf } from "./hook.js";
 import { SR } from "./music.js";
 import { writeMov, pcm16Stereo } from "./mov.js";
 import { StatBg, IllusBg, SectionBg, RecapBg, drawSource } from "./graphics.js";
@@ -22,6 +22,13 @@ export async function loadFonts() {
 function canvas(w, h) { const c = document.createElement("canvas"); c.width = Math.round(w); c.height = Math.round(h); return c; }
 function hexToRgb(hex) { const n = parseInt(hex.replace("#", ""), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
 const rgba = (c, a = 1) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+const GAIN = [74, 222, 128], LOSS = [255, 92, 92];
+// Per word: the meaning colour (1 gain, -1 loss, 0 none) and whether it comes from a money move, which wins over the highlight.
+function feelings(words) {
+  const texts = words.map((w) => w.text), dir = directionsOf(texts);
+  // A number that isn't a move ("7,324", "1947", "$5,000") pops in the brand colour: emphasis without implying good or bad.
+  return texts.map((t, i) => (dir[i] ? { feel: dir[i], move: true } : { feel: /^\$?\d/.test(t.replace(/^[^\w$]+/, "")) ? 2 : emphasisOf(t), move: false }));
+}
 
 /* ------------------------------------------------------------------ scene backgrounds */
 
@@ -70,16 +77,24 @@ class ImageBg {
   dispose() { this.base.width = this.base.height = 0; }
 }
 
+// A live market chart. It draws the same month the voice talks about ("down 5.0% this month"), so the line,
+// its colour and its label always agree with what's said; today's move and the month's pop up as pills when
+// they're spoken.
+const pctTxt = (v) => (Math.abs(v) < 0.05 ? "FLAT" : `${v >= 0 ? "▲" : "▼"} ${Math.abs(v).toFixed(1)}%`);
 class ChartBg {
-  constructor(chart) {
+  constructor(chart, words = []) {
     let values = chart?.values;
+    if (values && values.length > 23) values = values.slice(-22);            // the last month: what "this month" means
     if (!values) { values = []; let v = 100; for (let i = 0; i < 60; i++) { v *= 1 + 0.004 + (Math.random() - 0.5) * 0.05; values.push(v); } }
-    const up = values[values.length - 1] >= values[0];
-    this.color = up ? [46, 213, 115] : [255, 71, 87];
+    this.monthPct = (values[values.length - 1] / values[0] - 1) * 100;
+    this.color = this.monthPct >= 0 ? [46, 213, 115] : [255, 71, 87];
+    this.chart = chart; this.t = 0;
+    const said = (re) => words.find((w) => re.test(w.text.replace(/[^a-z]/gi, "")))?.start ?? null;
+    this.dayAt = said(/^(day|today|todays)$/i); this.monthAt = said(/^month$/i);
     const bg = canvas(W, H), c = bg.getContext("2d");
     const g = c.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "rgb(8,12,28)"); g.addColorStop(1, "rgb(18,26,58)");
     c.fillStyle = g; c.fillRect(0, 0, W, H);
-    const [x0, y0, x1, y1] = (this.box = [90, 640, W - 90, 1180]);
+    const [x0, y0, x1, y1] = (this.box = [90, 640, W - 170, 1150]);   // today's end stays clear of the side buttons
     c.strokeStyle = "rgba(255,255,255,0.09)"; c.lineWidth = 2;
     for (let i = 0; i < 6; i++) { const y = y0 + (y1 - y0) * i / 5; c.beginPath(); c.moveTo(x0, y); c.lineTo(x1, y); c.stroke(); }
     if (chart) {
@@ -89,17 +104,16 @@ class ChartBg {
       let price = chart.is_yield ? `${last.toFixed(2)}%` : last.toLocaleString("en-US", { maximumFractionDigits: last >= 1000 ? 0 : 2, minimumFractionDigits: last >= 1000 ? 0 : 2 });
       if (["BTC-USD", "ETH-USD", "GC=F", "CL=F"].includes(chart.symbol)) price = "$" + price;
       c.fillStyle = "#fff"; c.font = "104px Anton"; c.fillText(price, W / 2, 548);
-      const pc = chart.period_pct;
-      c.fillStyle = rgba(this.color); c.font = "800 46px Montserrat";
-      c.fillText(`${pc >= 0 ? "▲" : "▼"} ${Math.abs(pc).toFixed(1)}%  ·  3 MONTHS`, W / 2, 1235);
+      c.fillStyle = "rgba(255,255,255,0.45)"; c.font = "800 30px Montserrat"; c.fillText("1 MONTH AGO", x0 + 110, y1 + 38); c.fillText("TODAY", x1 - 60, y1 + 38);
     }
     const lo = Math.min(...values), span = (Math.max(...values) - lo) || 1;
     this.points = values.map((v, i) => [x0 + (x1 - x0) * i / (values.length - 1), y1 - (y1 - y0) * (v - lo) / span]);
     this.bg = bg;
   }
+  setTime(t) { this.t = t; }
   draw(ctx, p) {
     ctx.drawImage(this.bg, 0, 0);
-    const n = Math.max(2, Math.floor(this.points.length * ease(Math.min(1, p / 0.75))));
+    const n = Math.max(2, Math.floor(this.points.length * ease(Math.min(1, p / 0.6))));
     const pts = this.points.slice(0, n), yb = this.box[3];
     const path = () => { ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); };
     path(); ctx.lineTo(pts[n - 1][0], yb); ctx.lineTo(pts[0][0], yb); ctx.closePath(); ctx.fillStyle = rgba(this.color, 0.16); ctx.fill();
@@ -108,6 +122,66 @@ class ChartBg {
     path(); ctx.strokeStyle = rgba(this.color); ctx.lineWidth = 8; ctx.stroke();
     const [x, y] = pts[n - 1], r = 14 + 4 * Math.sin(p * 20);
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fillStyle = "#fff"; ctx.fill();
+    if (!this.chart) return;
+    // Today's move and the month's, each in its own colour, popping in when the voice gets to it.
+    const pills = [["TODAY", this.chart.day_pct, this.dayAt, 0.35]];
+    if (!this.chart.is_yield) pills.push(["THIS MONTH", this.monthPct, this.monthAt, 0.6]);
+    const pw = 380, gap = 30, x0 = (this.box[0] + this.box[2]) / 2 - (pills.length * pw + (pills.length - 1) * gap) / 2;
+    pills.forEach(([label, v, at, fallback], i) => {
+      const age = at != null ? this.t - at + 0.1 : (p - fallback) * 8;
+      if (age <= 0) return;
+      const k = Math.min(1, age / 0.25), s = 0.6 + 0.4 * ease(k) + (k < 1 ? 0.12 * Math.sin(Math.PI * k) : 0);
+      const col = Math.abs(v) < 0.05 ? [235, 238, 245] : v >= 0 ? GAIN : LOSS;
+      ctx.save(); ctx.globalAlpha = Math.min(1, age / 0.12); ctx.translate(x0 + i * (pw + gap) + pw / 2, 1272); ctx.scale(s, s);
+      ctx.fillStyle = "rgba(10,12,24,0.88)"; ctx.beginPath(); ctx.roundRect(-pw / 2, -56, pw, 112, 28); ctx.fill();
+      ctx.lineWidth = 5; ctx.strokeStyle = rgba(col, 0.85); ctx.stroke();
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillStyle = "rgba(255,255,255,0.7)"; ctx.font = "800 28px Montserrat"; ctx.fillText(label, 0, -27);
+      ctx.fillStyle = rgba(col); ctx.font = "62px Anton"; ctx.fillText(pctTxt(v), 0, 20);
+      ctx.restore();
+    });
+  }
+  dispose() { this.bg.width = this.bg.height = 0; }
+}
+
+// The day's market board: each index with its price, a month sparkline and today's move in red or green,
+// sliding in one by one. The opening of a market recap shows the whole day at a glance.
+class BoardBg {
+  constructor(markets, accent) {
+    this.m = (markets || []).slice(0, 4); this.accent = accent; this.t = 0;
+    const bg = canvas(W, H), c = bg.getContext("2d");
+    const g = c.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "rgb(8,12,28)"); g.addColorStop(1, "rgb(18,26,58)");
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    c.strokeStyle = "rgba(255,255,255,0.05)"; c.lineWidth = 2;
+    for (let x = 60; x < W; x += 120) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, H); c.stroke(); }
+    this.bg = bg;
+  }
+  draw(ctx, p) {
+    ctx.drawImage(this.bg, 0, 0);
+    ctx.save(); ctx.textBaseline = "middle";
+    ctx.textAlign = "center"; ctx.font = "800 44px Montserrat"; ctx.fillStyle = rgba(this.accent);
+    ctx.globalAlpha = Math.min(1, p * 8); ctx.fillText("TODAY'S MARKETS", W / 2, 560); ctx.globalAlpha = 1;
+    const rowH = 180, gap = 26, y0 = 650;
+    this.m.forEach((s, i) => {
+      const k = Math.min(1, Math.max(0, (p - 0.04 - i * 0.07) / 0.12)); if (k <= 0) return;
+      const y = y0 + i * (rowH + gap), off = (1 - ease(k)) * 260, v = s.day_pct, col = Math.abs(v) < 0.05 ? [235, 238, 245] : v >= 0 ? GAIN : LOSS;
+      ctx.save(); ctx.globalAlpha = k; ctx.translate(off, 0);
+      ctx.fillStyle = "rgba(255,255,255,0.06)"; ctx.beginPath(); ctx.roundRect(70, y, W - 220, rowH, 28); ctx.fill();
+      ctx.fillStyle = rgba(col); ctx.beginPath(); ctx.roundRect(70, y, 12, rowH, 6); ctx.fill();
+      ctx.textAlign = "left"; ctx.fillStyle = "#fff"; ctx.font = "800 48px Montserrat"; ctx.fillText(s.name.toUpperCase(), 120, y + 58);
+      const last = s.last, price = s.is_yield ? `${last.toFixed(2)}%` : (["BTC-USD", "ETH-USD", "GC=F", "CL=F"].includes(s.symbol) ? "$" : "") + last.toLocaleString("en-US", { maximumFractionDigits: last >= 1000 ? 0 : 2, minimumFractionDigits: last >= 1000 ? 0 : 2 });
+      ctx.fillStyle = "rgba(255,255,255,0.7)"; ctx.font = "56px Anton"; ctx.fillText(price, 120, y + 128);
+      // the month in a sparkline
+      const vals = (s.values || []).slice(-22);
+      if (vals.length > 2) {
+        const lo = Math.min(...vals), sp = (Math.max(...vals) - lo) || 1, sx = 450, sw = 210, sy = y + 40, sh = 100, n = Math.max(2, Math.round(vals.length * Math.min(1, k * 1.2)));
+        ctx.beginPath(); vals.slice(0, n).forEach((q, j) => { const x = sx + sw * j / (vals.length - 1), yy = sy + sh - sh * (q - lo) / sp; j ? ctx.lineTo(x, yy) : ctx.moveTo(x, yy); });
+        ctx.lineWidth = 6; ctx.lineJoin = ctx.lineCap = "round"; ctx.strokeStyle = rgba(vals.at(-1) >= vals[0] ? [46, 213, 115] : [255, 71, 87], 0.9); ctx.stroke();
+      }
+      ctx.textAlign = "right"; ctx.fillStyle = rgba(col); ctx.font = "84px Anton"; ctx.fillText(pctTxt(v), W - 190, y + rowH / 2 + 4);
+      ctx.restore();
+    });
+    ctx.restore();
   }
   dispose() { this.bg.width = this.bg.height = 0; }
 }
@@ -155,27 +229,45 @@ class TypeBg {
 // Big words that appear as they're spoken: for the moments that matter (the bottom line, the question
 // for the comments, a quiz question). The captions are hidden on these scenes: the words ARE the scene.
 class KineticBg {
-  constructor(words, accent, seed = 0, { top = 900, size = 108, label = "", transparent = false } = {}) {
-    this.words = words; this.accent = accent; this.t = 0; this.label = label; this.transparent = transparent;
+  // Big words, spoken one by one. As a scene of its own (the bottom line, the question for the comments) the
+  // block sits in the middle of the frame, as big as fits, over softly drifting light, with a graphic for what
+  // it is: a quote mark for the bottom line, a speech bubble for the question. Given "top", it's the hook
+  // title drawn over the opening picture instead.
+  constructor(words, accent, seed = 0, { top = null, size = 132, label = "", transparent = false, icon = "", center = 1040 } = {}) {
+    this.words = words; this.accent = accent; this.t = 0; this.label = label; this.transparent = transparent; this.icon = icon; this.seed = seed;
     const bg = canvas(W, H), c = bg.getContext("2d");
     const g = c.createLinearGradient(0, 0, W, H); g.addColorStop(0, "rgb(12,14,32)"); g.addColorStop(1, rgba(accent.map((v) => Math.round(v * 0.28))));
     c.fillStyle = g; c.fillRect(0, 0, W, H);
-    for (let i = 0; i < 6; i++) { c.beginPath(); c.arc((seed * 197 + i * 331) % W, 300 + ((seed * 89 + i * 263) % 1300), 140 + (i * 53) % 200, 0, Math.PI * 2); c.fillStyle = rgba(accent, 0.05 + (i % 3) * 0.02); c.fill(); }
     this.bg = bg;
-    // Lay the words out once: as big as fits in at most 6 lines.
+    this.blobs = [0, 1, 2, 3, 4, 5].map((i) => ({ x: (seed * 197 + i * 331) % W, y: 300 + ((seed * 89 + i * 263) % 1300), r: 140 + (i * 53) % 200, a: 0.05 + (i % 3) * 0.02, sp: 0.5 + (i % 3) * 0.35 }));
+    // Lay the words out once: as big as fits in five lines (six for a long line).
     const m = canvas(10, 10).getContext("2d"), texts = words.map((w) => w.text.replace(/["“”]/g, "").toUpperCase());
+    const maxRows = texts.length > 12 ? 6 : 5;
     for (this.size = size; ; this.size -= 6) {
       m.font = `${this.size}px Anton`; const gap = this.size * 0.3, rows = [[]]; let x = 0;
-      texts.forEach((tx, i) => { const w = m.measureText(tx).width; if (x + w > W - 150 && rows.at(-1).length) { rows.push([]); x = 0; } rows.at(-1).push([i, tx, w]); x += w + gap; });
-      if (rows.length <= 5 || this.size <= 56) { this.rows = rows; this.gap = gap; break; }
+      texts.forEach((tx, i) => { const w = m.measureText(tx).width; if (x + w > W - 250 && rows.at(-1).length) { rows.push([]); x = 0; } rows.at(-1).push([i, tx, w]); x += w + gap; });
+      if (rows.length <= maxRows || this.size <= 56) { this.rows = rows; this.gap = gap; break; }
     }
-    this.top = top - (this.rows.length - 1) * this.size * 0.6;
-    this.feel = words.map((w) => emphasisOf(w.text));
+    const n = this.rows.length;
+    this.top = top != null ? top - (n - 1) * this.size * 0.6 : center - (n - 1) * this.size * 0.6 + (icon ? 70 : 0);
+    // The graphic above a tall block must clear the video's title: move the block down instead.
+    if (icon && top == null) this.top += Math.max(0, 470 - (this.top - this.size * 0.6 - (label ? 230 : 150)));
+    this.feel = feelings(words);
+    this.first = words.length ? words[0].start : 0;
   }
   setTime(t) { this.t = t; }
   draw(ctx, p) {
-    if (!this.transparent) ctx.drawImage(this.bg, 0, 0);
-    if (this.label) { ctx.save(); ctx.font = "800 46px Montserrat"; ctx.textAlign = "center"; ctx.fillStyle = rgba(this.accent); ctx.fillText(this.label, W / 2, this.top - this.size * 1.1); ctx.restore(); }
+    if (!this.transparent) {
+      ctx.drawImage(this.bg, 0, 0);
+      // Light drifts slowly behind the words, so the screen is never a still.
+      for (const b of this.blobs) {
+        const x = b.x + Math.sin(this.t * 0.35 * b.sp + b.r) * 70, y = b.y + Math.cos(this.t * 0.3 * b.sp + b.x) * 50;
+        ctx.beginPath(); ctx.arc(x, y, b.r * (1 + 0.06 * Math.sin(this.t * 0.8 + b.y)), 0, Math.PI * 2); ctx.fillStyle = rgba(this.accent, b.a); ctx.fill();
+      }
+    }
+    const blockTop = this.top - this.size * 0.6;
+    if (this.icon) this.drawIcon(ctx, blockTop - (this.label ? 230 : 150));
+    if (this.label) { ctx.save(); ctx.font = "800 46px Montserrat"; ctx.textAlign = "center"; ctx.fillStyle = rgba(this.accent); ctx.fillText(this.label, W / 2, blockTop - (this.icon ? 30 : this.size * 0.5)); ctx.restore(); }
     ctx.save(); ctx.font = `${this.size}px Anton`; ctx.textBaseline = "middle"; ctx.textAlign = "left"; ctx.lineJoin = "round";
     this.rows.forEach((row, r) => {
       const total = row.reduce((n, [, , w]) => n + w, 0) + this.gap * (row.length - 1);
@@ -184,58 +276,111 @@ class KineticBg {
         const wd = this.words[i], age = this.t - wd.start;
         if (age < -0.02) { x += w + this.gap; continue; }                     // not said yet
         const k = Math.min(1, Math.max(0, age / 0.14)), s = 0.6 + 0.4 * ease(k) + (k < 1 ? 0.12 * Math.sin(Math.PI * k) : 0);
-        const on = this.t >= wd.start && this.t < wd.end + 0.05;
+        const on = this.t >= wd.start && this.t < wd.end + 0.05, { feel, move } = this.feel[i];
+        const tone = feel === 2 ? rgba(this.accent) : feel > 0 ? rgba(GAIN) : feel < 0 ? rgba(LOSS) : "#fff";
         ctx.save(); ctx.globalAlpha = Math.min(1, 0.2 + k); ctx.translate(x + w / 2, y); ctx.scale(s, s);
         ctx.lineWidth = 14; ctx.strokeStyle = "rgba(0,0,0,0.85)"; ctx.strokeText(tx, -w / 2, 0);
-        ctx.fillStyle = on ? rgba(this.accent) : this.feel[i] > 0 ? "rgb(74,222,128)" : this.feel[i] < 0 ? "rgb(255,92,92)" : "#fff";
+        ctx.fillStyle = on && !move ? rgba(this.accent) : tone;
         ctx.fillText(tx, -w / 2, 0); ctx.restore();
         x += w + this.gap;
       }
     });
     ctx.restore();
   }
+  // A quote mark (the bottom line) or a speech bubble (the question for the comments), popping in with the first word.
+  drawIcon(ctx, y) {
+    const age = this.t - this.first + 0.15; if (age <= 0) return;
+    const k = Math.min(1, age / 0.3), s = 0.5 + 0.5 * ease(k) + (k < 1 ? 0.15 * Math.sin(Math.PI * k) : 0), bob = Math.sin(this.t * 2.2) * 6;
+    ctx.save(); ctx.globalAlpha = Math.min(1, age / 0.15); ctx.translate(W / 2, y + bob); ctx.scale(s, s);
+    if (this.icon === "comment") {
+      ctx.fillStyle = rgba(this.accent); ctx.beginPath(); ctx.roundRect(-150, -95, 300, 170, 50); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(-70, 70); ctx.lineTo(-110, 130); ctx.lineTo(-10, 72); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "rgb(14,14,22)"; for (const dx of [-62, 0, 62]) { ctx.beginPath(); ctx.arc(dx, -10, 20, 0, Math.PI * 2); ctx.fill(); }
+    } else {
+      ctx.fillStyle = rgba(this.accent); ctx.font = "300px Anton"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("“", 0, 150);
+    }
+    ctx.restore();
+  }
   dispose() { this.bg.width = this.bg.height = 0; }
 }
 
-// A quiz question: "QUESTION 1 OF 3", "TRUE OR FALSE?", the statement word by word, then a 3-2-1 countdown.
+// Two answer buttons, TRUE and FALSE, like a real quiz: the viewer picks one while the clock runs, and the
+// answer scene lights up the right one.
+// (Kept clear of the platforms' own buttons: TikTok, Reels and Shorts put likes and shares down the right
+// edge and the caption along the bottom, so the quiz buttons sit above that and away from the right side.)
+function drawAnswerButtons(ctx, t, { appearAt = 0, pick = null, pulse = false, y = 1545 }) {
+  const age = t - appearAt; if (age < 0) return;
+  [[true, W / 2 - 205], [false, W / 2 + 175]].forEach(([val, x], i) => {
+    const k = Math.min(1, Math.max(0, (age - i * 0.08) / 0.3)); if (k <= 0) return;
+    const right = pick === val, wrong = pick !== null && pick !== val, col = val ? GAIN : LOSS;
+    const beat = pulse ? 1 + 0.035 * Math.max(0, Math.sin(t * 7 + (val ? 0 : Math.PI))) : 1;
+    const s = (0.7 + 0.3 * ease(k)) * beat * (right ? 1.08 : 1);
+    ctx.save(); ctx.globalAlpha = k * (wrong ? 0.35 : 1); ctx.translate(x, y + (1 - ease(k)) * 60); ctx.scale(s, s);
+    ctx.shadowColor = "rgba(0,0,0,0.5)"; ctx.shadowBlur = 30; ctx.shadowOffsetY = 10;
+    ctx.fillStyle = right ? rgba(col) : "rgba(14,16,30,0.82)"; ctx.beginPath(); ctx.roundRect(-170, -74, 340, 148, 40); ctx.fill();
+    ctx.shadowColor = "transparent"; ctx.lineWidth = 8; ctx.strokeStyle = right ? "#fff" : rgba(col, 0.9); ctx.stroke();
+    ctx.font = "86px Anton"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = right ? "#fff" : rgba(col);
+    ctx.fillText(val ? "TRUE" : "FALSE", right ? -24 : 0, 6);
+    if (right) { ctx.lineWidth = 14; ctx.lineCap = ctx.lineJoin = "round"; ctx.strokeStyle = "#fff"; ctx.beginPath(); ctx.moveTo(96, 4); ctx.lineTo(116, 26); ctx.lineTo(146, -20); ctx.stroke(); }
+    if (wrong) { ctx.lineWidth = 10; ctx.strokeStyle = "rgba(255,255,255,0.75)"; ctx.beginPath(); ctx.moveTo(-138, 0); ctx.lineTo(138, 0); ctx.stroke(); }
+    ctx.restore();
+  });
+}
+// Progress through the quiz: a dot per question, the current one wider.
+function drawQuizDots(ctx, num, of, accent, y) {
+  if (of < 2) return;
+  const gap = 34, w = (k) => (k === num ? 62 : 22), total = Array.from({ length: of }, (_, i) => w(i + 1)).reduce((a, b) => a + b, 0) + gap * (of - 1);
+  let x = W / 2 - total / 2;
+  for (let k = 1; k <= of; k++) {
+    ctx.fillStyle = k < num ? rgba(accent, 0.75) : k === num ? rgba(accent) : "rgba(255,255,255,0.22)";
+    ctx.beginPath(); ctx.roundRect(x, y - 11, w(k), 22, 11); ctx.fill(); x += w(k) + gap;
+  }
+}
+
+// A quiz question: "QUESTION 1 OF 3", progress dots, "TRUE OR FALSE?", the statement word by word, a 3-2-1
+// countdown, and the TRUE / FALSE buttons from the start, so the screen is never empty while it's read.
 class QuizBg extends KineticBg {
-  constructor(words, accent, seed, { num, of, countStart, countEnd }) {
-    super(words, accent, seed, { top: 960, size: 92 });
-    this.num = num; this.of = of; this.countStart = countStart; this.countEnd = countEnd;
+  constructor(words, accent, seed, { num, of, countStart, countEnd, start = 0 }) {
+    super(words, accent, seed, { top: 920, size: 92 });
+    this.num = num; this.of = of; this.countStart = countStart; this.countEnd = countEnd; this.start = start;
   }
   draw(ctx, p) {
     super.draw(ctx, p);
     ctx.save(); ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.font = "800 44px Montserrat"; ctx.fillStyle = "rgba(255,255,255,0.75)"; ctx.fillText(`QUESTION ${this.num} OF ${this.of}`, W / 2, 470);
+    ctx.font = "800 44px Montserrat"; ctx.fillStyle = "rgba(255,255,255,0.75)"; ctx.fillText(`QUESTION ${this.num} OF ${this.of}`, W / 2, 450);
+    drawQuizDots(ctx, this.num, this.of, this.accent, 500);
     const pulse = 1 + 0.03 * Math.sin(this.t * 6);
-    ctx.translate(W / 2, 580); ctx.scale(pulse, pulse); ctx.font = "120px Anton"; ctx.lineJoin = "round"; ctx.lineWidth = 16; ctx.strokeStyle = "rgba(0,0,0,0.85)";
+    ctx.translate(W / 2, 600); ctx.scale(pulse, pulse); ctx.font = "120px Anton"; ctx.lineJoin = "round"; ctx.lineWidth = 16; ctx.strokeStyle = "rgba(0,0,0,0.85)";
     ctx.strokeText("TRUE OR FALSE?", 0, 0); ctx.fillStyle = rgba(this.accent); ctx.fillText("TRUE OR FALSE?", 0, 0);
     ctx.restore();
     // The countdown, in the pause after the question.
     const left = this.countEnd - this.t, span = this.countEnd - this.countStart;
     if (this.t >= this.countStart && left > 0) {
       const n = Math.min(3, Math.max(1, Math.ceil((left / span) * 3))), frac = ((left / span) * 3) % 1 || 1;
-      const cx = W / 2, cy = 1450;
+      const cx = W / 2, cy = 1335;
       ctx.save();
-      ctx.beginPath(); ctx.arc(cx, cy, 120, 0, Math.PI * 2); ctx.fillStyle = "rgba(0,0,0,0.45)"; ctx.fill();
-      ctx.beginPath(); ctx.arc(cx, cy, 120, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (left / span)); ctx.lineWidth = 16; ctx.strokeStyle = rgba(this.accent); ctx.lineCap = "round"; ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, cy, 92, 0, Math.PI * 2); ctx.fillStyle = "rgba(0,0,0,0.45)"; ctx.fill();
+      ctx.beginPath(); ctx.arc(cx, cy, 92, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (left / span)); ctx.lineWidth = 14; ctx.strokeStyle = rgba(this.accent); ctx.lineCap = "round"; ctx.stroke();
       const s = 0.8 + 0.4 * frac;
-      ctx.translate(cx, cy); ctx.scale(s, s); ctx.font = "150px Anton"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#fff"; ctx.fillText(String(n), 0, 8);
+      ctx.translate(cx, cy); ctx.scale(s, s); ctx.font = "118px Anton"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#fff"; ctx.fillText(String(n), 0, 8);
       ctx.restore();
     }
+    drawAnswerButtons(ctx, this.t, { appearAt: this.start + 0.15, pulse: this.t >= this.countStart });
   }
 }
 
-// The answer: TRUE or FALSE stamped on screen in green or red; the explanation runs in the captions.
+// The answer: TRUE or FALSE stamped on screen in green or red, the right button lit and the other crossed
+// out; the explanation runs in the captions.
 class AnswerBg {
-  constructor(answer, accent) {
-    this.answer = answer; this.accent = accent;
+  constructor(answer, accent, { start = 0, num = 0, of = 0 } = {}) {
+    this.answer = answer; this.accent = accent; this.t = 0; this.start = start; this.num = num; this.of = of;
     const col = answer ? [34, 160, 90] : [200, 50, 60];
     const bg = canvas(W, H), c = bg.getContext("2d");
     const g = c.createRadialGradient(W / 2, 760, 50, W / 2, 760, 1300); g.addColorStop(0, rgba(col)); g.addColorStop(1, "rgb(10,12,26)");
     c.fillStyle = g; c.fillRect(0, 0, W, H);
     this.bg = bg; this.col = col;
   }
+  setTime(t) { this.t = t; }
   draw(ctx, p) {
     ctx.drawImage(this.bg, 0, 0);
     const k = Math.min(1, p / 0.12), s = 1.7 - 0.7 * ease(k);
@@ -248,31 +393,51 @@ class AnswerBg {
     ctx.font = "230px Anton"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.lineWidth = 22; ctx.strokeStyle = "rgba(0,0,0,0.7)";
     ctx.strokeText(this.answer ? "TRUE" : "FALSE", 0, 60); ctx.fillStyle = "#fff"; ctx.fillText(this.answer ? "TRUE" : "FALSE", 0, 60);
     ctx.restore();
+    drawAnswerButtons(ctx, this.t, { appearAt: this.start, pick: this.answer, y: 1095 });
   }
   dispose() { this.bg.width = this.bg.height = 0; }
 }
 
+// The ending: your brand and @handle, and a big button for what you're asking (follow, save, share,
+// comment) that a fingertip taps, flipping it to "✓ FOLLOWING", so the action is shown, not just said.
+const CTA_BUTTON = { follow: ["+ FOLLOW", "✓ FOLLOWING"], save: ["SAVE THIS", "✓ SAVED"], share: ["SHARE IT", "✓ SHARED"], comment: ["COMMENT", "✓ SEE YOU THERE"] };
 class OutroBg {
-  constructor(brand, accent, handle = "") {
-    this.accent = accent;
+  constructor(brand, accent, handle = "", cta = "follow") {
+    this.accent = accent; this.labels = CTA_BUTTON[cta] || CTA_BUTTON.follow;
     const bg = canvas(W, H), c = bg.getContext("2d");
     const g = c.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "rgb(10,14,32)"); g.addColorStop(1, rgba(accent.map((v) => Math.round(v * 0.35))));
     c.fillStyle = g; c.fillRect(0, 0, W, H);
     c.textAlign = "center"; c.textBaseline = "middle";
     let size = 132; c.font = `${size}px Anton`;
     while (c.measureText(brand.toUpperCase()).width > W - 120 && size > 60) { size -= 6; c.font = `${size}px Anton`; }
-    c.lineJoin = "round"; c.lineWidth = 8; c.strokeStyle = "rgba(0,0,0,0.8)"; c.strokeText(brand.toUpperCase(), W / 2, 640);
-    c.fillStyle = rgba(accent); c.fillText(brand.toUpperCase(), W / 2, 640);
-    if (handle) { c.fillStyle = "#fff"; c.font = "800 52px Montserrat"; c.fillText(handle, W / 2, 1010); }
+    c.lineJoin = "round"; c.lineWidth = 8; c.strokeStyle = "rgba(0,0,0,0.8)"; c.strokeText(brand.toUpperCase(), W / 2, 600);
+    c.fillStyle = rgba(accent); c.fillText(brand.toUpperCase(), W / 2, 600);
+    if (handle) { c.fillStyle = "#fff"; c.font = "800 52px Montserrat"; c.fillText(handle, W / 2, 712); }
     c.fillStyle = "rgba(255,255,255,0.6)"; c.font = "500 30px Montserrat"; c.fillText("NOT FINANCIAL ADVICE · FOR EDUCATION ONLY", W / 2, 1790);
     this.bg = bg;
   }
   draw(ctx, p) {
     ctx.drawImage(this.bg, 0, 0);
-    const cx = W / 2, cy = 860, r = 70 + 10 * Math.sin(p * Math.PI * 4);
-    ctx.beginPath(); ctx.arc(cx, cy, r + 18, 0, Math.PI * 2); ctx.strokeStyle = rgba(this.accent, 0.35); ctx.lineWidth = 6; ctx.stroke();
-    ctx.beginPath(); ctx.arc(cx, cy, 70, 0, Math.PI * 2); ctx.fillStyle = rgba(this.accent); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(cx - 22, cy - 34); ctx.lineTo(cx - 22, cy + 34); ctx.lineTo(cx + 36, cy); ctx.closePath(); ctx.fillStyle = "rgb(10,14,32)"; ctx.fill();
+    const cx = W / 2, cy = 890, tap = 0.42, done = p >= tap + 0.03;
+    // the button: breathing until it's tapped, pressed, then flipped
+    const press = p >= tap && p < tap + 0.06 ? 0.93 : 1, breathe = done ? 1 : 1 + 0.03 * Math.sin(p * 28);
+    const pop = done ? 1 + 0.1 * Math.max(0, 1 - (p - tap - 0.03) / 0.08) : 1;
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(press * breathe * pop, press * breathe * pop);
+    ctx.font = "800 74px Montserrat"; const label = done ? this.labels[1] : this.labels[0], bw = Math.max(620, ctx.measureText(label).width + 160), bh = 176;
+    ctx.shadowColor = rgba(this.accent, 0.5); ctx.shadowBlur = done ? 0 : 50;
+    ctx.fillStyle = done ? "rgba(255,255,255,0.12)" : rgba(this.accent); ctx.beginPath(); ctx.roundRect(-bw / 2, -bh / 2, bw, bh, bh / 2); ctx.fill();
+    ctx.shadowBlur = 0; if (done) { ctx.lineWidth = 6; ctx.strokeStyle = rgba(this.accent); ctx.stroke(); }
+    ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = done ? "#fff" : "rgb(14,14,22)"; ctx.fillText(label, 0, 4);
+    ctx.restore();
+    // a ripple where it was tapped
+    if (p >= tap && p < tap + 0.2) { const k = (p - tap) / 0.2; ctx.beginPath(); ctx.arc(cx + 120, cy + 20, 40 + 160 * k, 0, Math.PI * 2); ctx.strokeStyle = `rgba(255,255,255,${0.6 * (1 - k)})`; ctx.lineWidth = 8; ctx.stroke(); }
+    // the fingertip comes in from below, taps, and leaves
+    const inK = Math.min(1, Math.max(0, (p - 0.18) / (tap - 0.18))), outK = Math.min(1, Math.max(0, (p - tap - 0.08) / 0.15));
+    if (inK > 0 && outK < 1) {
+      const fx = cx + 120 + (1 - ease(inK)) * 260 + ease(outK) * 200, fy = cy + 20 + (1 - ease(inK)) * 520 + ease(outK) * 420;
+      ctx.save(); ctx.globalAlpha = 1 - outK; ctx.beginPath(); ctx.arc(fx, fy, p >= tap && p < tap + 0.06 ? 40 : 46, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255,255,255,0.85)"; ctx.shadowColor = "rgba(0,0,0,0.5)"; ctx.shadowBlur = 24; ctx.fill(); ctx.restore();
+    }
   }
   dispose() { this.bg.width = this.bg.height = 0; }
 }
@@ -338,8 +503,9 @@ class Captions {
   constructor(words, accent, style = "bold") {
     // "punch": one or two big words at a time, popping in (a popular short-video style).
     this.words = words; this.accent = accent; this.style = style; this.chunks = style === "punch" ? chunkWords(words, 2, 12) : chunkWords(words);
-    // Words that carry the meaning get a colour of their own: money and growth in green, risk in red.
-    this.feel = words.map((w) => emphasisOf(w.text));
+    // Words that carry the meaning get a colour of their own: money and growth in green, risk in red, and a
+    // money move ("down 5.0%", "rose 3%") in its direction's colour even while it's the word being said.
+    this.feel = feelings(words);
     this.times = this.chunks.map((ch, k) => {
       const start = words[ch[0]].start, lastEnd = words[ch[ch.length - 1]].end;
       const end = k + 1 < this.chunks.length ? words[this.chunks[k + 1][0]].start : lastEnd + 0.3;
@@ -356,7 +522,7 @@ class Captions {
     if (!lay) {
       const texts = idxs.map((i) => { const x = this.words[i].text.replace(/["“”]/g, ""); return this.style === "clean" ? x : x.toUpperCase(); });
       let size = { bold: 118, boxed: 100, clean: 92, punch: 160 }[this.style] || 118, widths, total;
-      const maxW = this.style === "bold" || this.style === "punch" ? W - 120 : W - 200;
+      const maxW = this.style === "bold" || this.style === "punch" ? W - 240 : W - 280;   // clear of the platforms' side buttons
       for (;;) {
         ctx.font = this.font(size);
         widths = texts.map((x) => ctx.measureText(x).width);
@@ -389,23 +555,23 @@ class Captions {
     }
     let x = -lay.total / 2;
     lay.texts.forEach((txt, j) => {
-      const on = idxs[j] === active, feel = this.feel[idxs[j]];
-      const tone = feel > 0 ? "rgb(74,222,128)" : feel < 0 ? "rgb(255,92,92)" : "#fff";
+      const on = idxs[j] === active, { feel, move } = this.feel[idxs[j]];
+      const tone = feel === 2 ? rgba(this.accent) : feel > 0 ? rgba(GAIN) : feel < 0 ? rgba(LOSS) : "#fff", hi = move ? tone : rgba(this.accent);
       // The spoken word grows a little as it's said.
       const grow = on ? 1 + 0.05 * Math.min(1, (t - this.words[idxs[j]].start) / 0.08) : 1;
       ctx.save();
       if (grow !== 1) { const cx = x + lay.widths[j] / 2; ctx.translate(cx, 0); ctx.scale(grow, grow); ctx.translate(-cx, 0); }
       if (this.style === "bold" || this.style === "punch") {
         ctx.lineWidth = this.style === "punch" ? 24 : 18; ctx.strokeStyle = "#000"; ctx.strokeText(txt, x, 0);
-        ctx.fillStyle = on ? rgba(this.accent) : tone;
+        ctx.fillStyle = on ? hi : tone;
       } else if (this.style === "boxed") {
         if (on) {
           const ph = lay.size * 1.16;
-          ctx.fillStyle = rgba(this.accent); ctx.beginPath(); ctx.roundRect(x - 12, -ph / 2 + lay.size * 0.03, lay.widths[j] + 24, ph, 14); ctx.fill();
+          ctx.fillStyle = hi; ctx.beginPath(); ctx.roundRect(x - 12, -ph / 2 + lay.size * 0.03, lay.widths[j] + 24, ph, 14); ctx.fill();
         }
         ctx.fillStyle = on ? "rgb(14,14,22)" : tone;
       } else {
-        ctx.fillStyle = on ? rgba(this.accent) : tone;
+        ctx.fillStyle = on ? hi : tone;
       }
       ctx.fillText(txt, x, lay.size * (this.style === "clean" ? 0.04 : 0.02));
       ctx.restore();
@@ -441,7 +607,7 @@ function drawStatPop(ctx, text, into, left, y, accent) {
   if (alpha <= 0) return;
   let size = 230;
   ctx.font = `${size}px Anton`;
-  while (ctx.measureText(text).width > W - 160 && size > 90) { size -= 10; ctx.font = `${size}px Anton`; }
+  while (ctx.measureText(text).width > W - 300 && size > 90) { size -= 10; ctx.font = `${size}px Anton`; }
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.translate(W / 2, y); ctx.rotate(-0.045); ctx.scale(scale, scale);
@@ -455,6 +621,7 @@ function drawStatPop(ctx, text, into, left, y, accent) {
 
 /* ------------------------------------------------------------------ frame painter */
 
+const PUSH = new Set(["stat", "chart", "board", "kinetic", "quiz", "illus", "section", "recap"]), PUSH_BY = 0.05;
 class Painter {
   constructor(job, target) {
     this.job = job;
@@ -476,13 +643,14 @@ class Painter {
   makeBg(sc) {
     try {
       if (sc.kind === "image" && sc.bitmap) return new ImageBg(sc.bitmap);
-      if (sc.kind === "outro") return new OutroBg(this.job.brand, this.accent, this.job.handle);
+      if (sc.kind === "outro") return new OutroBg(this.job.brand, this.accent, this.job.handle, this.job.cta);
       const said = () => this.job.words.filter((w) => w.start >= sc.start - 0.05 && w.start < sc.end);
-      if (sc.kind === "kinetic") return new KineticBg(said(), this.accent, sc.seed || 0, { label: sc.tone === "question" ? "YOUR TURN" : "" });
+      if (sc.kind === "kinetic") return new KineticBg(said(), this.accent, sc.seed || 0, { label: sc.tone === "question" ? "YOUR TURN" : "", icon: sc.tone === "question" ? "comment" : "quote" });
       if (sc.kind === "quiz") { const w = said(), k = w.findIndex((x) => /^false:?$/i.test(x.text.replace(/[^a-z:]/gi, ""))); return new QuizBg(k >= 0 ? w.slice(k + 1) : w, this.accent, sc.seed || 0, sc); }
-      if (sc.kind === "answer") return new AnswerBg(sc.answer, this.accent);
-      if (sc.kind === "chart") return new ChartBg(sc.chart);
-      if (sc.kind === "stat" && sc.spec) return new StatBg(sc.spec, this.accent, this.job.captionPos, sc.seed || 0);
+      if (sc.kind === "answer") return new AnswerBg(sc.answer, this.accent, sc);
+      if (sc.kind === "chart") return new ChartBg(sc.chart, said());
+      if (sc.kind === "board") return new BoardBg(sc.markets, this.accent);
+      if (sc.kind === "stat" && sc.spec) return new StatBg(sc.spec, this.accent, this.job.captionPos, sc.seed || 0, { continued: sc.continued });
       if (sc.kind === "illus") return new IllusBg(sc.icon, sc.label, this.accent, this.job.captionPos, sc.seed || 0);
       if (sc.kind === "section") return new SectionBg(sc.num, sc.label, this.accent, sc.seed || 0);
       if (sc.kind === "recap") return new RecapBg(sc.items || [], this.accent, sc.seed || 0);
@@ -495,15 +663,19 @@ class Painter {
     if (idx < 0) idx = scenes.length - 1;
     const sc = scenes[idx];
     if (idx !== this.idx) {
-      if (this.bg) {   // keep the old scene's final look for the crossfade
-        const sctx = this.snap.getContext("2d"); this.bg.draw(sctx, 1); this.hasSnap = true; this.bg.dispose();
+      if (this.bg) {   // keep the old scene's final look for the crossfade (with its final push-in, so a cut never jumps)
+        const sctx = this.snap.getContext("2d"), z1 = PUSH.has(scenes[this.idx]?.kind) ? 1 + PUSH_BY : 1;
+        sctx.setTransform(z1, 0, 0, z1, W * (1 - z1) / 2, H * (1 - z1) / 2); this.bg.setTime?.(scenes[this.idx].end); this.bg.draw(sctx, 1); sctx.setTransform(1, 0, 0, 1, 0, 0);
+        this.hasSnap = true; this.bg.dispose();
       }
       this.bg = this.makeBg(sc); this.idx = idx;
     }
     const into = t - sc.start;
     // A quick punch-in as each scene starts (harder on the hook and on the payoff), like an edited video.
     const punch = ["outro", "recap", "section", "kinetic", "quiz"].includes(sc.kind) ? 0 : idx === 0 || sc.payoff || sc.kind === "answer" ? 0.1 : 0.04;
-    const z = punch && into < 0.35 ? 1 + punch * (1 - ease(into / 0.35)) : 1;
+    // Graphics scenes (charts, numbers, big words) drift slowly closer the whole time, so nothing sits frozen.
+    const push = PUSH.has(sc.kind) ? 1 + PUSH_BY * ease((t - sc.start) / Math.max(0.001, sc.end - sc.start)) : 1;
+    const z = (punch && into < 0.35 ? 1 + punch * (1 - ease(into / 0.35)) : 1) * push;
     // ...and a short shake when the payoff hits.
     const shake = sc.payoff && into < 0.22 ? 14 * (1 - into / 0.22) : 0;
     let sx = shake * Math.sin(into * 97), sy = shake * Math.cos(into * 83);
@@ -535,7 +707,7 @@ class Painter {
     const hookTitle = idx === 0 && this.job.hookTitle !== false && ["image", "illus", "fallback", "stat"].includes(sc.kind);
     if (hookTitle) { ctx.fillStyle = `rgba(0,0,0,${0.42 * Math.min(1, into / 0.2)})`; ctx.fillRect(0, 0, W, H); }
     ctx.drawImage(sc.kind === "outro" ? this.plain : this.header, 0, 0);
-    if (sc.stat && !["outro", "chart", "stat"].includes(sc.kind)) drawStatPop(ctx, sc.stat, into, sc.end - t, this.popY, this.accent);
+    if (sc.stat && !["outro", "chart", "stat", "board"].includes(sc.kind)) drawStatPop(ctx, sc.stat, into, sc.end - t, this.popY, sc.statTone < 0 ? LOSS : sc.statTone > 0 ? GAIN : this.accent);
     if (sc.chip) drawChip(ctx, sc.chip, into, sc.end - t, this.accent, sc.tone, this.chipY);
     if (hookTitle) {
       this.hookWords ??= new KineticBg(this.job.words.filter((w) => w.start < sc.end), this.accent, 0, { transparent: true, top: 860, size: 116 });

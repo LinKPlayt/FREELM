@@ -276,5 +276,34 @@ export default async function ({ t, newPage }) {
   t.ok(r.insert.join() === "1,2", "a spare definition goes after the hook; other spares go before the takeaway", JSON.stringify(r.insert));
   t.ok(r.caps.youtube && r.caps.tiktok && r.caps.instagram && !/undefined/.test(JSON.stringify(r.caps)), "platform captions are complete", "");
   t.ok(!/undefined/.test(JSON.stringify(r.capsOld)) && r.capsOld.youtube.length > 5, "captions work for old reels with missing fields", JSON.stringify(r.capsOld).slice(0, 120));
+  t.section("Logic: videos that make sense (v49)");
+  const v = await page.evaluate(async () => {
+    const H = await import("./app/hook.js"), S = await import("./app/script.js"), V = await import("./app/visuals.js"), Q = await import("./app/quiz.js"), X = await import("./app/extras.js");
+    const out = {};
+    const dirs = (s) => { const w = s.split(" "), d = H.directionsOf(w); return w.map((x, i) => (d[i] > 0 ? "+" : d[i] < 0 ? "-" : "") + x).join(" "); };
+    out.dirs = ["The S&P 500 is down 0.2% on the day and down 5.0% this month.", "The Nasdaq rose 0.4% while the Dow fell by 1.1%.",
+      "Put 20% down payment on a home.", "It is up to you, up 3 percent today.", "Bitcoin lost about $5,000 in a week."].map(dirs);
+    const mk = (name, day, vals) => ({ name, symbol: name, day_pct: day, is_yield: false, last: vals.at(-1), values: vals });
+    const vals = Array.from({ length: 65 }, (_, i) => 100 + i);
+    out.lead = [S.marketLead([mk("S&P 500", -0.23, vals), mk("Nasdaq", 0.42, vals), mk("Dow Jones", -1.11, vals)]),
+      S.marketLead([mk("S&P 500", -0.5, vals), mk("Nasdaq", -1.6, vals)]), S.marketLead([mk("S&P 500", 0.01, vals), mk("Nasdaq", -0.02, vals)])];
+    const script = S.buildMarket([mk("S&P 500", -0.23, vals), mk("Nasdaq", 0.42, vals), mk("Dow Jones", -1.11, vals)], [], { generic: ["money"], cta: "Follow for more.", niche: "investing" });
+    out.board = [script.lines[0].board?.length, /^The Dow Jones fell 1\.1% while the Nasdaq rose 0\.4%\./.test(script.lines[0].text), script.lines.filter((l) => l.kind === "chart").length];
+    out.money = [V.analyzeLine("Buffett was inspired by a book at age seven, One Thousand Ways to Make $1000.").stat, V.analyzeLine("In 2008, Lehman Brothers lost $600 billion in assets.").stat?.value,
+      V.analyzeLine("Keep a $1,000 starter emergency fund.").stat?.value];
+    out.quiz = [Q.QUIZ_COUNT.standard, Q.QUIZ_COUNT.long, Q.quizTitle("Crypto", 2), Q.quizTitle("Crypto", 3), Q.buildQuiz({ niche: "crypto", cta: "Follow." }, { count: 2 }).lines.filter((l) => l.kind === "quiz").length];
+    const quiz = Q.buildQuiz({ niche: "crypto", cta: "Follow for more." }, { count: 2 });
+    const tips = X.coach(quiz.lines, { estimate: 40, range: [30, 45], visuals: [] }).tips.join(" | ");
+    out.coach = [/concrete number/.test(tips), /Mix visuals/.test(tips), /another point/.test(tips)];
+    return out;
+  });
+  t.ok(v.dirs.join(" / ") === "The S&P 500 is -down -0.2% on the day and -down -5.0% this month. / The Nasdaq +rose +0.4% while the Dow -fell by -1.1%. / Put 20% down payment on a home. / It is up to you, +up +3 +percent today. / Bitcoin -lost about -$5,000 in a week.",
+    "money moves are coloured by direction (down red, up green), and only when an amount follows", JSON.stringify(v.dirs));
+  t.ok(v.lead[0] === "The Dow Jones fell 1.1% while the Nasdaq rose 0.4%." && v.lead[1] === "Stocks fell across the board, led by the Nasdaq, down 1.6%." && v.lead[2] === "A quiet day: the markets barely moved.",
+    "a market recap opens with the day's real movers", JSON.stringify(v.lead));
+  t.ok(v.board.join() === "3,true,3", "the opening of a market recap carries the day's board for its picture", JSON.stringify(v.board));
+  t.ok(v.money[0] === null && v.money[1] === 6e11 && v.money[2] === 1000, "an amount in a book title isn't turned into a money counter", JSON.stringify(v.money));
+  t.ok(v.quiz.join() === "2,3,Crypto Quiz: Can You Get Both Right?,Crypto Quiz: Can You Get All 3?,2", "a quiz has as many questions as fit the length you chose", JSON.stringify(v.quiz));
+  t.ok(v.coach.join() === "false,false,false", "the reel coach doesn't ask a quiz for numbers, mixed pictures or more points", JSON.stringify(v.coach));
   await page.context().close();
 }

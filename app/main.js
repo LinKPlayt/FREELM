@@ -1038,12 +1038,14 @@ function showReview() {
     const v = visuals[i];
     let tag = i === 0 ? "Hook" : l.kind === "outro" ? "Ending" : l.kind === "quiz" ? `Question ${l.quiz?.n || ""} · countdown` : l.kind === "answer" ? `Answer · ${l.answer ? "True" : "False"}` : l.kind === "chart" ? "Chart" : l.kind === "section" ? `Chapter ${l.num}` : l.kind === "recap" ? "Recap" : `Scene ${i}`;
     if (l.source) tag += ` · ${l.source}`;
-    const big = l.kind === "media" && (l.stance || l.question) && !l.vmode;
+    const big = l.kind === "media" && (l.stance || l.question) && !l.vmode, board = l.board?.length >= 2 && !l.vmode;
     if (big) tag += " · Big words on screen";
+    else if (board) tag += " · Market board: today's moves";
     else if (l.kind === "media") tag += ` · ${VISUAL_NAMES[v.type]}${v.type === "stat" ? ": " + describeStat(v.spec) : v.type === "illus" ? ": " + (v.label || v.icon).toLowerCase() : ""}`;
     const thumb = l.kind === "outro" ? `<div class="thumb">END<br>CARD</div>` : l.kind === "quiz" ? `<div class="thumb">TRUE OR<br>FALSE?</div>` : big ? `<div class="thumb">BIG<br>WORDS</div>`
       : l.kind === "answer" ? `<div class="thumb" style="color:${l.answer ? "var(--good)" : "var(--bad)"}">${l.answer ? "TRUE ✓" : "FALSE ✗"}</div>` : l.kind === "chart" ? `<div class="thumb">LIVE<br>CHART</div>`
       : l.kind === "section" ? `<div class="thumb">PART ${l.num}<br>${esc(l.label || "")}</div>` : l.kind === "recap" ? `<div class="thumb">QUICK<br>RECAP</div>`
+      : board ? `<div class="thumb">MARKET<br>BOARD</div>`
       : `<div class="thumb"><canvas width="152" height="270" data-thumb="${i}"></canvas></div>`;
     const mode = l.vmode || "auto", hasStat = Boolean(l.analysis?.stat);
     const chips = l.kind !== "media" ? "" : `<div class="mini vis">${[["auto", "Auto"], ["photo", "Photo"], ["chart", "Chart"], ["illus", "Illustration"]]

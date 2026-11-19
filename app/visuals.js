@@ -34,6 +34,17 @@ function labelNear(text, index, length, max = 3, prefer = "after") {
   return words.join(" ").toUpperCase().trim() || null;
 }
 
+// True when a number sits inside a title of a work: the word right before it and at least one more of the
+// three before that are capitalised mid-sentence ("Ways to Make $1000"), or it's in quotes after "titled".
+function inTitle(raw, index) {
+  const before = raw.slice(0, index), words = before.split(/\s+/).filter(Boolean).slice(-4);
+  if (/\b(?:titled|called|named|entitled)\s+["“]?[^.]{0,60}$/i.test(before) && /["“][^"”]*$/.test(before)) return true;
+  const cap = (w) => /^[A-Z][a-z]/.test(w.replace(/^["“(]/, ""));
+  const prev = words.at(-1) || "", sentenceStart = /[.!?]\s*$/.test(raw.slice(0, Math.max(0, index - (prev.length + 1))));
+  if (!cap(prev) || sentenceStart) return false;
+  return words.slice(0, -1).filter(cap).length >= 1 && /\b(?:to|of|the|a|for|and|in)\b|[A-Z][a-z]+\s+[A-Z][a-z]+/.test(words.join(" "));
+}
+
 function statOf(raw) {
   const text = wordsToDigits(raw).replace(/(\d)\s*%/g, "$1 percent");
   let m;
@@ -67,8 +78,8 @@ function statOf(raw) {
   if (/\btwice as (?:much|many)\b/i.test(text)) return { type: "compare", mult: 2, label: "TWICE AS MUCH" };
   if (/\b(compound|grows?|growth|snowball)\b/i.test(text) && !/\bdebt\b/i.test(text)) return { type: "growth", every: 0, label: /compound/i.test(text) ? "COMPOUND GROWTH" : "GROWTH" };
 
-  // Money.
-  m = raw.match(/(?:US)?\$\s?(\d[\d,]*(?:\.\d+)?)\s?(trillion|billion|million|thousand|[TBMK])?\b/i);
+  // Money (not an amount inside the title of a book or film: "One Thousand Ways to Make $1000").
+  m = [...raw.matchAll(/(?:US)?\$\s?(\d[\d,]*(?:\.\d+)?)\s?(trillion|billion|million|thousand|[TBMK])?\b/gi)].find((x) => !inTitle(raw, x.index)) || null;
   if (m) {
     const mult = { trillion: 1e12, billion: 1e9, million: 1e6, thousand: 1e3, t: 1e12, b: 1e9, m: 1e6, k: 1e3 }[(m[2] || "").toLowerCase()] || 1;
     return { type: "money", value: toNum(m[1]) * mult, label: labelNear(raw, m.index, m[0].length) };

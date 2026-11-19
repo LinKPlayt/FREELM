@@ -230,6 +230,27 @@ export function dramatize(script, opts = {}) {
 // Words worth a colour in the captions: figures, money and words that carry feeling.
 export const EMPHASIS_UP = /^(\$?\d[\d,.]*%?[kmbt]?|free|grow|grows|growth|wealth|rich|richest|save|saves|savings|earn|earns|profit|win|double|doubles|millions?|billions?|trillions?|best|safe|secret|tax-free|compound|compounds)$/i;
 export const EMPHASIS_DOWN = /^(never|lose|loses|lost|loss|crash|crashed|crashes|debt|risk|risky|catch|zero|broke|scam|fraud|fail|failed|mistake|wrong|fees?|interest|penalty|danger|warning|collapse|collapsed|stop|nobody|worst|recession|inflation)$/i;
+// Money moves read by direction: "down 5.0%", "fell by 2%", "rose $300", "lost 40%". The direction word
+// and the amount after it are red (a loss) or green (a gain), whatever the brand colour, and they keep that
+// colour while spoken. A direction word with no amount after it ("down payment", "up to you") stays plain.
+const DIR_DOWN = /^(down|fell|fall|falls|falling|dropped|drop|drops|slid|slides|slipped|sank|sinks|plunged|plunges|tumbled|tumbles|declined|declines|lower|lost|lose|loses|losing|shed|sheds|minus)$/i;
+const DIR_UP = /^(up|rose|rise|rises|rising|gained|gain|gains|climbed|climbs|jumped|jumps|surged|surges|rallied|rallies|higher|added|adds|plus|grew|grows)$/i;
+const AMOUNT = /^[-−+]?\$?\d[\d,.]*(%|[kmbt])?$|^(percent|points?)$/i;
+const FILLER = /^(by|about|nearly|almost|over|roughly|around|another|a|an|more|than|some|just)$/i;
+export function directionsOf(texts) {
+  const bare = texts.map((t) => String(t).replace(/^[^\w$−+-]+|[^\w%]+$/g, ""));
+  const out = bare.map((w) => (/^[-−]\$?\d/.test(w) ? -1 : 0));
+  bare.forEach((w, i) => {
+    const sign = DIR_DOWN.test(w) ? -1 : DIR_UP.test(w) ? 1 : 0;
+    if (!sign) return;
+    let j = i + 1; while (j < bare.length && j <= i + 3 && FILLER.test(bare[j])) j++;
+    if (j >= bare.length || !AMOUNT.test(bare[j]) || /^(percent|points?)$/i.test(bare[j])) return;
+    out[i] = sign; out[j] = sign;
+    if (/^(percent|points?)$/i.test(bare[j + 1] || "")) out[j + 1] = sign;   // "down 5 percent"
+  });
+  return out;
+}
+
 export function emphasisOf(word) {
   const w = word.replace(/^[^\w$]+|[^\w%]+$/g, "");
   if (!w) return 0;

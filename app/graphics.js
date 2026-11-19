@@ -50,12 +50,14 @@ function bigText(ctx, text, x, y, size, color, maxW = W - 140) {
 
 export class StatBg {
   // spec from visuals.js; layout "low" or "middle" (where captions sit), so the graphic avoids them
-  constructor(spec, accent, layout = "low", seed = 0) {
-    this.s = spec; this.a = accent; this.bg = backdrop(accent, seed);
+  // continued: the line before showed this same graphic, so it carries on fully drawn instead of starting over.
+  constructor(spec, accent, layout = "low", seed = 0, { continued = false } = {}) {
+    this.s = spec; this.a = accent; this.bg = backdrop(accent, seed); this.continued = continued;
     this.cy = layout === "middle" ? 1360 : 790;
   }
   draw(ctx, p) {
     ctx.drawImage(this.bg, 0, 0);
+    if (this.continued) p = 1;
     const a = ease(p / 0.5), s = this.s;
     const fn = { percent: this.percent, split: this.split, range: this.range, growth: this.growth, compare: this.compare,
       money: this.counter, bignum: this.counter, year: this.year }[s.type];
@@ -169,6 +171,14 @@ export class StatBg {
       bigText(ctx, String(yr), x < 300 ? 300 : x > W - 300 ? W - 300 : x, cy - 260, 200 * Math.max(0.3, pin), rgba(this.a), 520);
     }
     label(ctx, this.s.label, W / 2, cy + 190, this.a);
+    // How long ago that was, which is often the point ("79 YEARS AGO").
+    const ago = now - yr, k = ease((a - 0.75) / 0.25);
+    if (ago !== 0 && k > 0) {
+      ctx.save(); ctx.globalAlpha = k; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.font = "800 44px Montserrat";
+      const txt = ago > 0 ? `${ago} YEAR${ago === 1 ? "" : "S"} AGO` : `IN ${-ago} YEAR${ago === -1 ? "" : "S"}`, w = ctx.measureText(txt).width + 60;
+      ctx.fillStyle = "rgba(255,255,255,0.1)"; ctx.beginPath(); ctx.roundRect(W / 2 - w / 2, cy + 260, w, 76, 38); ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.85)"; ctx.fillText(txt, W / 2, cy + 300); ctx.restore();
+    }
   }
   dispose() { this.bg.width = this.bg.height = 0; }
 }

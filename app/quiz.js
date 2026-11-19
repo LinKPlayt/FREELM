@@ -77,6 +77,11 @@ export const QUIZ = {
 
 const shuffle = (a) => { const b = [...a]; for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
 
+// "Crypto Quiz: Can You Get All 3?", or "…Both Right?" for two.
+export const quizTitle = (cap, n) => `${cap} Quiz: ${n === 2 ? "Can You Get Both Right?" : `Can You Get All ${n}?`}`;
+// How many questions fit the length you chose (each one, read, counted down and answered, takes about 16 s).
+export const QUIZ_COUNT = { short: 2, standard: 2, long: 3, deep: 4, full: 6 };
+
 // A quiz script: a hook, then for each question a "True or false" line (with a countdown after it)
 // and the answer line, then "How many did you get?" and your ending.
 export function buildQuiz(opts, { count = 3, recent = [] } = {}) {
@@ -100,7 +105,7 @@ export function buildQuiz(opts, { count = 3, recent = [] } = {}) {
   const date = new Date().toISOString().slice(0, 10).replaceAll("-", "");
   const cap = label.replace(/\b\w/g, (c) => c.toUpperCase());
   return {
-    kind: "quiz", topicId: `quiz-${opts.niche.replace(/\s+/g, "-")}-${date}`, title: `${cap} Quiz: Can You Get All ${n}?`, topicTitle: `${cap} quiz`,
+    kind: "quiz", topicId: `quiz-${opts.niche.replace(/\s+/g, "-")}-${date}`, title: quizTitle(cap, n), topicTitle: `${cap} quiz`,
     niche: opts.niche, lines, extras: [], tags: [`${label} quiz`, opts.niche, "quiz", "true or false"], sources: [], questions: picked.map((q) => q[0]),
   };
 }

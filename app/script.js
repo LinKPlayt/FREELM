@@ -175,16 +175,35 @@ export function buildNews(headlines, markets, opts) {
   };
 }
 
+// The opening fact of a market recap: the day's real movers, biggest first ("The Dow Jones fell 1.1% while
+// the Nasdaq rose 0.4%."), so the first second already says something.
+export function marketLead(markets, fallback = "") {
+  const eq = markets.filter((m) => !m.is_yield && Number.isFinite(m.day_pct));
+  if (eq.length < 2) return fallback;
+  const by = (a, b) => Math.abs(b.day_pct) - Math.abs(a.day_pct);
+  const up = eq.filter((m) => m.day_pct > 0.05).sort(by), down = eq.filter((m) => m.day_pct < -0.05).sort(by);
+  const what = /bitcoin|ether/i.test(eq[0].name || "") ? "Crypto" : "Stocks";
+  if (up.length && down.length) {
+    const [first, second] = Math.abs(down[0].day_pct) >= Math.abs(up[0].day_pct) ? [down[0], up[0]] : [up[0], down[0]];
+    const mv = (m) => `${m.day_pct >= 0 ? "rose" : "fell"} ${pct(m.day_pct)}`;
+    return `${subject(first)} ${mv(first)} while ${subject(second, false)} ${mv(second)}.`;
+  }
+  if (down.length === eq.length) return `${what} fell across the board, led by ${subject(down[0], false)}, down ${pct(down[0].day_pct)}.`;
+  if (up.length === eq.length) return `${what} rose across the board, led by ${subject(up[0], false)}, up ${pct(up[0].day_pct)}.`;
+  if (!up.length && !down.length) return "A quiet day: the markets barely moved.";
+  return fallback;
+}
+
 export function buildMarket(markets, headlines, opts) {
   if (markets.length < 2) return null;
   const g = opts.generic;
   const day = new Date().toLocaleDateString("en-US", { weekday: "long" });
-  // The opening says how the day went overall, and the closing thought answers it.
-  const mood = marketMood(markets.slice(0, 3));
-  const lines = [line(pick([
-    `Here's your ${day} market check. ${mood.opening}`,
-    `What did the markets do this ${day}? ${mood.opening}`,
-  ]).trim(), "new york stock exchange")];
+  // The opening says what moved (and the board shows the whole day); the closing thought answers it.
+  const mood = marketMood(markets.slice(0, 3)), opening = marketLead(markets.slice(0, 3), mood.opening);
+  const lines = [{ ...line(pick([
+    `${opening} Here's your ${day} market check.`,
+    `${opening} Here's what moved this ${day}.`,
+  ]).trim(), "new york stock exchange"), board: markets.slice(0, 3) }];
   for (const s of markets.slice(0, 3)) {
     const m = s.month_pct >= 0 ? "up" : "down";
     // A move that rounds to 0.0% is "flat", not "up 0.0%".

@@ -6,8 +6,8 @@ import { loadVoice, phonemize, synthesize, voiceRate, setVoice, releaseVoice, vo
 import { generateMusic, mix, resample, SR } from "./music.js";
 import { loadFonts, renderReel } from "./render.js";
 import { analyzeLine, iconFor } from "./visuals.js";
-import { dramatize } from "./hook.js";
-import { buildQuiz } from "./quiz.js";
+import { dramatize, directionsOf } from "./hook.js";
+import { buildQuiz, QUIZ_COUNT, quizTitle } from "./quiz.js";
 import { proofread } from "./wording.js";
 import { artFor, motifsFor, pickMotifs, artOptions, drawAhead, styleFor } from "./illustrator.js";
 const accentOf = (hex = "#FFD60A") => { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
@@ -49,7 +49,7 @@ async function writeScript(opts, data, say) {
   if (opts.mode === "quiz") {
     say("Picking quiz questions…");
     let recent = []; try { recent = JSON.parse(localStorage.getItem("quizUsed") || "[]"); } catch { /* none */ }
-    const quiz = buildQuiz(o, { recent });
+    const quiz = buildQuiz(o, { recent, count: QUIZ_COUNT[opts.length] || 2 });
     try { localStorage.setItem("quizUsed", JSON.stringify([...recent, ...quiz.questions].slice(-24))); } catch { /* private mode */ }
     return quiz;
   }
@@ -106,6 +106,22 @@ async function voiceScript(script, say, base = 1.0) {
   if (seconds(clips, script.lines) > MAX_S) {                                     // too long: speak a little faster
     speed = Math.min(base * 1.18, base * (Math.ceil((seconds(clips, script.lines) / MAX_S) * 50) / 50 + 0.02));
     clips = await speak(script.lines);
+  }
+  // A quiz that's still too long loses its last question (and answer), renumbered, and the lines that count
+  // the questions are said again with the new number.
+  while (seconds(clips, script.lines) > MAX_S && script.kind === "quiz") {
+    const qs = script.lines.map((l, i) => (l.kind === "quiz" ? i : -1)).filter((i) => i >= 0);
+    if (qs.length <= 2) break;
+    const last = qs.at(-1), n = script.lines[last + 1]?.kind === "answer" ? 2 : 1;
+    script.lines.splice(last, n); clips.splice(last, n);
+    const of = qs.length - 1;
+    script.lines.forEach((l) => { if (l.quiz) l.quiz.of = of; });
+    script.title = script.title.replace(/: Can You Get (?:All \d+|Both Right)\?$/, (m) => quizTitle("", of).replace(/^ Quiz/, ""));
+    for (let i = 0; i < script.lines.length; i++) {
+      const l = script.lines[i], fixed = l.text.replace(/\b\d+ questions\b/, `${of} questions`).replace(/\bout of \d+\b/, `out of ${of}`);
+      if (fixed === l.text) continue;
+      l.text = fixed; [l.phonemes] = await phonemize([speakable(fixed)]); clips[i] = await synthesize(l.phonemes, speed * (l.pace || 1));
+    }
   }
   while (seconds(clips, script.lines) > MAX_S && script.lines.length > 4) {       // still too long: drop a middle line
     // The story's skeleton stays: never the hook, the line right after it (what the topic is), or the
@@ -548,11 +564,12 @@ export async function produceReel(plan, opts, ui) {
       : /^Here's that number|^By the numbers/i.test(said) ? "KEY NUMBER" : line.tip || /^So here's what to do/i.test(said) ? "WHAT TO DO" : /^Here's why it matters/i.test(said) ? "WHY IT MATTERS" : "";
     sc.tone = line.question ? "question" : line.stance ? "stance" : sc.chip === "THE CATCH" || line.role === "risk" ? "down" : sc.chip === "WHAT TO DO" ? "tip" : "";
     if (line.kind === "outro") sc.kind = "outro";
+    else if (line.board?.length >= 2 && !line.vmode) { sc.kind = "board"; sc.markets = line.board; }   // a market recap opens on the day's board (unless you picked a picture)
     else if (line.kind === "chart" && line.chart) { sc.kind = "chart"; sc.chart = line.chart; }
     else if (line.kind === "section") { sc.kind = "section"; sc.num = line.num; sc.label = line.label; }
     else if (line.kind === "recap") { sc.kind = "recap"; sc.items = line.items; }
     else if (line.kind === "quiz") { sc.kind = "quiz"; sc.num = line.quiz?.n || 1; sc.of = line.quiz?.of || 1; sc.countStart = spans[i][1]; sc.countEnd = sc.end; }
-    else if (line.kind === "answer") { sc.kind = "answer"; sc.answer = line.answer !== false; sc.payoff = true; }
+    else if (line.kind === "answer") { const q = scenes.findLast((x) => x.kind === "quiz"); sc.kind = "answer"; sc.answer = line.answer !== false; sc.payoff = true; sc.num = q?.num || 0; sc.of = q?.of || 0; }
     // The big moments (the bottom line, the question for the comments) as big words on screen.
     else if (line.kind === "media" && (line.stance || line.question) && !line.vmode && opts.kinetic !== false) { sc.kind = "kinetic"; sc.chip = ""; }
     else {
@@ -572,10 +589,17 @@ export async function produceReel(plan, opts, ui) {
         } catch (e) { console.warn("illustration", e); sc.kind = "illus"; sc.icon = v.icon; sc.label = v.label; }
       }
       else { sc.kind = "illus"; sc.icon = v.icon; sc.label = v.label; }
-      if (opts.pops !== false && i > 0) sc.stat = statFor(line.text);   // big callout for the key number
+      if (opts.pops !== false && i > 0) {   // big callout for the key number, red or green when it's a loss or a gain
+        sc.stat = statFor(line.text);
+        if (sc.stat) { const toks = line.text.split(/\s+/), dir = directionsOf(toks), digits = sc.stat.replace(/[^\d.]/g, ""); const at = digits ? toks.findIndex((w) => w.replace(/[^\d.]/g, "") === digits) : -1; sc.statTone = at >= 0 ? dir[at] : 0; }
+      }
     }
     scenes.push(sc);
   }
+
+  // The same graphic on two lines in a row (a growth curve the next line keeps talking about) carries on
+  // instead of drawing itself again from nothing.
+  scenes.forEach((sc, k) => { const prev = scenes[k - 1]; if (sc.kind === "stat" && prev?.kind === "stat" && JSON.stringify(prev.spec) === JSON.stringify(sc.spec)) { sc.continued = true; sc.seed = prev.seed; } });
 
   // Cuts: a long line doesn't sit on one picture. Halfway through (at a word), it cuts to a second
   // visual of the same idea, the way an editor would. Payoffs and labels stay on the first shot.
@@ -605,7 +629,7 @@ export async function produceReel(plan, opts, ui) {
   let logo = null;
   if (opts.logo) { try { logo = await createImageBitmap(await (await fetch(opts.logo)).blob()); } catch { logo = null; } }
   const job = { title: script.title, brand: opts.brand, accent: opts.accent || "#FFD60A", scenes, words, audio,
-    captionStyle: opts.captionStyle || "bold", captionPos: opts.captionPos || "low", handle: opts.handle || "", logo, hookTitle: opts.hookTitle !== false,
+    captionStyle: opts.captionStyle || "bold", captionPos: opts.captionPos || "low", handle: opts.handle || "", logo, hookTitle: opts.hookTitle !== false, cta: opts.ctaKind || "follow",
     // High quality, except for 2–3 minute stories: their file is built in memory, and iPhones have little to spare.
     quality: opts.quality === "standard" || opts.length === "full" ? "standard" : "high" };
   const result = await renderReel(job, ui.canvas, ui.audioCtx, (f) => ui.say("Rendering your reel on this device…", 0.6 + 0.4 * f), opts.forceEncoder);
@@ -699,7 +723,7 @@ export function releasePlan(plan) {
 // Photos are found again when a draft is opened (your own photos aren't kept, to save space).
 export function draftFromPlan(plan, label) {
   const strip = (l) => ({ text: l.text, visual: l.visual, query: l.query, kind: l.kind, chart: l.chart || null, vmode: l.vmode, concrete: l.concrete,
-    source: l.source, hold: l.hold, items: l.items, num: l.num, label: l.label, section: l.section, tip: l.tip, claim: l.claim, pace: l.pace, payoff: l.payoff, artPick: l.artPick, question: l.question, optional: l.optional, stance: l.stance, quiz: l.quiz, answer: l.answer, role: l.role,
+    source: l.source, hold: l.hold, items: l.items, board: l.board, num: l.num, label: l.label, section: l.section, tip: l.tip, claim: l.claim, pace: l.pace, payoff: l.payoff, artPick: l.artPick, question: l.question, optional: l.optional, stance: l.stance, quiz: l.quiz, answer: l.answer, role: l.role,
     check: l.check ? { status: l.check.status, kind: l.check.kind, sources: l.check.sources, live: l.check.live,
       evidence: (l.check.evidence || []).slice(0, 2).map((e) => ({ text: e.text, source: e.source, section: e.section })) } : undefined,
     mine: l.asset && !l.asset.credit ? true : undefined, photo: l.asset?.photoPath || undefined });
