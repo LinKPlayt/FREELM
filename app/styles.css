@@ -258,6 +258,9 @@ label.btn { cursor: pointer; }
   }
 }
 @keyframes tip-in { from { opacity: 0; transform: translate(-50%, 3px); } }
+/* tip-start: the tooltip lines up with the left edge, for things near the edge of the screen */
+@media (hover: hover) { [data-tip].tip-start:hover::after { left: 0; transform: none; animation-name: tip-in-start; } }
+@keyframes tip-in-start { from { opacity: 0; transform: translateY(3px); } }
 
 /* progress, spinner, skeletons */
 .progress { height: 6px; background: var(--surface-3); border-radius: 99px; overflow: hidden; margin: 14px 0 10px; }

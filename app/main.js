@@ -312,7 +312,7 @@ async function renderHome() {
   if (state.tab !== "home") return;
   state.lib = reels;
   const withViews = results.filter((r) => r.stats?.views > 0), views = withViews.reduce((n, r) => n + r.stats.views, 0);
-  const done = reels.filter((r) => posted.has(r.id)).length, today = todayDraft(), resume = pendingAutosave();
+  const done = reels.filter((r) => posted.has(r.id)).length, today = todayDraft(), resume = state.busy || state.plan ? null : pendingAutosave();
   $("home-stats").innerHTML =
     stat("video", "Videos", reels.length, reels.length ? `${done} posted · ${reels.length - done} to post` : "Make your first one in the Studio")
     + stat("eye", "Total views", withViews.length ? fmtN(views) : "—", withViews.length ? `from ${withViews.length} video${withViews.length === 1 ? "" : "s"} with results` : "Add views to your videos in the Library")
@@ -320,13 +320,16 @@ async function renderHome() {
     + stat("queue", "Queue", drafts.length, today ? `Today: ${esc(today.label.replace(/^\w{3} · /, ""))}` : drafts.length ? "Drafts ready to make" : "Plan a week in Automation");
   // Up next: what's waiting for you, most urgent first.
   const items = [];
-  if (resume) items.push(`<div class="next-item"><span class="next-icon accent">${ICON.edit}</span><div><b>Continue: ${esc(resume.label)}</b><small>Script you were reviewing · ${ago(resume.saved)}</small></div><button class="btn" data-resume-act="open">Continue</button></div>`);
+  // A script open in the Studio goes straight back to it; one left from an earlier visit reopens; one being made shows in the status card.
+  if (state.plan && !state.busy) items.push(`<div class="next-item"><span class="next-icon accent">${ICON.edit}</span><div><b>Continue: ${esc(state.plan.script?.title || "your script")}</b><small>Open in the Studio, ready to edit or make</small></div><button class="btn" data-go="create">Continue</button></div>`);
+  else if (resume) items.push(`<div class="next-item"><span class="next-icon accent">${ICON.edit}</span><div><b>Continue: ${esc(resume.label)}</b><small>Script you were reviewing · ${ago(resume.saved)}</small></div><button class="btn" data-resume-act="open">Continue</button></div>`);
   if (today) items.push(`<div class="next-item"><span class="next-icon accent">${ICON.cal}</span><div><b>${esc(today.label.replace(/^\w{3} · /, ""))}</b><small>Today's planned video</small></div><button class="btn main" data-today-act="make">Make it now</button></div>`);
   const queued = drafts.filter((d) => d.id !== today?.id);
   if (queued.length) items.push(`<div class="next-item"><span class="next-icon">${ICON.queue}</span><div><b>${queued.length} draft${queued.length === 1 ? "" : "s"} in the queue</b><small>Make them one by one, or all in one go</small></div><button class="btn" data-go="auto">Open queue</button></div>`);
   const toPost = reels.length - done;
   if (toPost) items.push(`<div class="next-item"><span class="next-icon">${ICON.send}</span><div><b>${toPost} video${toPost === 1 ? "" : "s"} not posted yet</b><small>Share, copy the caption, mark as posted</small></div><button class="btn" data-lib-filter="unposted">Show</button></div>`);
   $("home-next").innerHTML = `<div class="section-head"><h2>Up next</h2></div>` + (items.length ? `<div class="next-list">${items.join("")}</div>`
+    : state.busy ? `<div class="empty"><b>Working on it</b>When it's done, your video shows up here and in the Library.</div>`
     : `<div class="empty"><b>You're all caught up</b>Make a video, or plan a whole week of drafts.<div class="btns"><button class="btn main" data-go="create">New video</button><button class="btn" data-go="auto">Plan my week</button></div></div>`);
   // Performance: views of recent videos with results, and what works best so far.
   const ins = insights({ voice: VOICE_LABELS, cta: CTA_LABELS, music: MOODS, captions: CAPTION_STYLES });
@@ -365,6 +368,12 @@ function renderAuto() {
       : `<p>Videos you make are kept in the Library, ready to share to TikTok, Instagram or YouTube.</p>`}`;
   if (!state.lib) listReels().then((l) => { state.lib = l; if (state.tab === "auto") renderAuto(); });
 }
+
+// The progress pill and Home's status card act as buttons: Enter or Space opens the Studio, as a tap does.
+document.addEventListener("keydown", (e) => {
+  const el = e.target.closest?.('[data-go][role="button"]');
+  if (el && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); el.click(); }
+});
 
 // Actions shared by Home, Automation and the Studio cards.
 document.addEventListener("click", (e) => {
@@ -431,7 +440,7 @@ function renderToday() {
 }
 
 // Makes several drafts one after another (Make all, or today's video): each is turned into a video,
-// saved to the Library and removed from Drafts. Stops at the first one that fails, keeping the rest.
+// saved to the Library and removed from the queue. Stops at the first one that fails, keeping the rest.
 async function makeDrafts(list) {
   if (state.busy || !list.length) return;
   state.busy = true;
@@ -459,7 +468,7 @@ async function makeDrafts(list) {
     window.__lastReel = made.at(-1); window.__batch = made;
   } catch (e) {
     screen("form");
-    showError(e, made.length ? `Made ${made.length} of ${list.length}, then stopped. The rest are still in Drafts` : "The video couldn't be made");
+    showError(e, made.length ? `Made ${made.length} of ${list.length}, then stopped. The rest are still in the queue` : "The video couldn't be made");
   }
   wake?.release?.().catch(() => {}); closeAudio();
   state.busy = false; renderDrafts(); renderToday();
@@ -671,7 +680,7 @@ function screen(name) {   // form | job | review
   $("job").classList.toggle("hidden", name !== "job");
   $("review").classList.toggle("hidden", name !== "review");
   if (name !== "form") $("result").classList.add("hidden");
-  window.scrollTo(0, 0);
+  if (state.tab === "create") window.scrollTo(0, 0);
   mirrorJob();
 }
 const say = (text, f) => {
@@ -680,10 +689,12 @@ const say = (text, f) => {
   mirrorJob(text, f);
 };
 // While something is being made, the sidebar and Home show it too, so you can look around meanwhile.
-let lastJobF = 0;
+let lastJobF = 0, jobWasBusy = false;
 function mirrorJob(text, f) {
   if (f != null) lastJobF = f;
   const busy = state.busy && !$("job").classList.contains("hidden");
+  if (jobWasBusy && !busy) setTimeout(jobEnded, 0);   // after the result card is filled in
+  jobWasBusy = busy;
   $("nav-job").classList.toggle("hidden", !busy);
   if (busy) $("nav-job-text").textContent = `${$("job-title").textContent.replace(/…$/, "")} · ${Math.round(lastJobF * 100)}%`;
   const hs = $("home-status");
@@ -692,6 +703,15 @@ function mirrorJob(text, f) {
     if (busy) hs.innerHTML = `<span class="spinner" aria-hidden="true"></span><div><b>${esc($("job-title").textContent)}</b><span class="meta">${esc(text || "")}</span>
       <div class="progress"><div style="width:${Math.round(lastJobF * 100)}%"></div></div></div><span class="badge accent">${Math.round(lastJobF * 100)}%</span>`;
   }
+}
+
+// When a job ends while you're on another page, that page catches up and a toast says how it went.
+function jobEnded() {
+  if (state.busy || state.tab === "create") return;
+  if (state.tab === "home") renderHome(); else if (state.tab === "library") renderLibrary(); else if (state.tab === "auto") renderAuto(); else if (state.tab === "about") renderStorage();
+  const title = !$("result").classList.contains("hidden") && $("result").querySelector("h2")?.textContent;
+  if (!$("review").classList.contains("hidden")) toast("Your script is ready to review in the Studio", "ok");
+  else if (title) { const bad = /couldn't|stopped|didn't|wrong/i.test(title); toast(`${title}. ${bad ? "Details are" : "See it"} in the Studio`, bad ? "err" : "ok"); }
 }
 
 // While a video is made: a checklist of the steps, and how long is left (from this phone's past reels).
@@ -764,7 +784,7 @@ async function produce() {
     const kept = await saveReel(reel);
     screen("form");
     const soundNote = reel.sound === false
-      ? `<p style="color:var(--bad)"><b>This video has no sound.</b> Your phone's browser didn't record the audio. Please run <b>Sound test</b> in the About tab and tell us what it says.</p>`
+      ? `<p style="color:var(--bad)"><b>This video has no sound.</b> Your phone's browser didn't record the audio. Please run <b>Sound test</b> in Settings and tell us what it says.</p>`
       : reel.sound ? `<p style="color:var(--good)">Sound checked ✓</p>`
       : reel.written && reel.written.peakDb > -40 ? `<p style="color:var(--good)">Sound written into the video ✓</p>` : "";
     const roomNote = kept?.removed?.length ? `<p class="meta">To make room on your phone, ${kept.removed.length === 1 ? "this older video was" : "these older videos were"} removed from the Library: ${kept.removed.map(esc).join(", ")}.</p>` : "";
@@ -851,7 +871,7 @@ async function planWeek() {
     }
     screen("form");
     renderToday();
-    $("result").innerHTML = `<h2>Your week is planned</h2><p>${made.length} drafts saved in the Library, each fact-checked and ready to review. Open one when you're ready to make it.</p><ol class="steps">${made.map((d) => `<li>${esc(d.label)}</li>`).join("")}</ol>
+    $("result").innerHTML = `<h2>Your week is planned</h2><p>${made.length} drafts saved to the queue in Automation, each fact-checked and ready to review. Open one when you're ready to make it.</p><ol class="steps">${made.map((d) => `<li>${esc(d.label)}</li>`).join("")}</ol>
       ${REMINDER_ROW}<div class="btns"><button class="btn wide" data-go="auto">Open the queue</button></div>`;
     $("result").classList.remove("hidden");
   } catch (e) { screen("form"); showError(e, made.length ? `Planned ${made.length}, then stopped` : "Couldn't plan the week"); }
