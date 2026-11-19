@@ -35,6 +35,7 @@
   --fast: 140ms; --mid: 220ms;
   /* layout */
   --safe-top: env(safe-area-inset-top); --safe-bottom: env(safe-area-inset-bottom);
+  --safe-left: env(safe-area-inset-left, 0px); --safe-right: env(safe-area-inset-right, 0px);   /* an iPhone on its side */
   --tabbar: 64px;
   --font: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   color-scheme: dark;
@@ -108,9 +109,9 @@ button { font-family: inherit; }
 
 /* tablet: an icon rail on the left */
 @media (min-width: 768px) {
-  .app-main { padding: calc(var(--safe-top) + 8px) 28px 40px; margin-left: 84px; max-width: none; }
+  .app-main { padding: calc(var(--safe-top) + 8px) calc(28px + var(--safe-right)) 40px 28px; margin-left: calc(84px + var(--safe-left)); max-width: none; }
   .nav {
-    top: 0; right: auto; width: 84px; padding: calc(var(--safe-top) + 16px) 10px 16px; border-top: 0; border-right: 1px solid var(--border);
+    top: 0; right: auto; width: calc(84px + var(--safe-left)); padding: calc(var(--safe-top) + 16px) 10px 16px calc(10px + var(--safe-left)); border-top: 0; border-right: 1px solid var(--border);
     display: flex; flex-direction: column; gap: 18px; background: rgba(10, 11, 18, .92);
   }
   .nav-brand { display: flex; justify-content: center; }
@@ -119,7 +120,7 @@ button { font-family: inherit; }
   .nav button { padding: 10px 4px; font-size: 10.5px; }
   .nav button:hover { color: var(--text); background: var(--surface-2); }
   .nav button.active { background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--border); }
-  .topbar { margin: 0 -28px 18px; padding: calc(var(--safe-top) + 18px) 28px 14px; }
+  .topbar { margin: 0 calc(-28px - var(--safe-right)) 18px -28px; padding: calc(var(--safe-top) + 18px) calc(28px + var(--safe-right)) 14px 28px; }
   .topbar-logo { display: none; }
   .topbar-title h1 { font-size: 24px; }
   .topbar-title p { font-size: 13.5px; }
