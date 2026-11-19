@@ -153,7 +153,7 @@ function browser(parent, w, src) {
   const bar = mk(root, "browser-bar", { height: barH + "px", paddingLeft: barH * 0.62 + "px", gap: barH * 0.3 + "px" });
   ["#ff5f57", "#febc2e", "#28c840"].forEach((c) => mk(bar, "", { width: barH * 0.3 + "px", height: barH * 0.3 + "px", borderRadius: "50%", background: c, opacity: 0.9 }));
   mk(bar, "browser-url", { fontSize: barH * 0.34 + "px", height: barH * 0.6 + "px", padding: `0 ${barH * 0.5}px` },
-    svg(IC.lock, `style="width:${barH * 0.32}px;height:${barH * 0.32}px;fill:none;stroke:#8b93a8;stroke-width:2.4"`) + "linkplayt.github.io/FREELM");
+    svg(IC.lock, `style="width:${barH * 0.32}px;height:${barH * 0.32}px;fill:none;stroke:#8b93a8;stroke-width:2.4"`) + "linkplayt.github.io/ReelBot");
   img(root, src, { width: "100%", display: "block" });
   return { root, w, h: barH + ch };
 }
@@ -542,8 +542,8 @@ scene(43.98, 46.08, (root) => {
 // 18. Outro: the logo, the link, out now.
 scene(45.95, 52.1, (root) => {
   const lk = lockup(root, { mark: L(170, 230), fs: L(170, 180), tagFs: L(40, 46), gap: L(40, 34), top: L(H / 2 - 100, H / 2 - 260), tagTop: L(H / 2 + 30, H / 2 + 170) });
-  const url = pill(root, "linkplayt.github.io/FREELM", L(34, 40), { icon: "link" }); S(url, { left: "50%", top: L(H / 2 + 130, H / 2 + 300) + "px", fontFamily: "JetBrains Mono", fontWeight: 600, letterSpacing: "0.02em" });
-  const now = mk(root, "mono abs", { left: 0, right: 0, textAlign: "center", top: L(H / 2 + 250, H / 2 + 440) + "px", fontSize: L(20, 24) + "px", color: "#8b93a8" }, "Out now · Version 47 · iPhone, Android & desktop");
+  const url = pill(root, "linkplayt.github.io/ReelBot", L(34, 40), { icon: "link" }); S(url, { left: "50%", top: L(H / 2 + 130, H / 2 + 300) + "px", fontFamily: "JetBrains Mono", fontWeight: 600, letterSpacing: "0.02em" });
+  const now = mk(root, "mono abs", { left: 0, right: 0, textAlign: "center", top: L(H / 2 + 250, H / 2 + 440) + "px", fontSize: L(20, 24) + "px", color: "#8b93a8" }, "Out now · iPhone, Android & desktop");
   const shine = mk(root, "abs", { left: 0, top: L(H / 2 - 260, H / 2 - 520) + "px", width: W + "px", height: L(320, 520) + "px", background: "linear-gradient(100deg, rgba(255,255,255,0) 44%, rgba(255,255,255,.13) 50%, rgba(255,255,255,0) 56%)", mixBlendMode: "screen", webkitMaskImage: "radial-gradient(ellipse 34% 50% at 50% 50%, #000 30%, transparent 75%)" });
   return (t) => {
     const push = pr(t, 46.0, 52, E.lin), pulse = t >= T.finalHit ? 0.025 * Math.exp(-(t - T.finalHit) * 5) : 0;

@@ -1,4 +1,4 @@
-# FREELM · ReelBot
+# ReelBot
 
 **Automatic 30–45 second finance reels, made entirely on your phone.**
 
@@ -21,7 +21,11 @@ on your phone:  research ──► script ──► voice ──► photos ─�
 
 ## Use it
 
-1. Open **https://linkplayt.github.io/FREELM/** in **Safari** on your iPhone.
+> **New address.** ReelBot used to live at `linkplayt.github.io/FREELM`. A copy installed from there keeps
+> working and shows how to move: **Settings → Backup** in the old copy, then add the new address to your
+> Home Screen and **Settings → Restore** (drafts, settings and results; save any videos you want first).
+
+1. Open **https://linkplayt.github.io/ReelBot/** in **Safari** on your iPhone.
 2. Tap **Share → Add to Home Screen** so it opens like an app.
 3. In the **Studio**, pick a niche and a type (or type **your own topic**), set your style in the five steps (see the live preview), then tap **Make my reel**.
 4. **Review it:** every scene is listed with its line and photo. Edit any line, remove scenes, add researched lines, or change a photo. Then tap **Make the video**, and keep the screen open while it renders.
@@ -505,7 +509,7 @@ the app still makes Explainer and news reels.
 The original Python version is still here. It needs **Python 3.10+** and **ffmpeg**.
 
 ```bash
-git clone https://github.com/LinKPlayt/FREELM.git && cd FREELM
+git clone https://github.com/LinKPlayt/ReelBot.git && cd ReelBot
 python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 

@@ -164,7 +164,7 @@ async function copy(text, { label, done = "Copied" } = {}) {
 }
 function repo() {   // https://owner.github.io/repo/ -> owner/repo
   const m = location.hostname.match(/^([^.]+)\.github\.io$/), seg = location.pathname.split("/").filter(Boolean)[0];
-  return m && seg ? `${m[1]}/${seg}` : "LinKPlayt/FREELM";
+  return m && seg ? `${m[1]}/${seg}` : "LinKPlayt/ReelBot";
 }
 
 // Pages: title and one-line description shown in the top bar.
@@ -613,7 +613,7 @@ async function saveFile(file) {
 
 /* ---------- backup and restore: settings, drafts, results (not the videos) ---------- */
 // Everything the app keeps in this phone's browser storage except short-lived voice/AI status flags.
-const NO_BACKUP = /^(voiceBusy|aiLoading|voiceStrikes|voiceRetried|voiceError|voiceLevel|voiceReady-.*|seenVersion|libSaved)$/;
+const NO_BACKUP = /^(voiceBusy|aiLoading|voiceStrikes|voiceRetried|voiceError|voiceLevel|voiceReady-.*|seenVersion|libSaved|movedLater)$/;
 async function backup() {
   const data = {};
   for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && !NO_BACKUP.test(k)) data[k] = localStorage.getItem(k); }
@@ -1340,6 +1340,33 @@ function showWhatsNew(sinceVersion) {
   sheet.addEventListener("click", (e) => { if (e.target === sheet || e.target.closest('[data-news="close"]')) close(); });
   document.body.appendChild(sheet);
 }
+/* ---------- the new address (v48): linkplayt.github.io/ReelBot ---------- */
+// A copy opened from the old address (/FREELM/) keeps working from what's saved on this phone. Once the new
+// address is live it says so, with the steps to bring drafts and settings along (Home Screen web apps keep
+// their own storage, so they move with a backup). "Later" hides it for three days.
+const NEW_HOME = "/ReelBot/", OLD_HOME = /^\/freelm\//i;
+async function checkMoved() {
+  if (!OLD_HOME.test(location.pathname)) return;
+  if (Date.now() - Number(store.get("movedLater") || 0) < 3 * 86400e3) return;
+  try { const r = await fetch(NEW_HOME + "manifest.webmanifest", { cache: "no-store" }); if (!r.ok) return; } catch { return; }
+  const url = location.origin + NEW_HOME;
+  document.getElementById("moved-sheet")?.remove();
+  const sheet = document.createElement("div");
+  sheet.id = "moved-sheet"; sheet.className = "copy-sheet"; sheet.setAttribute("role", "dialog"); sheet.setAttribute("aria-label", "ReelBot has a new address");
+  sheet.innerHTML = `<div class="copy-box news"><h2 style="margin:0">ReelBot has a new address</h2>
+    <p class="meta" style="margin:4px 0 0"><b>${esc(url.replace(/^https?:\/\//, ""))}</b>, a link that matches its name.</p>
+    <p>This copy keeps working, but updates now arrive at the new address. To bring everything along:</p>
+    <ol class="steps"><li><b>Back up</b> here (settings, drafts and results go into one file).</li><li>Save any videos you want to keep (Library → Save / Share).</li>
+    <li>Open the new address in Safari, add it to your Home Screen, then <b>Settings → Restore</b>.</li></ol>
+    <div class="btns"><a class="btn main" href="${esc(url)}" target="_blank" rel="noopener" style="text-decoration:none">Open the new address</a><button class="btn" data-moved="backup">Back up now</button><button class="btn ghost" data-moved="later">Later</button></div></div>`;
+  sheet.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-moved]");
+    if (b?.dataset.moved === "backup") backup();
+    if (b?.dataset.moved === "later" || e.target === sheet) { store.set("movedLater", String(Date.now())); sheet.remove(); }
+  });
+  document.body.appendChild(sheet);
+}
+
 function checkWhatsNew() {
   const seen = Number(store.get("seenVersion") || 0);
   // Someone who has used the app before sees what changed; a brand-new user just starts.
@@ -1601,7 +1628,7 @@ async function init() {
     if (b.dataset.today === "make") return makeDrafts([d]);
     show("auto"); document.querySelector(`[data-draft-open="${CSS.escape(d.id)}"]`)?.click();
   });
-  checkWhatsNew();
+  checkWhatsNew(); checkMoved();
   $("ai-check").addEventListener("click", aiCheck);
   $("wipe").addEventListener("click", async () => { if (confirm("Delete every reel stored on this phone?")) { await clearReels(); renderLibrary(); toast("Deleted"); } });
   const info = await encoderInfo();

@@ -1,9 +1,14 @@
 // The app's version and its update notes, shown once in a "What's new" window after each update.
 // When you deploy: bump APP_VERSION, add an entry at the top of UPDATES, and set the same number in
 // sw.js (VERSION = "reelbot-v<APP_VERSION>"). A test checks the two match.
-export const APP_VERSION = 47;
+export const APP_VERSION = 48;
 
 export const UPDATES = [
+  { version: 48, title: "A new address: linkplayt.github.io/ReelBot", items: [
+    "ReelBot is moving to linkplayt.github.io/ReelBot, a link that matches its name.",
+    "Nothing gets locked away: a copy opened from the old address keeps working, and once the new one is live it shows you how to bring your drafts and settings along (Back up here, Restore there).",
+    "At the new address, voices and AI models you already downloaded are reused instead of downloaded again.",
+  ] },
   { version: 47, title: "A redesigned ReelBot", items: [
     "A new look throughout: a refined dark theme, clearer type, consistent spacing, and smooth, subtle animation.",
     "New Home dashboard: your videos, posted count, total and average views, the queue, what's up next, recent videos, performance and activity, all from what's on your phone.",
