@@ -394,6 +394,20 @@ While you review a script, it's saved on the phone as you go (the script and you
 If the phone reloads the app (iPhones often do this to apps left in the background), **Pick up where you
 left off** appears at the top of Create. Making the video, Start over, New script or Save draft clears it.
 
+### Library space and posted videos
+
+The Library keeps up to 60 videos. When that's passed, or the phone's space for the app is over 85% full,
+the oldest videos are removed, ones you've marked as posted first, and the app names them. Each video has
+**Mark as posted** (adding its views marks it too); the Library shows how much space it uses, a **Not
+posted yet** filter and **Delete posted**. The app asks the browser for persistent storage at start-up.
+
+### Posting reminders and backups
+
+After **Plan my week**, **Add to Calendar** (choose 12, 6 or 8 PM) saves an .ics file with one event per
+planned day, each with an alert, for the phone's calendar. **About → Backup** saves settings, drafts,
+results and learned estimates to a JSON file (not videos, music or photos); **Restore** reads it back.
+The review screen's **↑ / ↓** reorder scenes (the hook stays first and the ending last).
+
 ### Your photos
 
 Photos you choose with **My photo** are saved on the phone (JPEG, up to 1600 px) and come back with drafts,

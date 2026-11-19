@@ -124,6 +124,7 @@
   .job-steps li::before { content: "○ "; } .job-steps li.done::before { content: "✓ "; } .job-steps li.now::before { content: "● "; }
   .news h3 { margin: 12px 0 4px; font-size: 16px; } .news ul { margin: 0; padding-left: 18px; } .news li { margin: 4px 0; }
   .card.today { border: 2px solid var(--accent); }
+  .btn.on { border-color: var(--good); color: var(--good); }
   .lib-tools { margin: 0 0 12px; } .lib-tools input { width: 100%; margin-bottom: 8px; }
   .card.today .btns { display: flex; gap: 8px; } .card.today .btns > * { flex: 1; }
   .art-gallery { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; padding: 8px 0 2px; }
@@ -288,6 +289,7 @@
   <section id="tab-library" class="tab">
     <div id="drafts"></div>
     <div id="insights"></div>
+    <div id="lib-space" class="card hidden"></div>
     <div id="lib-tools" class="lib-tools hidden">
       <input id="lib-q" type="search" placeholder="Search your reels" autocomplete="off">
       <div class="chips" id="lib-kinds"></div>
@@ -301,6 +303,12 @@
     <div class="card">
       <div class="row" style="padding:0"><div><b>What's new</b><small id="version-line"></small></div>
         <button class="btn" id="whats-new" style="flex:none">Show</button></div>
+    </div>
+    <div class="card">
+      <h2>Backup</h2>
+      <p class="meta">Save your settings, drafts, results and channel style to a file (for a new phone, or before clearing Safari). Videos and downloads aren't included.</p>
+      <div class="btns" style="display:flex;gap:8px;margin:0"><button class="btn" id="backup" style="flex:1">Back up</button>
+        <label class="btn" style="flex:1;cursor:pointer;text-align:center">Restore<input id="restore" type="file" accept="application/json,.json" hidden></label></div>
     </div>
     <div class="card">
       <h2>Storage on this phone</h2>

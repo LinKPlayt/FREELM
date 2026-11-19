@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 // End-to-end tests of every feature, as a user would use them (phone-sized browser). Makes real
 // videos, so it takes a while and needs the internet (photos, headlines, Wikipedia).
 const until = (page, fn, arg, timeout = 600000) => page.waitForFunction(fn, arg, { timeout, polling: 500 });
@@ -50,6 +51,9 @@ export default async function ({ t, newPage, BASE }) {
     await page.click("#undo-remove");
     t.ok(await page.locator(".scene").count() === n0 + 1 && (await page.inputValue('[data-line="1"]')) === removedText && await page.locator("#undo-remove").isHidden(), "Undo remove puts the scene back");
     await page.locator("[data-del]").last().click();
+    const t1 = await page.inputValue('[data-line="1"]'); await page.click('[data-move="1:1"]');
+    t.ok((await page.inputValue('[data-line="2"]')) === t1, "↓ moves a scene down (the hook stays first)");
+    await page.click('[data-move="2:-1"]');
     const h0 = await page.inputValue('[data-line="0"]'); await page.click("[data-hook]");
     t.ok((await page.inputValue('[data-line="0"]')) !== h0, "Another hook changes the hook");
     const chips = await page.locator('[data-vmode^="1:"]').count();
@@ -145,6 +149,9 @@ export default async function ({ t, newPage, BASE }) {
     await until(page, () => /week is planned|Couldn't|stopped/.test(document.getElementById("result").textContent), null, 600000);
     const week = await page.innerText("#result");
     t.ok(/week is planned/.test(week) && /Mon · /.test(week) && /(Tue|Wed|Thu) · [^\n]*Quiz/i.test(week), "Plan my week saves a varied week of drafts (with a mid-week quiz)", week.slice(0, 300));
+    const [ics] = await Promise.all([page.waitForEvent("download", { timeout: 15000 }), page.click('#result [data-remind]')]);
+    const icsText = readFileSync(await ics.path(), "utf8");
+    t.ok((icsText.match(/BEGIN:VEVENT/g) || []).length >= 4 && /SUMMARY:Post: /.test(icsText) && /BEGIN:VALARM/.test(icsText) && /DTSTART:\d{8}T180000/.test(icsText), "the planned week becomes calendar reminders (one per day, with an alert)", icsText.slice(0, 200));
     await page.click('nav [data-tab="library"]'); await page.locator("[data-draft-open]").first().click();
     await page.waitForSelector("#review:not(.hidden)", { timeout: 180000 });
     t.ok(await page.locator(".scene").count() >= 4, "a saved draft opens in the review screen, with photos found again");
@@ -310,11 +317,11 @@ export default async function ({ t, newPage, BASE }) {
   t.section("Features: What's new, storage, make-time, Library covers");
   try {
     // a returning user who last saw version 29 (the window shows the newest three updates)
-    await page.evaluate(() => localStorage.setItem("seenVersion", "42"));
+    await page.evaluate(() => localStorage.setItem("seenVersion", "43"));
     await page.reload(); await until(page, () => window.__ready, null, 60000);
     t.ok(await page.locator("#news-sheet").count() === 1 && /What's new/.test(await page.innerText("#news-sheet")), "What's new appears after an update");
     const news = await page.innerText("#news-sheet");
-    t.ok(/photos kept/.test(news) && /nothing lost/.test(news) && !/Smoother cuts/.test(news), "it lists only the updates since the last one seen", news.slice(0, 200));
+    t.ok(/safer Library/.test(news) && /photos kept/.test(news) && !/moves with the video/.test(news), "it lists only the updates since the last one seen", news.slice(0, 200));
     await page.click('[data-news="close"]');
     t.ok(await page.locator("#news-sheet").count() === 0, "Got it closes it");
     await page.reload(); await until(page, () => window.__ready, null, 60000);
@@ -326,6 +333,15 @@ export default async function ({ t, newPage, BASE }) {
     const artNote = await page.innerText("#art-note");
     await until(page, () => !document.getElementById("art-gallery").classList.contains("hidden"), null, 20000).catch(() => {});
     t.ok(/Drew and saved 36 new/.test(artNote) && await page.locator("#art-gallery img").count() >= 6, "Draw more draws and saves a batch of illustrations, shown in Storage", artNote);
+    // Backup and restore: a file with the settings, drafts and results; restoring brings them back.
+    const brand0 = await page.evaluate(() => localStorage.getItem("brand") || "");
+    const [bk] = await Promise.all([page.waitForEvent("download", { timeout: 15000 }), page.click("#backup")]);
+    const bkText = readFileSync(await bk.path(), "utf8"), bkJson = JSON.parse(bkText);
+    await page.evaluate(() => localStorage.setItem("brand", "Changed Brand"));
+    await page.setInputFiles("#restore", { name: "backup.json", mimeType: "application/json", buffer: Buffer.from(bkText) });
+    await page.waitForEvent("load", { timeout: 20000 }).catch(() => {}); await until(page, () => window.__ready, null, 60000); await toastLog();
+    t.ok(bkJson.app === "ReelBot" && "results" in bkJson.data && !("voiceBusy" in bkJson.data) && await page.evaluate(() => localStorage.getItem("brand") || "") === brand0, "Back up saves settings, drafts and results to a file, and Restore brings them back", JSON.stringify({ keys: Object.keys(bkJson.data || {}).length, brand0 }));
+    await page.click('nav [data-tab="about"]').catch(() => {});
     await page.click("#whats-new"); t.ok(await page.locator("#news-sheet").count() === 1, "What's new can be reopened from About"); await page.click('[data-news="close"]');
     await page.click('nav [data-tab="create"]').catch(() => {});
     await page.click('#modes .chip >> text="Explainer"'); await page.click("#go"); await page.waitForSelector("#review:not(.hidden)", { timeout: 180000 });
@@ -351,6 +367,20 @@ export default async function ({ t, newPage, BASE }) {
       const quizChip = page.locator('#lib-kinds [data-lib-kind="quiz"]');
       let quizzes = -1; if (await quizChip.count()) { await quizChip.click(); quizzes = await page.locator("#reels [data-reel]").count(); await page.click('#lib-kinds [data-lib-kind="all"]'); }
       t.ok(found >= 1 && found <= total && none === 0 && offer === 1 && quizzes !== 0 && await page.locator("#reels [data-reel]").count() === total, "Library search and type filters work", JSON.stringify({ title, total, found, none, quizzes }));
+    }
+    // Mark as posted, and Delete posted
+    const postedBefore = await page.evaluate(() => JSON.parse(localStorage.getItem("posted") || "[]").length);
+    const unpostedCard = page.locator("#reels [data-reel]").filter({ has: page.locator('[data-act="posted"]:not(.on)') }).first();
+    if (await unpostedCard.count()) {
+      await unpostedCard.locator('[data-act="posted"]').click();
+      const after = await page.evaluate(() => JSON.parse(localStorage.getItem("posted") || "[]").length);
+      t.ok(after === postedBefore + 1 && new RegExp(`${after} posted`).test(await page.innerText("#lib-space")) && await page.locator("[data-del-posted]").isVisible(), "Mark as posted is remembered and counted, with Delete posted offered", await page.innerText("#lib-space"));
+      const totalNow = await page.locator("#reels [data-reel]").count();
+      if (totalNow - after >= 1) {
+        await page.click("[data-del-posted]");
+        await until(page, (n) => document.querySelectorAll("#reels [data-reel]").length === n, totalNow - after, 15000).catch(() => {});
+        t.ok(await page.locator("#reels [data-reel]").count() === totalNow - after && await page.locator("[data-del-posted]").count() === 0, "Delete posted removes exactly the posted videos", `${totalNow} - ${after} → ${await page.locator("#reels [data-reel]").count()}`);
+      }
     }
     const before = await page.locator("#reels [data-reel]").count();
     await page.locator('#reels [data-act="delete"]').first().click();

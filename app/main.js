@@ -9,7 +9,7 @@ import { drawArt, motifsFor, pickMotifs, styleFor, ART_STYLES, forgetArt, savedA
 const MOTIFS_COUNT = Object.keys(MOTIFS).length;
 import { KOKORO_VOICES, setVoice, loadVoice, phonemize, synthesize, voiceRate, releaseVoice, voiceNotice, resetVoiceLevel, naturalFailed, lastVoiceError } from "./tts.js";
 const factModule = () => import("./ai/factcheck.js");
-import { listReels, saveReel, deleteReel, clearReels, listDrafts, saveDraft, deleteDraft } from "./store.js";
+import { postedIds, setPosted, listReels, saveReel, deleteReel, clearReels, listDrafts, saveDraft, deleteDraft } from "./store.js";
 import { platformCaptions, setPronunciations, visualMatch } from "./script.js";
 import { FIELDS, getResult, saveResult, insights } from "./results.js";
 import { APP_VERSION, UPDATES } from "./version.js";
@@ -202,6 +202,7 @@ function reelCard(r, inline = false) {
     </div>
     ${r.srt || r.cover ? `<div class="btns">${r.cover ? `<button class="btn" data-act="cover">Cover image</button>` : ""}${r.srt ? `<button class="btn" data-act="srt">Captions (.srt)</button>` : ""}</div>` : ""}
     <div class="btns"><button class="btn wide" data-act="remix">Remix: edit this script and make it again</button></div>
+    ${inline ? "" : `<div class="btns"><button class="btn wide${postedIds().has(r.id) ? " on" : ""}" data-act="posted">${postedIds().has(r.id) ? "✓ Posted" : "Mark as posted"}</button></div>`}
     ${inline ? "" : resultsForm(r)}
     <div class="btns" style="margin-top:0">
       ${inline ? "" : `<button class="btn danger wide" data-act="delete">Delete</button>`}
@@ -263,6 +264,16 @@ function renderResume() {
     <div class="btns" style="margin:0"><button class="primary" data-resume="open">Continue</button><button class="btn" data-resume="drop">Discard</button></div>`;
 }
 
+// "Remind me to post" (for planned weeks): a time and a button that makes the calendar file.
+const REMINDER_ROW = `<div class="row reminders" style="padding:4px 0 10px"><div><small class="meta">Get a reminder on each day's video</small></div>
+  <select data-remind-hour style="flex:none;width:auto"><option value="12">12 PM</option><option value="18" selected>6 PM</option><option value="20">8 PM</option></select>
+  <button class="btn" data-remind="1" style="flex:none">Add to Calendar</button></div>`;
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-remind]"); if (!b) return;
+  const hour = Number(b.closest(".reminders")?.querySelector("[data-remind-hour]")?.value) || 18;
+  addReminders(hour);
+});
+
 // Today's planned video (from Plan my week): one tap to make it, or open it to review first.
 const todayDraft = () => { const day = new Date().toLocaleDateString("en-US", { weekday: "short" }); return listDrafts().find((d) => d.label.startsWith(day + " · ")); };
 function renderToday() {
@@ -310,7 +321,7 @@ async function makeDrafts(list) {
 function renderDrafts() {
   const drafts = listDrafts();
   $("drafts").innerHTML = drafts.length ? `<div class="card"><h2>Drafts</h2><p>Scripts you saved to finish later.${drafts.length > 1 ? " Make them all in one go: keep the app open and the phone plugged in." : ""}</p>
-    ${drafts.length > 1 ? `<button class="primary" data-draft-all="1" style="margin:4px 0 10px">Make all ${drafts.length} videos</button>` : ""}${drafts.map((d) => `
+    ${drafts.length > 1 ? `<button class="primary" data-draft-all="1" style="margin:4px 0 10px">Make all ${drafts.length} videos</button>` : ""}${drafts.some((d) => /^\w{3} · /.test(d.label)) ? REMINDER_ROW : ""}${drafts.map((d) => `
     <div class="draft"><div><b>${esc(d.label)}</b><div class="meta">${new Date(d.saved).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} · ${d.script.lines.length} scenes</div></div>
       <div class="mini" style="margin:0"><button data-draft-open="${esc(d.id)}">Open</button><button class="del" data-draft-del="${esc(d.id)}">Delete</button></div></div>`).join("")}</div>` : "";
 }
@@ -331,6 +342,7 @@ $("reels").addEventListener("change", (e) => {
   const card = input.closest("[data-reel]"), r = state.reels.get(card?.dataset.reel); if (!r) return;
   const stats = Object.fromEntries([...card.querySelectorAll("[data-result]")].map((i) => [i.dataset.result, i.value]));
   if (saveResult(r, stats)) {
+    if (Number(stats.views) > 0 && !postedIds().has(r.id)) { setPosted(r.id, true); const pb = card.querySelector('[data-act="posted"]'); if (pb) { pb.textContent = "✓ Posted"; pb.classList.add("on"); } renderLibSpace(); }
     card.querySelector(".results summary").textContent = resultsSummary(stats);
     renderInsights();
   } else toast("Couldn't save the results (storage full?)");
@@ -340,6 +352,19 @@ async function renderLibrary() {
   state.lib = await listReels();
   renderInsights();
   renderReelList();
+  renderLibSpace();
+}
+// How much the Library holds, how full the phone's space for the app is, and a way to clear posted videos.
+async function renderLibSpace() {
+  const el = $("lib-space"); if (!el) return;
+  const all = state.lib || [], posted = postedIds(), done = all.filter((r) => posted.has(r.id));
+  if (!all.length) { el.classList.add("hidden"); return; }
+  const mb = Math.round(all.reduce((n, r) => n + (r.blob?.size || 0) + (r.cover?.size || 0), 0) / 1e6);
+  let pct = null; try { const est = await navigator.storage?.estimate?.(); if (est?.quota) pct = Math.round((est.usage / est.quota) * 100); } catch { /* unknown */ }
+  el.classList.remove("hidden");
+  el.innerHTML = `<div class="row" style="padding:0"><div><b>${all.length} video${all.length === 1 ? "" : "s"}</b> · ${mb} MB${done.length ? ` · ${done.length} posted` : ""}
+    <small class="meta" style="display:block">${pct != null ? `${pct}% of the space your phone allows ReelBot is used. ` : ""}${pct != null && pct >= 70 ? "Getting full: delete videos you've already posted." : "Mark videos as posted; if space runs low, those go first."}</small></div>
+    ${done.length ? `<button class="btn" data-del-posted="1" style="flex:none">Delete posted (${done.length})</button>` : ""}</div>`;
 }
 // The Library list: search by title or topic, filter by type, newest or most-viewed first.
 const LIB_KINDS = { evergreen: "Explainers", news: "News", market: "Markets", custom: "Your topics", idea: "Ideas", quiz: "Quizzes" };
@@ -348,12 +373,14 @@ function renderReelList() {
   const kinds = [...new Set(all.map((r) => r.kind).filter((k) => LIB_KINDS[k]))];
   $("lib-tools").classList.toggle("hidden", all.length < 4);
   if (all.length >= 4) {
-    $("lib-kinds").innerHTML = [["all", `All (${all.length})`], ...kinds.map((k) => [k, `${LIB_KINDS[k]} (${all.filter((r) => r.kind === k).length})`])]
+    const unposted = all.filter((r) => !postedIds().has(r.id)).length;
+    $("lib-kinds").innerHTML = [["all", `All (${all.length})`], ...(unposted && unposted < all.length ? [["unposted", `Not posted yet (${unposted})`]] : []), ...kinds.map((k) => [k, `${LIB_KINDS[k]} (${all.filter((r) => r.kind === k).length})`])]
       .map(([k, label]) => `<button class="chip${f.kind === k ? " on" : ""}" data-lib-kind="${k}">${esc(label)}</button>`).join("")
       + `<button class="chip" data-lib-sort="1">${f.sort === "views" ? "Most views first" : "Newest first"}</button>`;
   }
   const q = f.q.trim().toLowerCase();
-  let list = all.filter((r) => (f.kind === "all" || r.kind === f.kind) && (!q || `${r.title} ${r.topic || ""} ${r.niche || ""}`.toLowerCase().includes(q)));
+  const posted = postedIds();
+  let list = all.filter((r) => (f.kind === "all" || (f.kind === "unposted" ? !posted.has(r.id) : r.kind === f.kind)) && (!q || `${r.title} ${r.topic || ""} ${r.niche || ""}`.toLowerCase().includes(q)));
   if (f.sort === "views") list = list.slice().sort((a, b) => (getResult(b.id)?.stats?.views || 0) - (getResult(a.id)?.stats?.views || 0));
   $("reels").innerHTML = !all.length ? `<div class="empty">No reels yet.<br>Make your first one in Create.</div>`
     : !list.length ? `<div class="empty">No reels match. <button class="btn" data-lib-clear="1" style="margin-top:8px">Show all</button></div>`
@@ -369,7 +396,11 @@ document.addEventListener("click", async (ev) => {
     await copy(text, { label: `${name} caption`, done: `${name} caption copied` });
     return;
   }
-  if (btn.dataset.act === "delete" && confirm("Delete this reel from your phone?")) { await deleteReel(r.id); card.remove(); }
+  if (btn.dataset.act === "delete" && confirm("Delete this reel from your phone?")) { await deleteReel(r.id); card.remove(); state.lib = (state.lib || []).filter((x) => x.id !== r.id); renderLibSpace(); }
+  if (btn.dataset.act === "posted") {
+    const on = !postedIds().has(r.id); setPosted(r.id, on);
+    btn.textContent = on ? "✓ Posted" : "Mark as posted"; btn.classList.toggle("on", on); renderLibSpace();
+  }
   if (btn.dataset.act === "remix") {
     // The reel's script becomes a draft in the review screen: change the voice, style, lines or hook, then make it again.
     if (state.busy) return;
@@ -403,6 +434,64 @@ document.addEventListener("click", async (ev) => {
     } catch (e) { if (e.name !== "AbortError") toast("Couldn't open the share sheet: " + e.message); }
   }
 });
+
+// Hands a file to the share sheet (Save to Files, AirDrop, Calendar…), or downloads it where that isn't offered.
+async function saveFile(file) {
+  try {
+    if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file] });
+    else { const a = document.createElement("a"); a.href = URL.createObjectURL(file); a.download = file.name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 60000); }
+    return true;
+  } catch (e) { if (e.name !== "AbortError") toast("Couldn't share: " + e.message); return false; }
+}
+
+/* ---------- backup and restore: settings, drafts, results (not the videos) ---------- */
+// Everything the app keeps in this phone's browser storage except short-lived voice/AI status flags.
+const NO_BACKUP = /^(voiceBusy|aiLoading|voiceStrikes|voiceRetried|voiceError|voiceLevel|voiceReady-.*|seenVersion|libSaved)$/;
+async function backup() {
+  const data = {};
+  for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && !NO_BACKUP.test(k)) data[k] = localStorage.getItem(k); }
+  const day = new Date().toISOString().slice(0, 10);
+  const file = new File([JSON.stringify({ app: "ReelBot", version: APP_VERSION, made: Date.now(), data }, null, 1)], `reelbot-backup-${day}.json`, { type: "application/json" });
+  if (await saveFile(file)) toast(`Backed up ${Object.keys(data).length} items (settings, drafts, results)`);
+}
+async function restore(file) {
+  let b = null;
+  try { b = JSON.parse(await file.text()); } catch { /* not JSON */ }
+  if (!b || b.app !== "ReelBot" || typeof b.data !== "object") return toast("That isn't a ReelBot backup file.");
+  const when = new Date(b.made || 0).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+  if (!confirm(`Restore the backup from ${when}? Your settings, drafts and results are replaced with the ones in the backup. Videos on this phone stay.`)) return;
+  let n = 0;
+  for (const [k, v] of Object.entries(b.data)) { if (NO_BACKUP.test(k) || typeof v !== "string") continue; try { localStorage.setItem(k, v); n++; } catch { /* full */ } }
+  toast(`Restored ${n} items. Reloading…`);
+  setTimeout(() => location.reload(), 900);
+}
+
+/* ---------- posting reminders: the planned week in your calendar ---------- */
+// An .ics file with one event per planned draft ("Mon · …"), on its next day at the chosen hour, with an alert.
+function weekCalendar(drafts, hour = 18) {
+  const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], pad = (n) => String(n).padStart(2, "0");
+  const stamp = (d) => `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
+  const esc = (s) => String(s).replace(/[\\;,]/g, (m) => "\\" + m).replace(/\n/g, "\\n");
+  const now = new Date(), events = [];
+  for (const d of drafts) {
+    const day = DAYS.indexOf((d.label.match(/^(\w{3}) · /) || [])[1]); if (day < 0) continue;
+    const at = new Date(now); at.setHours(hour, 0, 0, 0);
+    let ahead = (day - now.getDay() + 7) % 7; if (ahead === 0 && at <= now) ahead = 7;
+    at.setDate(at.getDate() + ahead);
+    const title = d.label.replace(/^\w{3} · /, "");
+    events.push(["BEGIN:VEVENT", `UID:${d.id}-${stamp(at)}@reelbot`, `DTSTAMP:${stamp(now)}`, `DTSTART:${stamp(at)}`, "DURATION:PT15M",
+      `SUMMARY:${esc("Post: " + title)}`, `DESCRIPTION:${esc("Open ReelBot: today's video is ready to make and post. " + location.href.split("#")[0])}`, `URL:${location.href.split("#")[0]}`,
+      "BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${esc("Time to post: " + title)}`, "TRIGGER:-PT0M", "END:VALARM", "END:VEVENT"].join("\r\n"));
+  }
+  if (!events.length) return null;
+  return ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//ReelBot//Posting plan//EN", "CALSCALE:GREGORIAN", ...events, "END:VCALENDAR"].join("\r\n") + "\r\n";
+}
+async function addReminders(hour) {
+  const planned = listDrafts().filter((d) => /^\w{3} · /.test(d.label));
+  const ics = weekCalendar(planned, hour);
+  if (!ics) return toast("Plan your week first: the reminders come from its drafts.");
+  if (await saveFile(new File([ics], "reelbot-posting-plan.ics", { type: "text/calendar" }))) toast(`${planned.length} posting reminders ready: add them to your calendar`);
+}
 
 /* ---------- making a reel: plan -> review -> produce ---------- */
 function options() {
@@ -501,7 +590,8 @@ async function produce() {
       ? `<p style="color:var(--bad)"><b>This video has no sound.</b> Your phone's browser didn't record the audio. Please run <b>Sound test</b> in the About tab and tell us what it says.</p>`
       : reel.sound ? `<p style="color:var(--good)">Sound checked ✓</p>`
       : reel.written && reel.written.peakDb > -40 ? `<p style="color:var(--good)">Sound written into the video ✓</p>` : "";
-    $("result").innerHTML = `<h2>Your reel is ready</h2><p>Made in ${Math.round((performance.now() - t0) / 1000)}s on this device (${esc(reel.how)}).${kept ? "" : " It couldn't be kept in the Library, so save it now."}</p>${soundNote}` + reelCard(reel, true);
+    const roomNote = kept?.removed?.length ? `<p class="meta">To make room on your phone, ${kept.removed.length === 1 ? "this older video was" : "these older videos were"} removed from the Library: ${kept.removed.map(esc).join(", ")}.</p>` : "";
+    $("result").innerHTML = `<h2>Your reel is ready</h2><p>Made in ${Math.round((performance.now() - t0) / 1000)}s on this device (${esc(reel.how)}).${kept ? "" : " It couldn't be kept in the Library, so save it now."}</p>${soundNote}${roomNote}` + reelCard(reel, true);
     $("result").classList.remove("hidden");
     store.set("made", "1"); $("first-run").classList.add("hidden");
     learnMakeRate((performance.now() - t0) / 1000, reel.duration);
@@ -583,7 +673,8 @@ async function planWeek() {
     }
     screen("form");
     renderToday();
-    $("result").innerHTML = `<h2>Your week is planned</h2><p>${made.length} drafts saved in the Library, each fact-checked and ready to review. Open one when you're ready to make it.</p><ol class="steps">${made.map((d) => `<li>${esc(d.label)}</li>`).join("")}</ol>`;
+    $("result").innerHTML = `<h2>Your week is planned</h2><p>${made.length} drafts saved in the Library, each fact-checked and ready to review. Open one when you're ready to make it.</p><ol class="steps">${made.map((d) => `<li>${esc(d.label)}</li>`).join("")}</ol>
+      ${REMINDER_ROW}`;
     $("result").classList.remove("hidden");
   } catch (e) { screen("form"); showError(e, made.length ? `Planned ${made.length}, then stopped` : "Couldn't plan the week"); }
   state.busy = false;
@@ -752,7 +843,7 @@ function showReview() {
       .filter(([m]) => m !== "chart" || hasStat)
       .map(([m, txt]) => `<button data-vmode="${i}:${m}" class="${mode === m ? "on" : ""}">${txt}</button>`).join("")}</div>`;
     const tools = l.kind !== "media" ? (["chart", "section", "recap"].includes(l.kind) && content > 2 ? `<div class="mini"><button class="del" data-del="${i}">Remove</button></div>` : "")
-      : `<div class="mini">${v.type === "illus" && state.art !== "icons" ? `<button data-artpick="${i}">Another illustration</button>` : ""}<button data-swap="${i}">New photo</button><button data-search="${i}">Search…</button><button data-mine="${i}">My photo</button>${content > 2 ? `<button class="del" data-del="${i}">Remove</button>` : ""}</div>`;
+      : `<div class="mini">${i > 1 ? `<button data-move="${i}:-1" aria-label="Move up">↑</button>` : ""}${i > 0 && script.lines[i + 1] && script.lines[i + 1].kind !== "outro" ? `<button data-move="${i}:1" aria-label="Move down">↓</button>` : ""}${v.type === "illus" && state.art !== "icons" ? `<button data-artpick="${i}">Another illustration</button>` : ""}<button data-swap="${i}">New photo</button><button data-search="${i}">Search…</button><button data-mine="${i}">My photo</button>${content > 2 ? `<button class="del" data-del="${i}">Remove</button>` : ""}</div>`;
     const hookBtn = i === 0 ? `<div class="mini"><button data-hook="1">Another hook</button></div>` : "";
     return `<div class="scene"><div>${thumb}</div><div><div class="scene-tag"><span>${esc(tag)}</span></div>
       <textarea data-line="${i}" rows="${Math.min(7, Math.max(2, Math.ceil(l.text.length / 34)))}">${esc(l.text)}</textarea>${factBadge(l, i)}${hookBtn}${chips}${tools}</div></div>`;
@@ -833,6 +924,16 @@ $("scenes").addEventListener("click", async (e) => {
     first.text = plan.hookChoices[plan.hookIndex]; first.analysis = null; plan.edited = true;
     plan.script.hookKind = smartHooks(plan.script).find((o) => o.text === first.text)?.kind || "written";   // for "What works for you"
     return showReview();
+  }
+  if (b.dataset.move != null) {
+    // Move a scene up or down. The hook stays first and the ending stays last.
+    const [i, d] = b.dataset.move.split(":").map(Number), j = i + d, lines = plan.script.lines;
+    if (j < 1 || i < 1 || !lines[j] || lines[j].kind === "outro" || lines[i].kind === "outro") return;
+    [lines[i], lines[j]] = [lines[j], lines[i]];
+    plan.undo?.line.asset?.bitmap?.close?.();        // an undo after moving scenes would put it in the wrong place
+    plan.edited = true; plan.undo = null; showReview();
+    document.querySelector(`[data-line="${j}"]`)?.closest(".scene")?.scrollIntoView({ block: "center", behavior: "smooth" });
+    return;
   }
   if (b.dataset.artpick != null) {
     const l = plan.script.lines[+b.dataset.artpick];
@@ -1225,6 +1326,17 @@ async function init() {
   $("version-line").textContent = `Version ${APP_VERSION} · ${UPDATES[0].title}`;
   $("whats-new").addEventListener("click", () => showWhatsNew(APP_VERSION - 3));
   $("art-more").addEventListener("click", drawMoreArt);
+  $("backup").addEventListener("click", backup);
+  $("restore").addEventListener("change", () => { const f = $("restore").files[0]; if (f) restore(f); $("restore").value = ""; });
+  $("lib-space").addEventListener("click", async (e) => {
+    if (!e.target.closest("[data-del-posted]")) return;
+    const posted = postedIds(), list = (state.lib || []).filter((r) => posted.has(r.id));
+    if (!list.length || !confirm(`Delete ${list.length} posted video${list.length === 1 ? "" : "s"} from your phone? Their results stay in “What works for you”.`)) return;
+    for (const r of list) { await deleteReel(r.id); setPosted(r.id, false); }
+    toast(`Deleted ${list.length} posted video${list.length === 1 ? "" : "s"}`); renderLibrary();
+  });
+  // Ask the phone to keep ReelBot's storage (videos, voices, drafts) even when space runs low.
+  navigator.storage?.persisted?.().then((p) => { if (!p) navigator.storage.persist?.().catch(() => {}); }).catch(() => {});
   // Tidy up: your saved photos that no draft or autosaved script uses any more.
   setTimeout(() => {
     const keep = [...listDrafts(), pendingAutosave()].filter(Boolean).flatMap((d) => d.script.lines.map((l) => l.photo).filter(Boolean));

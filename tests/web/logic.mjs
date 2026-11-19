@@ -147,6 +147,15 @@ export default async function ({ t, newPage }) {
     // High-pitched energy (hi-hats, claps, plucks): what the beat adds.
     const busy = (a, from, to) => { let s = 0; const i0 = Math.floor(from * MU.SR), i1 = Math.floor(to * MU.SR); for (let i = i0 + 2; i < i1; i++) { const d = a[i] - 2 * a[i - 1] + a[i - 2]; s += d * d; } return Math.sqrt(s / (i1 - i0)); };
     out.drop = ["bright", "suspense", "upbeat"].map((m) => { const a = MU.generateMusic(10, m, { dropAt: 4 }); return [a.length === 10 * MU.SR, a.every((v) => Number.isFinite(v)), busy(a, 4.1, 6) / Math.max(1e-9, busy(a, 1.2, 3.0))]; });
+    // The Library keeps up to 60 videos, and removes posted ones before older unposted ones
+    const SD = await import("./app/store.js");
+    await SD.clearReels(); localStorage.removeItem("posted");
+    const tiny = (i) => ({ id: "t" + i, title: "T" + i, kind: "custom", created: 1000 + i, duration: 30, blob: new Blob([new Uint8Array(10)]), ext: "mp4" });
+    SD.setPosted("t10", true);
+    let last = null; for (let i = 0; i < 61; i++) last = await SD.saveReel(tiny(i));
+    const left = (await SD.listReels()).map((r) => r.id);
+    out.keep = [left.length, last.removed.join(), left.includes("t0"), left.includes("t10"), left.includes("t60")];
+    await SD.clearReels(); localStorage.removeItem("posted");
     // Length estimates follow the narrator's learned pace
     const MK3 = await import("./app/make.js"), lines3 = [{ text: "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty" }];
     localStorage.removeItem("speechRate-natural"); const e1 = MK3.estimateSeconds(lines3, 1, "natural"), r1 = MK3.learnedRate("natural");
@@ -261,6 +270,7 @@ export default async function ({ t, newPage }) {
   t.ok(r.say2.join("|") === "Save 3 to 6 months at an A P R of 24 percent.|A hee lock, a four oh three b and a W 2.|Rates hit 5.25 percent to 5.5 percent, up 1.5 times year to date.", "ranges, multiples and finance acronyms are said the way people say them", r.say2.join(" | "));
   t.ok(r.moods.join() === "suspense,cinematic,upbeat,bright,cinematic,upbeat", "Auto music picks a mood that suits each video", r.moods.join());
   t.ok(r.drop.every(([len, ok, ratio]) => len && ok && ratio > 1.5), "the new moods play, and the beat drops in after the hook", JSON.stringify(r.drop));
+  t.ok(r.keep.join() === "60,T10,true,false,true", "the Library keeps up to 60 videos and removes a posted one before an older unposted one", JSON.stringify(r.keep));
   t.ok(r.pace[0] === 2.75 && r.pace[1] && r.pace[2] > 2, "length estimates use the narrator's learned speaking pace", JSON.stringify(r.pace));
   t.ok(r.punch.every(Boolean), "Punch captions show one or two words at a time (and never drop a word)", JSON.stringify(r.punch));
   t.ok(r.insert.join() === "1,2", "a spare definition goes after the hook; other spares go before the takeaway", JSON.stringify(r.insert));
