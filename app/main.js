@@ -832,6 +832,7 @@ async function produceSeries() {
 async function planWeek() {
   if (state.busy) return;
   state.busy = true;
+  show("create");      // progress and the result show in the Studio, wherever this was started
   screen("job"); $("job-title").textContent = "Planning your week…"; $("preview").classList.add("hidden");
   const made = [], used = [];
   try {
@@ -851,7 +852,7 @@ async function planWeek() {
     screen("form");
     renderToday();
     $("result").innerHTML = `<h2>Your week is planned</h2><p>${made.length} drafts saved in the Library, each fact-checked and ready to review. Open one when you're ready to make it.</p><ol class="steps">${made.map((d) => `<li>${esc(d.label)}</li>`).join("")}</ol>
-      ${REMINDER_ROW}`;
+      ${REMINDER_ROW}<div class="btns"><button class="btn wide" data-go="auto">Open the queue</button></div>`;
     $("result").classList.remove("hidden");
   } catch (e) { screen("form"); showError(e, made.length ? `Planned ${made.length}, then stopped` : "Couldn't plan the week"); }
   state.busy = false;
