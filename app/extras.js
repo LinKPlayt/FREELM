@@ -1,4 +1,4 @@
-import { smartHooks } from "./hook.js";
+import { smartHooks, directionsOf } from "./hook.js";
 // Features for more detailed videos and better results:
 //   deep dives (chapters + recap), sound effects, captions files, cover images, hook options and the reel coach.
 import { analyzeLine } from "./visuals.js";
@@ -307,14 +307,16 @@ export function makeSrt(words) {
 /* ---------------------------------------------------------------- cover image */
 
 // A 1080x1920 cover (thumbnail) with the title big and readable, over the reel's best picture.
-export async function makeCover({ title, brand, accent, handle, scenes, style = "bold", keyNumber = "", question = "" }, drawBackground) {
+// keyTone: -1 when the key number is a loss ("fell 1.1%"), 1 for a gain; it's then red or green, as in the reel.
+export async function makeCover({ title, brand, accent, handle, scenes, style = "bold", keyNumber = "", keyTone = 0, question = "" }, drawBackground) {
   const W = 1080, H = 1920, c = document.createElement("canvas"); c.width = W; c.height = H;
   const ctx = c.getContext("2d");
-  drawBackground(ctx, scenes);
-  const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, "rgba(0,0,0,0.55)"); g.addColorStop(0.45, "rgba(0,0,0,0.15)"); g.addColorStop(1, "rgba(0,0,0,0.75)");
-  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  const rgb = `rgb(${accent.join(",")})`;
+  if ((drawBackground(ctx, scenes, style) || {}).overlay !== false) {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, "rgba(0,0,0,0.55)"); g.addColorStop(0.45, "rgba(0,0,0,0.15)"); g.addColorStop(1, "rgba(0,0,0,0.75)");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  }
+  const rgb = `rgb(${accent.join(",")})`, tone = (d) => (d < 0 ? "rgb(255,92,92)" : d > 0 ? "rgb(74,222,128)" : rgb);
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
   if (brand) {
     ctx.font = "800 40px Montserrat";
@@ -327,7 +329,7 @@ export async function makeCover({ title, brand, accent, handle, scenes, style = 
     let size = 420; ctx.font = `${size}px Anton`;
     while (ctx.measureText(keyNumber).width > W - 120 && size > 160) { size -= 20; ctx.font = `${size}px Anton`; }
     ctx.lineJoin = "round"; ctx.lineWidth = 30; ctx.strokeStyle = "rgba(0,0,0,0.9)"; ctx.strokeText(keyNumber, W / 2, 720);
-    ctx.fillStyle = rgb; ctx.fillText(keyNumber, W / 2, 720);
+    ctx.fillStyle = tone(keyTone); ctx.fillText(keyNumber, W / 2, 720);
     title = title.replace(/\s*#Shorts$/, "");
     let ts = 96; ctx.font = `${ts}px Anton`;
     const wordsN = title.toUpperCase().split(/\s+/), rows = []; let cur = "";
@@ -354,10 +356,12 @@ export async function makeCover({ title, brand, accent, handle, scenes, style = 
     size -= 10;
   }
   const lh = size * 1.08, top = Math.max(300 + lh / 2, 600 - (lines.length * lh) / 2 + lh / 2);   // always below the brand tag
+  // The last line is in the brand colour, or red/green when it holds a move ("…DOWN 0.2%").
+  const lastDir = directionsOf(words).slice(-lines[lines.length - 1].split(" ").length).find((d) => d) || 0;
   ctx.lineJoin = "round";
   lines.forEach((ln, i) => {
     ctx.lineWidth = 22; ctx.strokeStyle = "rgba(0,0,0,0.9)"; ctx.strokeText(ln, W / 2, top + i * lh);
-    ctx.fillStyle = i === lines.length - 1 ? rgb : "#fff"; ctx.fillText(ln, W / 2, top + i * lh);
+    ctx.fillStyle = i === lines.length - 1 ? tone(lastDir) : "#fff"; ctx.fillText(ln, W / 2, top + i * lh);
   });
   if (handle) { ctx.font = "800 46px Montserrat"; ctx.fillStyle = "#fff"; ctx.fillText(handle, W / 2, H - 150); }
   return await new Promise((res) => c.toBlob(res, "image/jpeg", 0.9));

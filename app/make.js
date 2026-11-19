@@ -4,7 +4,7 @@ import { buildEvergreen, buildNews, buildMarket, buildCustom, buildMetadata, spe
 import { MediaFinder } from "./media.js";
 import { loadVoice, phonemize, synthesize, voiceRate, setVoice, releaseVoice, voiceDownloadMB, voiceNotice, voiceEngine, naturalFailed } from "./tts.js";
 import { generateMusic, mix, resample, SR } from "./music.js";
-import { loadFonts, renderReel } from "./render.js";
+import { loadFonts, renderReel, drawMarketCover } from "./render.js";
 import { analyzeLine, iconFor } from "./visuals.js";
 import { dramatize, directionsOf } from "./hook.js";
 import { buildQuiz, QUIZ_COUNT, quizTitle } from "./quiz.js";
@@ -591,7 +591,7 @@ export async function produceReel(plan, opts, ui) {
       else { sc.kind = "illus"; sc.icon = v.icon; sc.label = v.label; }
       if (opts.pops !== false && i > 0) {   // big callout for the key number, red or green when it's a loss or a gain
         sc.stat = statFor(line.text);
-        if (sc.stat) { const toks = line.text.split(/\s+/), dir = directionsOf(toks), digits = sc.stat.replace(/[^\d.]/g, ""); const at = digits ? toks.findIndex((w) => w.replace(/[^\d.]/g, "") === digits) : -1; sc.statTone = at >= 0 ? dir[at] : 0; }
+        if (sc.stat) sc.statTone = toneOf(line.text, sc.stat);
       }
     }
     scenes.push(sc);
@@ -635,10 +635,12 @@ export async function produceReel(plan, opts, ui) {
   const result = await renderReel(job, ui.canvas, ui.audioCtx, (f) => ui.say("Rendering your reel on this device…", 0.6 + 0.4 * f), opts.forceEncoder);
   ui.say("Making the cover and captions…", 0.99);
   const accentRgb = (() => { const n = parseInt((opts.accent || "#FFD60A").slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; })();
-  const keyNumber = script.lines.map((l) => (l.kind === "media" ? statFor(l.text) : null)).find(Boolean) || "";
+  // The cover's key number: the title's own figure when it has one (so the two agree), else the first one spoken.
+  const titleNum = statFor(script.title, { isTitle: true }), keyLine = titleNum ? null : script.lines.find((l) => l.kind === "media" && statFor(l.text));
+  const keyNumber = titleNum || (keyLine ? statFor(keyLine.text) : ""), keyTone = keyNumber ? toneOf(titleNum ? script.title : keyLine.text, keyNumber) : 0;
   const question = script.lines.find((l) => l.kind === "media" && /\?\s*$/.test(l.text) && l.text.split(/\s+/).length <= 12)?.text || "";
-  const cover = await makeCover({ title: script.title, brand: opts.brand, accent: accentRgb, handle: opts.handle || "", scenes, style: opts.coverStyle || "bold", keyNumber, question },
-    (ctx, list) => coverBackground(ctx, list, accentRgb)).catch((e) => { console.warn("cover", e); return null; });
+  const cover = await makeCover({ title: script.title, brand: opts.brand, accent: accentRgb, handle: opts.handle || "", scenes, style: opts.coverStyle || "bold", keyNumber, keyTone, question },
+    (ctx, list, style) => coverBackground(ctx, list, accentRgb, style, script.kind === "market")).catch((e) => { console.warn("cover", e); return null; });
   for (const sc of scenes) if (sc.art) sc.bitmap?.close?.();      // drawn illustrations are saved; free the memory
   releasePlan(plan);
 
@@ -654,8 +656,19 @@ export async function produceReel(plan, opts, ui) {
   };
 }
 
-// The cover's picture: the reel's first photo, else its first chart or illustration.
-function coverBackground(ctx, scenes, accent) {
+// Whether a line's key figure is a loss (-1), a gain (1) or neither (0): in "the Dow fell 1.1%." it's a loss.
+export function toneOf(text, stat) {
+  const num = (w) => w.replace(/[^\d.]/g, "").replace(/^\.+|\.+$/g, ""), digits = num(stat || "");
+  const toks = text.split(/\s+/), at = digits ? toks.findIndex((w) => num(w) === digits) : -1;
+  return at >= 0 ? directionsOf(toks)[at] : 0;
+}
+
+// The cover's picture: a market recap's chart, else the reel's first photo, else its first chart or illustration.
+// Returns { overlay: false } when the picture leaves the title room and needs no darkening.
+function coverBackground(ctx, scenes, accent, style = "bold", marketRecap = false) {
+  // A market recap: the lead index's month, big, under the title (the same chart and colours as in the reel).
+  const market = marketRecap && scenes.find((s) => s.kind === "chart" && s.chart?.values?.length > 2);
+  if (market) { drawMarketCover(ctx, market.chart, style === "number" ? 1330 : 1110); return { overlay: false }; }
   // Only a photo that fits the topic makes the cover; otherwise the reel's chart or illustration does.
   // Best first: a tall photo or a drawn illustration (both fill the cover cleanly), then a wide photo.
   const images = scenes.filter((s) => s.kind === "image" && s.bitmap && s.relevant && s.bitmap.width > 0);

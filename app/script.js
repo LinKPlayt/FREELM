@@ -324,19 +324,34 @@ export function wordsToDigits(text) {
   return out.join("");
 }
 
+// True when a number sits inside a title of a work: the word right before it and at least one more of the
+// three before that are capitalised mid-sentence ("Ways to Make $1000"), or it's in quotes after "titled".
+// A name that ends its clause ("according to Goldman Sachs, $5 billion") isn't a title.
+export function inTitle(raw, index) {
+  const before = raw.slice(0, index), words = before.split(/\s+/).filter(Boolean).slice(-4);
+  if (/\b(?:titled|called|named|entitled)\s+["“]?[^.]{0,60}$/i.test(before) && /["“][^"”]*$/.test(before)) return true;
+  const cap = (w) => /^[A-Z][a-z]/.test(w.replace(/^["“(]/, ""));
+  const prev = words.at(-1) || "", sentenceStart = /[.!?]\s*$/.test(raw.slice(0, Math.max(0, index - (prev.length + 1))));
+  if (!cap(prev) || sentenceStart || /[,;:)]$/.test(prev)) return false;
+  return words.slice(0, -1).filter(cap).length >= 1 && /\b(?:to|of|the|a|for|and|in)\b|[A-Z][a-z]+\s+[A-Z][a-z]+/.test(words.join(" "));
+}
+
 const fmtN = (n) => Number(n).toLocaleString("en-US", { maximumFractionDigits: 1 });
-export function statFor(text) {
-  let m = text.match(/(?:US)?\$\s?(\d[\d,]*(?:\.\d+)?)\s?(trillion|billion|million|thousand|[TBMK])?\b/i);
+// The line's key figure for its number pop; an amount inside a title ("One Thousand Ways to Make $1000") isn't one.
+// isTitle: the text is itself a title (the video's), so nothing in it is passed over as one.
+export function statFor(text, { isTitle = false } = {}) {
+  const first = (re, src) => [...src.matchAll(re)].find((x) => isTitle || !inTitle(src, x.index)) || null;
+  let m = first(/(?:US)?\$\s?(\d[\d,]*(?:\.\d+)?)\s?(trillion|billion|million|thousand|[TBMK])?\b/gi, text);
   if (m) {
     const unit = (m[2] || "").toLowerCase();
     return "$" + m[1] + ({ trillion: "T", billion: "B", million: "M", thousand: "K", t: "T", b: "B", m: "M", k: "K" }[unit] || "");
   }
-  m = text.match(/(\d+(?:\.\d+)?)\s?%/);
+  m = first(/(\d+(?:\.\d+)?)\s?%/g, text);
   if (m) return m[1] + "%";
   const t = wordsToDigits(text);
-  m = t.match(/\b(\d[\d,]*(?:\.\d+)?)\s+(?:percent|per cent)\b/i);
+  m = first(/\b(\d[\d,]*(?:\.\d+)?)\s+(?:percent|per cent)\b/gi, t);
   if (m) return fmtN(m[1].replaceAll(",", "")) + "%";
-  m = t.match(/\b(\d[\d,]*)\s+dollars?\b/i);
+  m = first(/\b(\d[\d,]*)\s+dollars?\b/gi, t);
   if (m) return "$" + fmtN(m[1].replaceAll(",", ""));
   m = t.match(/\b(\d+)\s+(?:to|-)\s+(\d+)\s+(years?|months?|weeks?|days?)\b/i);
   if (m) return `${m[1]}–${m[2]} ${m[3].toUpperCase()}`;

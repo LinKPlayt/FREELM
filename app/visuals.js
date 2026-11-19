@@ -2,7 +2,7 @@
 //   analyzeLine(text) -> { stat: {...} | null, icon: "piggy" | ... | null, label: "EMERGENCY FUND" | null }
 // "stat" describes a data graphic built from the line's own numbers (see graphics.js);
 // "icon" is the illustration that fits the line's concept.
-import { wordsToDigits } from "./script.js";
+import { wordsToDigits, inTitle } from "./script.js";
 
 const NUM = String.raw`(\d[\d,]*(?:\.\d+)?)`;
 const STOP = new Set(("a an the of to for on in and or your you is are be was were been has had have just only about like with from that this " +
@@ -32,17 +32,6 @@ function labelNear(text, index, length, max = 3, prefer = "after") {
   if (/^\s*[,;:]/.test(text.slice(index + length))) prefer = "before";
   const words = prefer === "before" ? (before.length ? before : after) : (after.length ? after : before);
   return words.join(" ").toUpperCase().trim() || null;
-}
-
-// True when a number sits inside a title of a work: the word right before it and at least one more of the
-// three before that are capitalised mid-sentence ("Ways to Make $1000"), or it's in quotes after "titled".
-function inTitle(raw, index) {
-  const before = raw.slice(0, index), words = before.split(/\s+/).filter(Boolean).slice(-4);
-  if (/\b(?:titled|called|named|entitled)\s+["“]?[^.]{0,60}$/i.test(before) && /["“][^"”]*$/.test(before)) return true;
-  const cap = (w) => /^[A-Z][a-z]/.test(w.replace(/^["“(]/, ""));
-  const prev = words.at(-1) || "", sentenceStart = /[.!?]\s*$/.test(raw.slice(0, Math.max(0, index - (prev.length + 1))));
-  if (!cap(prev) || sentenceStart) return false;
-  return words.slice(0, -1).filter(cap).length >= 1 && /\b(?:to|of|the|a|for|and|in)\b|[A-Z][a-z]+\s+[A-Z][a-z]+/.test(words.join(" "));
 }
 
 function statOf(raw) {

@@ -65,7 +65,9 @@ WCAG AA contrast, and works with a keyboard (visible focus, a "Skip to content" 
 - **Types:**
   - **Explainer:** a timeless topic, such as compound interest or the 50/30/20 rule (35 built in)
   - **Today's news:** today's top 3 headlines for the niche, plus a "why it matters" line
-  - **Market recap:** animated charts of the S&P 500, Nasdaq, Bitcoin and more
+  - **Market recap:** opens on the day's board (each index with its price and today's move in red or green) and
+    leads with what really moved; then a chart per index showing the same month the narrator talks about, with
+    **Today** and **This month** pills that pop in as they're said, so the picture and the numbers always agree
   - **Auto:** mixes all three and avoids making the same kind twice in a row
   - **Your topic:** type anything, such as "Roth IRA" or "Warren Buffett". The app finds the Wikipedia article and writes a script from its key sentences.
 
@@ -170,12 +172,12 @@ subject big in the middle with two related ones beside it, and finishes it in an
 | Flat | soft gradient, clean shapes |
 | Neon | synthwave sun and glowing grid |
 | Paper cut | layered paper, cut-out shadows, grain |
-| Blueprint | grid paper, outlines, measurement marks |
+| Blueprint | grid paper, white line art (each subject's own details traced, like a technical drawing), measurement marks |
 | Pop art | halftone dots, burst and thick outlines |
 
 *Auto* picks one per niche (crypto → Neon, economy → Blueprint, personal finance and real estate → Paper
 cut, investing → Flat, side hustles → Pop art). Choose under **Style → Illustration style**, or *Animated
-icons* for the old look.
+icons* for the old look; the style you choose is used for the video's illustrations as well as the previews.
 
 There are 108 subjects to draw (`app/motifs.js` and `app/illustrator.js`), and each scene has 8 or more
 alternative illustrations: every subject the line mentions as the main one in turn, then related ways
@@ -226,16 +228,19 @@ or **Review first**.
 
 ### Quiz reels
 
-Pick **Quiz** as the type. The app picks three "True or false?" questions for your niche from a
-hand-written, checked bank (`app/quiz.js`, 56 questions; ones you used recently are skipped). Each
-question appears word by word under **TRUE OR FALSE?**, followed by a 3-2-1 countdown with a ticking
-clock; then a **TRUE ✓** or **FALSE ✗** stamp lands with a chime or buzzer while the narrator explains.
-It ends by asking viewers how many they got right. A false statement is always corrected straight away.
+Pick **Quiz** as the type. The app picks "True or false?" questions for your niche from a hand-written,
+checked bank (`app/quiz.js`, 56 questions; ones you used recently are skipped): as many as fit the length
+you chose (two for Short and Standard, three for Long, more for a deep dive). Each question appears word by
+word under **TRUE OR FALSE?** with progress dots and **TRUE** / **FALSE** buttons to play along, then a 3-2-1
+countdown with a ticking clock; then a **TRUE ✓** or **FALSE ✗** stamp lands with a chime or buzzer, the right
+button lights up, and the narrator explains. It ends by asking viewers how many they got right. A false
+statement is always corrected straight away.
 
 ### Big-word moments
 
 The bottom line and the question for the comments are shown as big words that appear as they're
-spoken (captions are hidden on those scenes). The narrator also slows slightly for the payoff, the bottom
+spoken, centred and as large as fits, under a quote mark or a speech bubble (captions are hidden on those
+scenes). The narrator also slows slightly for the payoff, the bottom
 line and quiz answers. Choose Photo or Illustration on a scene to turn the big words off for it.
 
 ### Deep dives and better results
@@ -255,7 +260,8 @@ line and quiz answers. Choose Photo or Illustration on a scene to turn the big w
 - **Reel score.** The review screen scores the script out of 100 (hook, length, numbers, visuals,
   sentence length, call to action) and lists the top things to improve.
 - **Posting kit.** Each reel in the Library also has a **Cover image** (a 1080×1920 thumbnail
-  with the title, for the cover frame on TikTok, Reels or Shorts) and a **Captions (.srt)** file
+  with the title over the reel's best picture, for the cover frame on TikTok, Reels or Shorts; a market
+  recap's shows the lead index's real month chart, and a fall in the title is red) and a **Captions (.srt)** file
   with exact timings, for platforms that accept uploaded subtitles.
 - **Full story (2–3 min).** A longer format for Shorts (up to 3 minutes) and TikTok, in up to five
   chapters: *what it is*, *where it came from* (dated facts in time order), *why it matters*,
@@ -361,12 +367,14 @@ The Style card shows a **live preview** that updates as you change settings.
 | Music volume | Low, medium or high (the music always dips under the voice) |
 | Pronunciations | Teach the narrator a word, one per line: `Roth = rawth`, `ETF = E T F` |
 | Ending | **Follow**, **Ask a question** ("Would you try this? Tell me in the comments"), **Save this** or **Share this**. Comments, saves and shares are what the apps reward most |
-| Cover image style | **Bold title**, **Big number** (the reel's key figure, huge) or **Question** (the hook as a question) |
+| Cover image style | **Bold title**, **Big number** (the title's figure, or else the reel's key figure, huge; red for a loss, green for a gain) or **Question** (the hook as a question) |
 | My music | Upload a track you have the rights to use; it loops under the voice, dips when the narrator speaks, and stays on the phone |
 | Your logo | Upload an image once; it appears in the top-left corner of every reel (kept on the phone) |
 | Length | **Short** 20–30 s, **Standard** 30–45 s, **Long** 40–60 s, **Deep dive** 60–90 s, **Full story** 2–3 min |
-| Number pops | Key figures in a line ("20%", "$1,000", "3–6 months", including ones written as words) pop up big on screen |
+| Number pops | Key figures in a line ("20%", "$1,000", "3–6 months", including ones written as words) pop up big on screen; a loss ("down 5%") is red and a gain green, whatever your brand colour |
 | Your @handle | Shown at the bottom of every scene and on the end card, and spoken in the call to action ("Follow @yourchannel…") |
+| Ending | The end card shows a big button for your call to action (**+ FOLLOW**, **SAVE THIS**, **SHARE IT** or **COMMENT**) that a fingertip taps, flipping it to "✓ FOLLOWING", under your brand and @handle |
+| Safe zones | Buttons, charts, captions and big words stay clear of TikTok, Reels and Shorts' own like/share buttons on the right and caption area at the bottom |
 
 Your choices are remembered on the phone.
 

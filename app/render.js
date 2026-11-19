@@ -97,7 +97,17 @@ class ChartBg {
     this.monthPct = (values[values.length - 1] / values[0] - 1) * 100;
     this.color = this.monthPct >= 0 ? [46, 213, 115] : [255, 71, 87];
     this.chart = chart; this.t = 0;
-    const said = (re) => words.find((w) => re.test(w.text.replace(/[^a-z]/gi, "")))?.start ?? null;
+    // Each pill lands with its figure: the move said just before "on the day" / "this month" (or "flat").
+    const texts = words.map((w) => w.text), dirs = directionsOf(texts);
+    const said = (re) => {
+      const i = texts.findIndex((x) => re.test(x.replace(/[^a-z]/gi, "")));
+      if (i < 0) return null;
+      for (let j = i - 1; j >= Math.max(0, i - 4); j--) {
+        if ((dirs[j] && /\d/.test(texts[j])) || /^flat\b/i.test(texts[j])) return words[j].start;
+        if (/[,;.]$/.test(texts[j])) break;
+      }
+      return words[i].start;
+    };
     this.dayAt = said(/^(day|today|todays)$/i); this.monthAt = said(/^month$/i);
     const bg = canvas(W, H), c = bg.getContext("2d");
     const g = c.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "rgb(8,12,28)"); g.addColorStop(1, "rgb(18,26,58)");
@@ -192,6 +202,32 @@ class BoardBg {
     ctx.restore();
   }
   dispose() { this.bg.width = this.bg.height = 0; }
+}
+
+// A market reel's cover picture: the lead index's month as a big chart from "top" down (the title sits above),
+// green or red by the month's direction, as in the reel. The background is dark enough for the title as it is.
+export function drawMarketCover(ctx, chart, top = 1110) {
+  const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "rgb(8,12,28)"); g.addColorStop(1, "rgb(18,26,58)");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  const vals = chart.values.length > 23 ? chart.values.slice(-22) : chart.values;
+  const col = vals[vals.length - 1] >= vals[0] ? [46, 213, 115] : [255, 71, 87];
+  const x0 = 70, x1 = W - 70, y0 = top, y1 = Math.min(H - 300, top + 500);
+  ctx.strokeStyle = "rgba(255,255,255,0.08)"; ctx.lineWidth = 2;
+  for (let i = 0; i < 5; i++) { const y = y0 + (y1 - y0) * i / 4; ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke(); }
+  const lo = Math.min(...vals), span = (Math.max(...vals) - lo) || 1;
+  const pts = vals.map((v, i) => [x0 + (x1 - x0) * i / (vals.length - 1), y1 - (y1 - y0) * (v - lo) / span]);
+  const path = () => { ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); };
+  const fill = ctx.createLinearGradient(0, y0, 0, y1); fill.addColorStop(0, rgba(col, 0.32)); fill.addColorStop(1, rgba(col, 0));
+  path(); ctx.lineTo(x1, y1); ctx.lineTo(x0, y1); ctx.closePath(); ctx.fillStyle = fill; ctx.fill();
+  ctx.lineJoin = ctx.lineCap = "round";
+  path(); ctx.strokeStyle = rgba(col, 0.3); ctx.lineWidth = 28; ctx.stroke();
+  path(); ctx.strokeStyle = rgba(col); ctx.lineWidth = 11; ctx.stroke();
+  const [x, y] = pts[pts.length - 1];
+  ctx.beginPath(); ctx.arc(x, y, 32, 0, Math.PI * 2); ctx.fillStyle = rgba(col, 0.3); ctx.fill();
+  ctx.beginPath(); ctx.arc(x, y, 17, 0, Math.PI * 2); ctx.fillStyle = "#fff"; ctx.fill();
+  // what the line spans, so "UP today" over a month that fell still reads right
+  ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.font = "800 30px Montserrat"; ctx.textBaseline = "middle";
+  ctx.textAlign = "left"; ctx.fillText("1 MONTH AGO", x0, y1 + 44); ctx.textAlign = "right"; ctx.fillText("TODAY", x1, y1 + 44);
 }
 
 // Offline background when a scene has no photo: drifting oversized type on a soft gradient.
@@ -658,7 +694,7 @@ class Painter {
       if (sc.kind === "answer") return new AnswerBg(sc.answer, this.accent, sc);
       if (sc.kind === "chart") return new ChartBg(sc.chart, said());
       if (sc.kind === "board") return new BoardBg(sc.markets, this.accent);
-      if (sc.kind === "stat" && sc.spec) return new StatBg(sc.spec, this.accent, this.job.captionPos, sc.seed || 0, { continued: sc.continued });
+      if (sc.kind === "stat" && sc.spec) return new StatBg(sc.spec, this.accent, this.job.captionPos, sc.seed || 0, { continued: sc.continued, bare: sc === this.job.scenes[0] && this.job.hookTitle !== false });
       if (sc.kind === "illus") return new IllusBg(sc.icon, sc.label, this.accent, this.job.captionPos, sc.seed || 0);
       if (sc.kind === "section") return new SectionBg(sc.num, sc.label, this.accent, sc.seed || 0);
       if (sc.kind === "recap") return new RecapBg(sc.items || [], this.accent, sc.seed || 0);

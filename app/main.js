@@ -669,7 +669,7 @@ function options() {
     cta: ctaText(state.cta, cleanHandle($("handle").value)), ctaKind: state.cta, logo: store.get("logo") || "", coverStyle: state.cover,
     music: state.mood, accent: state.accent, voiceSpeed: SPEEDS[state.speed] || 1, length: state.length,
     voiceEngine: voiceOpts(state.voice).engine, voice: voiceOpts(state.voice).voice, musicVolume: MUSIC_VOLUMES[state.musicVol] ?? 1,
-    captionStyle: state.capStyle, captionPos: state.capPos, pops: $("pops").checked, offline: $("offline").checked,
+    captionStyle: state.capStyle, captionPos: state.capPos, artStyle: state.art, pops: $("pops").checked, offline: $("offline").checked,
     sfx: $("sfx").checked, cuts: $("cuts").checked, hookTitle: $("hooktitle").checked, showSources: $("sources").checked,
     depth: Number(state.depth) || 2, factCheck: $("factcheck").checked, strict: $("factcheck").checked && $("strict").checked,
     forceEncoder: params.get("encoder") || undefined,

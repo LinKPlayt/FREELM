@@ -290,11 +290,24 @@ export default async function ({ t, newPage }) {
     const script = S.buildMarket([mk("S&P 500", -0.23, vals), mk("Nasdaq", 0.42, vals), mk("Dow Jones", -1.11, vals)], [], { generic: ["money"], cta: "Follow for more.", niche: "investing" });
     out.board = [script.lines[0].board?.length, /^The Dow Jones fell 1\.1% while the Nasdaq rose 0\.4%\./.test(script.lines[0].text), script.lines.filter((l) => l.kind === "chart").length];
     out.money = [V.analyzeLine("Buffett was inspired by a book at age seven, One Thousand Ways to Make $1000.").stat, V.analyzeLine("In 2008, Lehman Brothers lost $600 billion in assets.").stat?.value,
-      V.analyzeLine("Keep a $1,000 starter emergency fund.").stat?.value];
+      V.analyzeLine("Keep a $1,000 starter emergency fund.").stat?.value, V.analyzeLine("According to Goldman Sachs, $5 billion moved into funds.").stat?.value];
+    out.pop = [S.statFor("Buffett was inspired by a book from the Omaha public library at age seven, One Thousand Ways to Make $1000."),
+      S.statFor("According to Goldman Sachs, $5 billion moved into funds."), S.statFor("Keep a $1,000 starter emergency fund."), S.statFor("Market Check: Bitcoin Up 3.4% #Shorts", { isTitle: true })];
     out.quiz = [Q.QUIZ_COUNT.standard, Q.QUIZ_COUNT.long, Q.quizTitle("Crypto", 2), Q.quizTitle("Crypto", 3), Q.buildQuiz({ niche: "crypto", cta: "Follow." }, { count: 2 }).lines.filter((l) => l.kind === "quiz").length];
     const quiz = Q.buildQuiz({ niche: "crypto", cta: "Follow for more." }, { count: 2 });
     const tips = X.coach(quiz.lines, { estimate: 40, range: [30, 45], visuals: [] }).tips.join(" | ");
     out.coach = [/concrete number/.test(tips), /Mix visuals/.test(tips), /another point/.test(tips)];
+    // A key figure's tone (a sentence-final "1.1%." too), and a cover title's fall drawn red over a green brand.
+    const MK = await import("./app/make.js"), RD = await import("./app/render.js"); await RD.loadFonts();
+    out.tone = [MK.toneOf("The Dow Jones fell 1.1%.", "1.1%"), MK.toneOf("Bitcoin rose 12 percent this week.", "12%"), MK.toneOf("Keep a $1,000 starter fund.", "$1,000")];
+    const chart = mk("S&P 500", -0.23, Array.from({ length: 65 }, (_, i) => 120 - i * 0.3 + Math.sin(i) * 2));
+    const blob = await X.makeCover({ title: "Market Check: S&P 500 Down 0.2% #Shorts", brand: "Money Minute", accent: [46, 213, 115], handle: "", scenes: [], style: "bold" },
+      (ctx) => { RD.drawMarketCover(ctx, chart); return { overlay: false }; });
+    const bmp = await createImageBitmap(blob), cv = document.createElement("canvas"); cv.width = 1080; cv.height = 1920;
+    const cx = cv.getContext("2d"); cx.drawImage(bmp, 0, 0);
+    const px = cx.getImageData(0, 870, 1080, 140).data; let red = 0, green = 0;
+    for (let i = 0; i < px.length; i += 4) { if (px[i] > 200 && px[i + 1] < 130 && px[i + 2] < 130) red++; if (px[i + 1] > 180 && px[i] < 120) green++; }
+    out.cover = [blob.size > 20000, red > 2000, green < 200];
     return out;
   });
   t.ok(v.dirs.join(" / ") === "The S&P 500 is -down -0.2% on the day and -down -5.0% this month. / The Nasdaq +rose +0.4% while the Dow -fell by -1.1%. / Put 20% down payment on a home. / It is up to you, +up +3 +percent today. / Bitcoin -lost about -$5,000 in a week.",
@@ -302,8 +315,11 @@ export default async function ({ t, newPage }) {
   t.ok(v.lead[0] === "The Dow Jones fell 1.1% while the Nasdaq rose 0.4%." && v.lead[1] === "Stocks fell across the board, led by the Nasdaq, down 1.6%." && v.lead[2] === "A quiet day: the markets barely moved.",
     "a market recap opens with the day's real movers", JSON.stringify(v.lead));
   t.ok(v.board.join() === "3,true,3", "the opening of a market recap carries the day's board for its picture", JSON.stringify(v.board));
-  t.ok(v.money[0] === null && v.money[1] === 6e11 && v.money[2] === 1000, "an amount in a book title isn't turned into a money counter", JSON.stringify(v.money));
+  t.ok(v.money[0] === null && v.money[1] === 6e11 && v.money[2] === 1000 && v.money[3] === 5e9, "an amount in a book title isn't turned into a money counter", JSON.stringify(v.money));
+  t.ok(v.pop.join() === ",$5B,$1,000,3.4%", "nor into a number pop; a name that ends its clause or the video's own title still counts", JSON.stringify(v.pop));
   t.ok(v.quiz.join() === "2,3,Crypto Quiz: Can You Get Both Right?,Crypto Quiz: Can You Get All 3?,2", "a quiz has as many questions as fit the length you chose", JSON.stringify(v.quiz));
   t.ok(v.coach.join() === "false,false,false", "the reel coach doesn't ask a quiz for numbers, mixed pictures or more points", JSON.stringify(v.coach));
+  t.ok(v.tone.join() === "-1,1,0", "a key figure is a loss, a gain or neither, even at the end of a sentence", JSON.stringify(v.tone));
+  t.ok(v.cover.join() === "true,true,true", "a market cover's \"Down 0.2%\" is red, even with a green brand colour", JSON.stringify(v.cover));
   await page.context().close();
 }

@@ -51,8 +51,9 @@ function bigText(ctx, text, x, y, size, color, maxW = W - 140) {
 export class StatBg {
   // spec from visuals.js; layout "low" or "middle" (where captions sit), so the graphic avoids them
   // continued: the line before showed this same graphic, so it carries on fully drawn instead of starting over.
-  constructor(spec, accent, layout = "low", seed = 0, { continued = false } = {}) {
-    this.s = spec; this.a = accent; this.bg = backdrop(accent, seed); this.continued = continued;
+  // bare: under the hook title, the graphic goes without its own words (the title says them; they'd collide).
+  constructor(spec, accent, layout = "low", seed = 0, { continued = false, bare = false } = {}) {
+    this.s = spec; this.a = accent; this.bg = backdrop(accent, seed); this.continued = continued; this.bare = bare;
     this.cy = layout === "middle" ? 1360 : 790;
   }
   draw(ctx, p) {
@@ -61,7 +62,9 @@ export class StatBg {
     const a = ease(p / 0.5), s = this.s;
     const fn = { percent: this.percent, split: this.split, range: this.range, growth: this.growth, compare: this.compare,
       money: this.counter, bignum: this.counter, year: this.year, move: this.move }[s.type];
-    fn?.call(this, ctx, a, p);
+    if (!this.bare) return fn?.call(this, ctx, a, p);
+    ctx.fillText = ctx.strokeText = () => {};
+    try { fn?.call(this, ctx, a, p); } finally { delete ctx.fillText; delete ctx.strokeText; }
   }
   percent(ctx, a) {
     const { cy } = this, R = 290, v = Math.min(100, this.s.value);

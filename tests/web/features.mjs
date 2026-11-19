@@ -131,14 +131,18 @@ export default async function ({ t, newPage, BASE }) {
   try {
     await page.click('nav [data-tab="create"]').catch(() => {});
     await page.click('#niches .chip >> text="Investing"'); await page.click('#modes .chip >> text="Quiz"');
+    await page.click('#art-styles .chip >> text="Blueprint"');   // the style you choose is the one the video uses
     await page.click("#go"); await page.waitForSelector("#review:not(.hidden)", { timeout: 120000 });
     const tags = await page.$$eval(".scene-tag", (els) => els.map((e) => e.textContent));
     t.ok(await page.locator("#series").isHidden(), "a quiz doesn't offer a 3-part series");
-    t.ok(tags.filter((x) => /Question \d · countdown/.test(x)).length === 3 && tags.filter((x) => /Answer · (True|False)/.test(x)).length === 3 && tags.some((x) => /Big words/.test(x)), "a quiz has 3 questions with countdowns, 3 answers and a big-words question at the end", tags.join(" | "));
+    // Standard length: 2 questions (Long has 3, a deep dive more), so the quiz fits the length chosen.
+    t.ok(tags.filter((x) => /Question \d · countdown/.test(x)).length === 2 && tags.filter((x) => /Answer · (True|False)/.test(x)).length === 2 && tags.some((x) => /Big words/.test(x)), "a Standard quiz has 2 questions with countdowns, 2 answers and a big-words question at the end", tags.join(" | "));
     await page.evaluate(() => { window.__lastReel = null; window.__lastError = null; });
     await page.click("#produce");
     await until(page, () => window.__lastReel || window.__lastError);
-    const q = await page.evaluate(() => ({ err: window.__lastError, sound: window.__lastReel?.sound, dur: window.__lastReel?.duration, script: window.__lastReel?.script || "" }));
+    const q = await page.evaluate(() => ({ err: window.__lastError, sound: window.__lastReel?.sound, dur: window.__lastReel?.duration, script: window.__lastReel?.script || "", art: window.__lastReel?.settings?.art }));
+    t.ok(q.art === "blueprint", "the illustration style chosen in the Studio is the one the video is made with", String(q.art));
+    await page.click('#art-styles .chip >> text="Auto (matches niche)"').catch(() => {});
     t.ok(!q.err && q.sound === true && q.dur > 25 && /True or false/.test(q.script) && /^(True|False)! /m.test(q.script), `a quiz reel is made with sound (${Math.round(q.dur || 0)} s)`, q.err || q.script.slice(0, 160));
   } catch (e) { t.ok(false, "section crashed: Features: quiz reel", String(e.message || e).split("\n")[0]); await page.goto(page.url()).catch(() => {}); }
 

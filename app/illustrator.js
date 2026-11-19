@@ -235,6 +235,22 @@ function glow(src, color) {
   sil.width = sil.height = small.width = small.height = 0;
   return c;
 }
+// A subject's own inner lines (a coin's "$", a calendar's grid, a clock's hands) as line art, for the blueprint
+// style: wherever its colours change inside the shape. Its silhouette edge is left to the outline.
+function edges(src, [r, g, b]) {
+  const w = src.width, h = src.height, px = src.getContext("2d").getImageData(0, 0, w, h).data, lum = new Float32Array(w * h);
+  for (let i = 0, j = 0; j < lum.length; i += 4, j++) lum[j] = px[i + 3] < 128 ? -1 : 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+  const c = canvas(w, h), x = c.getContext("2d"), img = x.createImageData(w, h), d = img.data;
+  for (let y = 2; y < h - 2; y++) for (let i = y * w + 2, end = y * w + w - 2; i < end; i++) {
+    const v = lum[i]; if (v < 0) continue;
+    const at = (k) => (lum[k] < 0 ? v : lum[k]);
+    const diff = Math.max(Math.abs(at(i + 2) - at(i - 2)), Math.abs(at(i + 2 * w) - at(i - 2 * w)));
+    if (diff < 14) continue;
+    const o = i * 4; d[o] = r; d[o + 1] = g; d[o + 2] = b; d[o + 3] = Math.min(255, (diff - 14) * 9);
+  }
+  x.putImageData(img, 0, 0);
+  return c;
+}
 function place(ctx, img, cx, cy, scale = 1, rot = 0, alpha = 1) {
   ctx.save(); ctx.globalAlpha = alpha; ctx.translate(cx, cy); ctx.rotate(rot); ctx.scale(scale, scale);
   ctx.drawImage(img, -img.width / 2, -img.height / 2); ctx.restore();
@@ -334,6 +350,7 @@ function stamp(ctx, style, spr, cx, cy, scale, rot, a) {
   } else if (style === "blueprint") {
     place(ctx, outline(spr, "rgb(235,245,255)", 5), cx, cy, scale, rot); place(ctx, tint(spr, "rgb(16,58,112)"), cx, cy, scale, rot);
     place(ctx, tint(spr, "rgba(235,245,255,0.18)"), cx, cy, scale, rot);
+    place(ctx, edges(spr, [235, 245, 255]), cx, cy, scale, rot);   // its inner lines, so a coin isn't a blank circle
   } else if (style === "pop") {
     place(ctx, tint(spr, INK), cx + 16 * scale, cy + 16 * scale, scale, rot);
     place(ctx, outline(spr, INK, 12), cx, cy, scale, rot); place(ctx, spr, cx, cy, scale, rot);
@@ -368,7 +385,9 @@ export function drawArt(ctx, { motifs = ["coins"], style = "flat", accent = [255
 export const ART_CACHE = "reelbot-user-art", ART_PATH = "/user/art/";
 const INDEX = "artIndex", KEEP = 300;
 const hex = (c) => c.map((v) => v.toString(16).padStart(2, "0")).join("");
-export const artKey = ({ motifs, style, accent }) => `${style}-${motifs.join("_")}-${hex(accent)}`;
+// A style redrawn better gets a new revision, so drawings saved before are made again rather than reused.
+const REVISION = { blueprint: "2" };
+export const artKey = ({ motifs, style, accent }) => `${style}${REVISION[style] || ""}-${motifs.join("_")}-${hex(accent)}`;
 function index() { try { return JSON.parse(localStorage.getItem(INDEX) || "[]"); } catch { return []; } }
 function saveIndex(list) { try { localStorage.setItem(INDEX, JSON.stringify(list.slice(-KEEP))); } catch { /* full or private */ } }
 export const savedArt = () => index();
