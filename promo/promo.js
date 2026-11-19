@@ -559,7 +559,7 @@ scene(45.95, 52.1, (root) => {
 });
 
 /* ---------------------------------------------------------------- overlays: grain, vignette, flash, fade */
-const grain = mk(stage, "", { position: "absolute", inset: "-64px", pointerEvents: "none", opacity: 0.06 }); grain.id = "grain";
+const grain = mk(stage, "", { position: "absolute", inset: "0", pointerEvents: "none", opacity: 0.035 }); grain.id = "grain";
 { const c = document.createElement("canvas"); c.width = c.height = 256; const x = c.getContext("2d"), d = x.createImageData(256, 256), r = rng(3);
   for (let i = 0; i < d.data.length; i += 4) { const v = r() * 255; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 255; } x.putImageData(d, 0, 0);
   grain.style.backgroundImage = `url(${c.toDataURL()})`; }
@@ -577,7 +577,7 @@ window.render = async function (t) {
   flash.style.opacity = fl;
   world.style.transform = `translate(${sx}px, ${sy}px)`;
   fade.style.opacity = pr(t, 51.55, 52.0) + (1 - pr(t, 0, 0.06));
-  const fi = Math.floor(t * 30); grain.style.transform = `translate(${(hash(fi) * 64) | 0}px, ${(hash(fi + 0.5) * 64) | 0}px)`;
+  // The grain stays still: it dithers the dark gradients (no banding) without costing bitrate on every frame.
   await Promise.all(pending);
 };
 window.ready = (async () => {
