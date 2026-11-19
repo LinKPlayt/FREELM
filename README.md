@@ -292,6 +292,12 @@ line and quiz answers. Choose Photo or Illustration on a scene to turn the big w
   usual loudness for Reels, Shorts and TikTok. The old voice's harsh saturation is gone.
 - **Classic (fast)** is the previous voice: a smaller download, quicker, more robotic. If the
   natural voice can't start on a phone, the app falls back to it and tells you.
+- **Natural timing.** The pause after each line follows the story, the way a narrator's does: shorter when the
+  thought carries on ("But…", "So…"), longer between points and between stories, and a beat before the bottom
+  line, the question for the comments and the sign-off. Inside a line, the voice's long pauses are cut back to a
+  narrator's (a comma about 0.24 s, a colon 0.3 s, a full stop 0.42 s, a breath 0.34 s) by removing silence only,
+  so no word is touched and videos don't get longer. Each cut lands in the pause before its line, with the new
+  picture slightly ahead of the words. Measurements are in [docs/quality-log.md](docs/quality-log.md).
 - **Pronunciations.** If the narrator says a word wrong, add it under Style (`Roth = rawth`).
 
 ### Results and what works for you

@@ -373,5 +373,28 @@ export default async function ({ t, newPage }) {
     && n.told[10] === "Your retirement plan may assume 2% inflation. What happens if it's 3.5%?",
     "headlines aren't cut into fragments; essays, columns and unanswered lists are skipped; a real question stays", JSON.stringify(n.told.slice(4)));
   t.ok(n.news.join() === "false,false,false,true,false", "a news script says no site names, teasers or broken sentences", JSON.stringify(n.news));
+
+  // Narration rhythm: pauses that follow the story, and the voice's own pauses cut to a narrator's.
+  t.section("Logic: narration rhythm (v51)");
+  const nr = await page.evaluate(async () => {
+    const MK = await import("./app/make.js"), g = MK._test.gapAfter, L = (text, extra = {}) => ({ kind: "media", text, ...extra });
+    const out = {};
+    out.gaps = [g(L("Stocks fell."), L("But bonds rose.")), g(L("Stocks fell."), L("Bonds rose.")), g(L("Story one."), L("Second: rates are up.")),
+      g(L("Rates rose."), L("Bottom line: save first.", { stance: true })), g(L("Rates rose."), { kind: "outro", text: "Follow for more." }), g(L("Is it safe?"), L("Mostly.")),
+      g(L("The hook.", { hold: 0.3 }), L("But first.")), g({ kind: "quiz", text: "True or false?", hold: 2.6 }, { kind: "answer", text: "False!" }), g(L("Last line."))].map((x) => x.toFixed(2));
+    const rate = 24000, tone = (sec) => Float32Array.from({ length: Math.round(sec * rate) }, (_, i) => 0.5 * Math.sin(i / 3)), sil = (sec) => new Float32Array(Math.round(sec * rate));
+    const cat = (...a) => { const o = new Float32Array(a.reduce((k, x) => k + x.length, 0)); let k = 0; for (const x of a) { o.set(x, k); k += x.length; } return o; };
+    const clip = cat(sil(0.03), tone(0.9), sil(0.6), tone(0.9), sil(0.03)), plain = cat(sil(0.03), tone(1.5), sil(0.03));
+    const comma = MK._test.tighten(clip, "Hello there my friend, nice to see you again.", rate), breath = MK._test.tighten(clip, "Hello there my friend nice to see you again", rate);
+    const left = (c) => MK._test.pausesIn(c, rate).map(([a, b]) => b - a);
+    out.tight = [(clip.length - comma.length) / rate, left(comma)[0], (clip.length - breath.length) / rate, left(breath)[0],
+      MK._test.tighten(plain, "Hello there my friend, nice to see you.", rate) === plain, comma.every(Number.isFinite) && Math.max(...comma.map(Math.abs)) <= 0.5 + 1e-6];
+    return out;
+  });
+  t.ok(nr.gaps.join() === "0.37,0.45,0.53,0.65,0.65,0.53,0.58,2.88,0.28",
+    "the pause after a line follows the story: shorter when the thought carries on, longer for the next item, a beat before the bottom line and the sign-off; held moments keep their timing", nr.gaps.join());
+  const [cut1, left1, cut2, left2, same, clean] = nr.tight;
+  t.ok(Math.abs(cut1 - 0.36) < 0.03 && Math.abs(left1 - 0.24) < 0.04 && Math.abs(cut2 - 0.26) < 0.03 && Math.abs(left2 - 0.34) < 0.04 && same && clean,
+    "a comma's long pause is cut to 0.24 s and a breath to 0.34 s, by removing silence only; a clip without long pauses is untouched", JSON.stringify(nr.tight));
   await page.context().close();
 }

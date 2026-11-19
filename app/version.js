@@ -1,9 +1,14 @@
 // The app's version and its update notes, shown once in a "What's new" window after each update.
 // When you deploy: bump APP_VERSION, add an entry at the top of UPDATES, and set the same number in
 // sw.js (VERSION = "reelbot-v<APP_VERSION>"). A test checks the two match.
-export const APP_VERSION = 50;
+export const APP_VERSION = 51;
 
 export const UPDATES = [
+  { version: 51, title: "A narrator with natural timing", items: [
+    "The narrator pauses like a person: briefly when a thought carries on (\u201cBut\u2026\u201d, \u201cSo\u2026\u201d), longer between points and stories, and a beat before the bottom line, the question and the sign-off.",
+    "Long pauses inside sentences are tightened (the voice paused almost as long at a comma as at a full stop), so sentences flow and videos don't get longer.",
+    "Each cut lands in the pause before its line, with the new picture a moment ahead of the words.",
+  ] },
   { version: 50, title: "News that sounds like a newsreader", items: [
     "News reels tell each story completely: a headline that teases (\u201cthis stock\u201d, \u201chere's why\u201d) is told with the answer from the article's own summary, or left out. Nothing is made up.",
     "No more site names, section labels or cut-off sentences in the narration (\u201c| Economy | U.S. News\u201d, \u201c\u2026to seek U.S.\u201d).",

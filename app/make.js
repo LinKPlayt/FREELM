@@ -75,21 +75,39 @@ async function writeScript(opts, data, say) {
   return buildEvergreen(topic, o, topic.wiki && !opts.offline ? await research.wikipediaDefinition(topic.wiki) : "");
 }
 
-// Pause after a line: the normal gap, plus extra hold time for chapter and recap cards so they can be read.
-const gapAfter = (line) => GAP + (line?.hold || 0);
-const seconds = (clips, lines = []) => clips.reduce((n, c) => n + c.length, 0) / voiceRate()
-  + clips.slice(0, -1).reduce((n, _, i) => n + gapAfter(lines[i]), 0) + TAIL;
+// The pause after a line follows the story, as a narrator's does: the bigger the turn, the longer the pause.
+// Measured with the voice (v51): its own pauses inside a line run 0.4–0.5 s, so the old fixed 0.28 s between
+// lines (about 0.35 s heard) ran ideas together at every cut while commas dragged. Read speech pauses longest
+// at paragraph breaks, then at sentences, then at commas; these values are scaled for brisk short-form
+// narration. Each is the silence added between clips (about 0.07 s less than heard: the voice's own lead-in
+// and tail). Lines with a hold (the hook, chapter and recap cards, quiz countdowns) keep their own timing.
+const PAUSE = { carry: 0.37, next: 0.45, item: 0.53, beat: 0.65 };
+const CARRIES = /^(?:but|and|so|or|yet|that|that's|this|these|it|it's|they|which|instead|plus|still|even|because|in fact|also|now)\b/i;
+const ITEM = /^(?:first|second|third|fourth|fifth|finally|next|then|also:|meanwhile|in the news|question \d|and one more)\b/i;
+function gapAfter(line, next) {
+  if (!line || !next || line.hold || line.kind === "quiz") return GAP + (line?.hold || 0);
+  const said = String(next.text || "").trim();
+  let g = PAUSE.next;                                         // a new point
+  if (CARRIES.test(said)) g = PAUSE.carry;                    // the same thought carries on ("But…", "So…")
+  if (ITEM.test(said)) g = PAUSE.item;                        // the next story or question in a list
+  if (next.payoff || next.stance || next.question || ["outro", "section", "recap"].includes(next.kind)) g = PAUSE.beat;   // a beat before the reveal, the bottom line, the question, the sign-off
+  if (/\?["”')]?$/.test(String(line.text || "").trim()) && g < PAUSE.item) g = PAUSE.item;      // a question gets a moment to land
+  return g;
+}
+const gapsOf = (lines, n = lines.length) => { let s = 0; for (let i = 0; i < n - 1; i++) s += gapAfter(lines[i], lines[i + 1]); return s; };
+const seconds = (clips, lines = []) => clips.reduce((n, c) => n + c.length, 0) / voiceRate() + gapsOf(lines, clips.length) + TAIL;
 
 async function voiceScript(script, say, base = 1.0) {
   const all = [...script.lines, ...script.extras];
   const phon = await phonemize(all.map((l) => speakable(l.text)));
   all.forEach((l, i) => { l.phonemes = phon[i]; });
   let speed = base;
+  const voice = async (line) => tighten(await synthesize(line.phonemes, speed * (line.pace || 1)), line.text, voiceRate());
   const speak = async (lines) => {
     const out = [];
     for (let i = 0; i < lines.length; i++) {
       say(`Recording the voiceover (${i + 1} of ${lines.length})…`, i / lines.length);
-      out.push(await synthesize(lines[i].phonemes, speed * (lines[i].pace || 1)));
+      out.push(await voice(lines[i]));
       await sleep(0);   // let the screen update between sentences
     }
     return out;
@@ -99,7 +117,7 @@ async function voiceScript(script, say, base = 1.0) {
     const extra = script.extras.shift();
     const at = insertIndex(script, extra);                             // where it makes sense in the story
     script.lines.splice(at, 0, extra);
-    clips.splice(at, 0, await synthesize(extra.phonemes, speed * (extra.pace || 1)));
+    clips.splice(at, 0, await voice(extra));
   }
   const opt = script.lines.findIndex((l) => l.question) > 0 ? script.lines.findIndex((l) => l.question) : script.lines.findIndex((l) => l.optional);
   if (opt > 0 && seconds(clips, script.lines) > MAX_S) { script.lines.splice(opt, 1); clips.splice(opt, 1); }   // too long: the comment question goes first
@@ -120,7 +138,7 @@ async function voiceScript(script, say, base = 1.0) {
     for (let i = 0; i < script.lines.length; i++) {
       const l = script.lines[i], fixed = l.text.replace(/\b\d+ questions\b/, `${of} questions`).replace(/\bout of \d+\b/, `out of ${of}`);
       if (fixed === l.text) continue;
-      l.text = fixed; [l.phonemes] = await phonemize([speakable(fixed)]); clips[i] = await synthesize(l.phonemes, speed * (l.pace || 1));
+      l.text = fixed; [l.phonemes] = await phonemize([speakable(fixed)]); clips[i] = await voice(l);
     }
   }
   while (seconds(clips, script.lines) > MAX_S && script.lines.length > 4) {       // still too long: drop a middle line
@@ -159,6 +177,56 @@ function pausesIn(clip, rate) {
   return out;
 }
 
+// Which real pause in a clip follows each punctuation mark of its line: each mark's expected place (by word
+// lengths) snapped to the nearest unused pause within 0.6 s, in order. Returns [tokenIndex, from, to] in seconds.
+function punctuationPauses(clip, tokens, weights, rate, start, end) {
+  const cuts = tokens.map((tok, j) => (j < tokens.length - 1 && /[.,!?;:—]["”']?$/.test(tok) ? j : -1)).filter((j) => j >= 0);
+  const total = weights.reduce((a, b) => a + b, 0) || 1, pauses = pausesIn(clip, rate), bounds = [];
+  let lastEnd = start;
+  for (const j of cuts) {
+    const before = weights.slice(0, j + 1).reduce((a, b) => a + b, 0);
+    const expected = start + (end - start) * before / total;
+    let best = -1, bestDist = 0.6;                                     // only pauses within 0.6 s of the estimate
+    pauses.forEach(([a, b], k) => {
+      const mid = (a + b) / 2, d = Math.abs(mid - expected);
+      if (d < bestDist && a > lastEnd + 0.1 && b < end - 0.05) { best = k; bestDist = d; }
+    });
+    if (best >= 0) { bounds.push([j, pauses[best][0], pauses[best][1]]); lastEnd = pauses[best][1]; }
+  }
+  return bounds;
+}
+const weightsOf = (tokens) => tokens.map((tok) => speakable(tok).length + 2.5 + (/[.,!?;:]$/.test(tok) ? 3 : 0));
+
+// The voice's own pauses inside a line, shaped like a narrator's. It pauses 0.4–0.5 s at every comma (people
+// pause at fewer than half of them, and briefly) and nearly as long at a colon as at a full stop. Each pause
+// is cut back to its mark's length: a comma 0.24 s, a colon, semicolon or dash 0.30 s, a full stop, question or
+// exclamation inside the line 0.42 s. Only silence is removed, from the middle of the pause with short fades,
+// so no word is touched; the captions are timed on the result.
+// A breath the voice takes mid-sentence, where there's no punctuation, is kept but held to 0.34 s.
+const INNER = { ",": 0.24, ";": 0.3, ":": 0.3, "—": 0.3, ".": 0.42, "!": 0.42, "?": 0.42 }, BREATH = 0.34;
+export function tighten(clip, text, rate) {
+  const tokens = String(text || "").split(/\s+/).filter(Boolean);
+  if (!clip?.length || tokens.length < 3) return clip;
+  const dur = clip.length / rate, start = 0.04, end = Math.max(start + 0.1, dur - 0.04);
+  const marks = new Map(punctuationPauses(clip, tokens, weightsOf(tokens), rate, start, end).map(([j, a]) => [a, tokens[j].replace(/["”']+$/, "").slice(-1)]));
+  const cuts = [];
+  for (const [a, b] of pausesIn(clip, rate)) {
+    const excess = (b - a) - (marks.has(a) ? INNER[marks.get(a)] ?? 0.3 : BREATH);
+    if (excess > 0.03) { const mid = (a + b) / 2; cuts.push([Math.round((mid - excess / 2) * rate), Math.round((mid + excess / 2) * rate)]); }
+  }
+  if (!cuts.length) return clip;
+  const out = new Float32Array(clip.length - cuts.reduce((n, [a, b]) => n + (b - a), 0)), fade = Math.max(1, Math.round(rate * 0.005));
+  let from = 0, at = 0;
+  for (const [a, b] of [...cuts, [clip.length, clip.length]]) {
+    out.set(clip.subarray(from, a), at);
+    if (from > 0) for (let k = 0; k < fade && at + k < out.length; k++) out[at + k] *= k / fade;            // fade in after a cut
+    at += a - from;
+    if (a < clip.length) for (let k = 1; k <= fade && at - k >= 0; k++) out[at - k] *= (k - 1) / fade;      // fade out before it
+    from = b;
+  }
+  return out;
+}
+
 // Word timings for the captions. Each line is split into phrases at its punctuation, and each phrase
 // is lined up with a real pause in the recorded voice (the narrator pauses at commas and full stops),
 // so the highlighted word stays with the voice. Within a phrase, words share the time by length.
@@ -169,26 +237,10 @@ function timings(script, clips) {
     const dur = clips[i].length / rate;
     spans.push([t, t + dur]);
     const tokens = line.text.split(/\s+/).filter(Boolean);
-    const weights = tokens.map((tok) => speakable(tok).length + 2.5 + (/[.,!?;:]$/.test(tok) ? 3 : 0));
-    // Phrase boundaries: after tokens that end in punctuation (not the last one).
-    const cuts = tokens.map((tok, j) => (j < tokens.length - 1 && /[.,!?;:—]["”']?$/.test(tok) ? j : -1)).filter((j) => j >= 0);
-    const total = weights.reduce((a, b) => a + b, 0) || 1;
+    const weights = weightsOf(tokens);
     const start = 0.04, end = Math.max(start + 0.1, dur - 0.04);
-    // Where each cut is expected (by word lengths), then snap it to the nearest unused real pause.
-    const pauses = pausesIn(clips[i], rate);
-    // Each matched pause must come after the previous one (in time), and before the end of the line.
-    const bounds = [];
-    let lastEnd = start;
-    for (const j of cuts) {
-      const before = weights.slice(0, j + 1).reduce((a, b) => a + b, 0);
-      const expected = start + (end - start) * before / total;
-      let best = -1, bestDist = 0.6;                                     // only pauses within 0.6 s of the estimate
-      pauses.forEach(([a, b], k) => {
-        const mid = (a + b) / 2, d = Math.abs(mid - expected);
-        if (d < bestDist && a > lastEnd + 0.1 && b < end - 0.05) { best = k; bestDist = d; }
-      });
-      if (best >= 0) { bounds.push([j, pauses[best][0], pauses[best][1]]); lastEnd = pauses[best][1]; }
-    }
+    // Phrase boundaries: each punctuation mark snapped to the real pause the narrator makes there.
+    const bounds = punctuationPauses(clips[i], tokens, weights, rate, start, end);
     // Build phrases: [firstToken, lastToken, from, to]
     const phrases = []; let from = 0, at = start;
     for (const b of bounds) { phrases.push([from, b[0], at, b[1]]); from = b[0] + 1; at = b[2]; }
@@ -198,7 +250,7 @@ function timings(script, clips) {
       let cursor = t + s0;
       for (let j = a; j <= b; j++) { const d = (s1 - s0) * weights[j] / sum; words.push({ text: tokens[j], start: cursor, end: cursor + d }); cursor += d; }
     }
-    t += dur + gapAfter(line);
+    t += dur + gapAfter(line, script.lines[i + 1]);
   });
   return { words, spans };
 }
@@ -227,7 +279,7 @@ async function masterVoice(clips, lines, total) {
           const buf = ctx.createBuffer(1, c.length, rate); buf.copyToChannel(c, 0);
           const src = ctx.createBufferSource(); src.buffer = buf; src.connect(hp); src.start(t);
         }
-        t += c.length / rate + gapAfter(lines[i]);
+        t += c.length / rate + gapAfter(lines[i], lines[i + 1]);
       });
       const rendered = await ctx.startRendering();
       return limitAndLevel(rendered.getChannelData(0).slice(0));
@@ -235,7 +287,7 @@ async function masterVoice(clips, lines, total) {
   }
   const voice = new Float32Array(length);
   let off = 0;
-  clips.forEach((c, i) => { const r = resample(c, rate); voice.set(r.subarray(0, Math.max(0, voice.length - off)), off); off += r.length + Math.round(gapAfter(lines[i]) * SR); });
+  clips.forEach((c, i) => { const r = resample(c, rate); voice.set(r.subarray(0, Math.max(0, voice.length - off)), off); off += r.length + Math.round(gapAfter(lines[i], lines[i + 1]) * SR); });
   return limitAndLevel(voice);
 }
 
@@ -369,7 +421,7 @@ function learnRate(engine, words, secondsSpoken, speed) {
 }
 export function estimateSeconds(lines, speed = 1.0, engine = "natural") {
   const words = lines.reduce((n, l) => n + speakable(l.text).split(/\s+/).filter(Boolean).length, 0);
-  return words / (learnedRate(engine) * speed) + lines.slice(0, -1).reduce((n, l) => n + gapAfter(l), 0) + TAIL;
+  return words / (learnedRate(engine) * speed) + gapsOf(lines) + TAIL;
 }
 
 // Step 1: research, write the script and find a photo for every scene.
@@ -551,10 +603,13 @@ export async function produceReel(plan, opts, ui) {
   const { audio, total } = await assembleAudio(clips, mood, script.lines, opts.musicVolume ?? 1, spans);
 
   ui.say("Preparing scenes…", 0.56);
+  // Each cut sits in the pause before its line: halfway, and at most 0.26 s before the voice (the picture
+  // leads the word). A held moment (a quiz countdown, a chapter card) stays with the scene it belongs to.
+  const cutBefore = (i) => (i === 0 ? 0 : spans[i][0] - Math.min(0.26, Math.max(0.02, (spans[i][0] - spans[i - 1][1] - (script.lines[i - 1].hold || 0)) / 2)));
   const scenes = [], credits = [], shown = [];      // shown: main subjects of recent illustrations
   for (let i = 0; i < script.lines.length; i++) {
     const line = script.lines[i];
-    const sc = { start: i === 0 ? 0 : spans[i][0] - GAP / 2, end: i === script.lines.length - 1 ? total : spans[i + 1][0] - GAP / 2, kind: "fallback",
+    const sc = { start: cutBefore(i), end: i === script.lines.length - 1 ? total : cutBefore(i + 1), kind: "fallback",
       label: (i === 0 ? script.title : line.query || script.title).replace(/\s*#Shorts$/, ""), seed: i };
     if (opts.showSources !== false && line.source) sc.source = line.source;
     if (line.payoff) sc.payoff = true;
@@ -761,7 +816,7 @@ export async function planFromDraft(draft, ui) {
 }
 
 // For the automated tests (tests/web): internal helpers, no app behaviour depends on this.
-export const _test = { timings, pausesIn, limitAndLevel, gapAfter };
+export const _test = { timings, pausesIn, limitAndLevel, gapAfter, tighten };
 
 // After a video is made: draw the other ways each of its scenes could be illustrated, and save them,
 // so a better picture is ready (and instant) if you remix it or the same idea comes up again.

@@ -10,6 +10,66 @@ before and after on the same inputs, and add tests so it can't come back.
 
 ---
 
+## v51 · Narration · Natural timing: pauses that follow the story
+
+**Weakest area found.** Measured with the app's own voice (Kokoro, af_heart) on real scripts the app wrote, the
+narration's rhythm was upside down. Every line was followed by the same 0.28 s (about 0.35 s heard, with the
+voice's own lead-in and tail), while the voice paused 0.4–0.5 s at commas, colons and breaths *inside* a line.
+So the biggest turns in the story (a new point, a new scene, the bottom line) got the shortest pauses, shorter
+than a comma. Ideas ran together at every cut, and sentences dragged in the middle.
+
+**Technique.** Research on read speech:
+- Pause length rises with the strength of the boundary: comma < sentence < paragraph (Kentner et al. 2023).
+- Sentence pauses are about 0.6 of paragraph pauses (ICPhS 1991).
+- English readers pause after 94% of full stops but only 45% of commas, and briefly (BYU, 80 speakers).
+- Listeners mainly notice pauses far from what the context leads them to expect (Google Research, Speech Prosody 2024).
+- Pauses placed by fixed rules score poorly next to structure-based ones (ICPhS 1991).
+
+The fix applies this hierarchy, scaled for brisk short-form narration:
+- Between lines, the pause follows the relation to the next line.
+- Inside a line, the voice's own long pauses are cut back to a narrator's, by removing silence only.
+
+**What changed** (`app/make.js`):
+- `gapAfter(line, next)`, the silence after a line:
+  - 0.37 s when the thought carries on ("But", "So", "That"…)
+  - 0.45 s for a new point
+  - 0.53 s for the next item ("First", "Next", "Then", "Question 2"…) or after a question
+  - 0.65 s, a beat, before the payoff, the bottom line, the comment question, a chapter card and the sign-off
+  - Lines with a hold (the hook, the pre-payoff hold, chapter cards, quiz countdowns) keep their exact timing.
+- `tighten(clip, text)`: each pause in a clip is matched to the punctuation it follows (the matching the captions
+  already used, now shared as `punctuationPauses`) and cut to the narrator's length:
+  - comma 0.24 s
+  - colon, semicolon or dash 0.30 s
+  - full stop, question or exclamation inside the line 0.42 s
+  - a breath with no punctuation 0.34 s
+  Silence is cut from the middle of the pause, with 5 ms fades. Captions are timed on the result.
+- Scene cuts sit in the real pause: halfway, and at most 0.26 s before the voice, so the picture leads the word.
+  Held moments cut exactly as before.
+
+**Measured** (heard pauses, ms), same synthesized audio assembled old and new; Stablecoin "Your topic" script
+and an explainer:
+
+| Pause | Before | After |
+|---|---|---|
+| Comma inside a line | 340–520 | 240 |
+| Colon ("Bottom line:", "Here's the catch:") | 390–460 | 300 |
+| Breath with no punctuation | 430 | 340 |
+| Full stop inside a line | 350–500 | 350–420 |
+| Next line carries on ("So here's what to do") | 340–360 | 430–450 |
+| New point | 330–370 | 500–540 |
+| Next item ("Next, add active income…") | 340 | 590 |
+| Before the bottom line, comment question, sign-off | 340–410 | 710–780 |
+| Hook and other held moments | 640–690 | unchanged |
+| Length | 38.03 s, 27.34 s | 37.92 s, 28.35 s |
+
+Loudness unchanged (explainer −15.2 LUFS before and after). Real renders of an explainer and a quiz confirmed
+the quiz countdown timing is unchanged.
+
+**Tests.** `tests/web/logic.mjs` → "Logic: narration rhythm (v51)": the pause hierarchy and held lines; `tighten`
+on synthetic speech (a 0.6 s comma pause becomes 0.24 s, a breath 0.34 s, nothing else changes).
+
+---
+
 ## v50 · Scriptwriting · The newsroom: news lines a newsreader would say
 
 **Weakest area found.** News reels (also used by Auto, Plan my week and the market recap's "In the news"
@@ -84,16 +144,15 @@ Found on the live feed right after release and added: a trailing fragment that p
 
 ## Queue: weaknesses found, not fixed yet (highest impact first)
 
-1. **Narration rhythm.** Every line is followed by the same 0.28 s pause (`GAP` in `app/make.js`), whatever comes
-   next. A narrator gives the hook a beat to land, pauses before a reveal or the bottom line, and runs on when the
-   next line continues the thought ("But…", "So…"). Measure: the spread of pause lengths and where the long ones fall.
-2. **"Your topic" scripts are encyclopedic.** Wikipedia sentences are read close to verbatim: two definitions in a
+1. **"Your topic" scripts are encyclopedic.** Wikipedia sentences are read close to verbatim: two definitions in a
    row (Roth IRA: "…is an individual retirement account…", then "A Roth IRA can be an individual retirement account
    containing investments in securities…"), jargon ("taxed upon distribution"), and facts out of time order
    (Buffett: Wharton in 1947, then a book at age seven).
-3. **Headlinese.** Even complete headlines are written for the eye (Title Case, no articles: "Japan exports in
+2. **Headlinese.** Even complete headlines are written for the eye (Title Case, no articles: "Japan exports in
    October surge 20.5%"). A spoken rewrite needs care to stay faithful.
-4. **Pronunciation of new names.** Tickers and company names from the day's news (CoreWeave, AGNC, HELOC) aren't
+3. **Pronunciation of new names.** Tickers and company names from the day's news (CoreWeave, AGNC, HELOC) aren't
    in the pronunciation list; check how the voice says them.
-5. **Photo relevance.** Photos are matched by words in their titles; judge them by meaning (the on-device
+4. **Photo relevance.** Photos are matched by words in their titles; judge them by meaning (the on-device
    semantic model is already used by the fact check).
+5. **Emphasis.** The voice gives every word the same weight; key numbers and contrast words ("but", "only",
+   "never") could be stressed (Kokoro takes stress marks in its phonemes).
