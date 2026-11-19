@@ -53,13 +53,23 @@ function statOf(raw) {
   m = text.match(new RegExp(String.raw`doubl\w*\s+(?:about\s+|roughly\s+)?every\s+` + NUM + String.raw`\s+years?`, "i"));
   if (m) return { type: "growth", every: toNum(m[1]), label: `DOUBLES EVERY ${m[1]} YEARS` };
 
-  // Several percentages in one breath: a split (50/30/20).
+  // A move: "fell 1.1%", "rose 12 percent". A ring would say "1.1% of something"; it gets an arrow instead,
+  // red or green, with what moved.
+  const mv = text.match(new RegExp(String.raw`\b(down|fell|fall|falls|dropped|drops|slid|sank|plunged|tumbled|declined|lost|lose|loses|up|rose|rises|gained|gains|climbed|jumped|surged|rallied|grew)\s+(?:by\s+|about\s+|nearly\s+|almost\s+|over\s+|roughly\s+)?` + NUM + String.raw`\s+percent`, "i"));
+  if (mv) {
+    const up = /^(up|rose|rises|gained|gains|climbed|jumped|surged|rallied|grew)$/i.test(mv[1]);
+    const subject = phrase(text.slice(0, mv.index).toLowerCase().replace(/[^a-z0-9 '&-]/g, " ").split(/\s+/).filter(Boolean).reverse(), 3).reverse().join(" ").toUpperCase();
+    return { type: "move", value: toNum(mv[2]), dir: up ? 1 : -1, label: subject || labelNear(text, mv.index, mv[0].length) };
+  }
+
+  // Several percentages in one breath: a split (50/30/20) of a whole, so they add up to most of 100.
   const pcts = [...text.matchAll(new RegExp(NUM + String.raw`\s+percent`, "gi"))];
   m = raw.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{1,2})\b/);
   if (m) return { type: "split", parts: [m[1], m[2], m[3]].map(Number), labels: ["NEEDS", "WANTS", "SAVINGS"], title: `${m[1]}/${m[2]}/${m[3]}` };
   if (pcts.length >= 2) {
     const parts = pcts.slice(0, 4).map((p) => toNum(p[1]));
-    if (parts.every((p) => p > 0 && p <= 100) && parts.reduce((a, b) => a + b, 0) <= 100.5)
+    const sum = parts.reduce((a, b) => a + b, 0);
+    if (parts.every((p) => p > 0 && p <= 100) && sum <= 100.5 && sum >= 80)
       return { type: "split", parts, labels: pcts.slice(0, 4).map((p) => labelNear(text, p.index, p[0].length, 2) || ""), title: parts.join("/") };
   }
   if (pcts.length === 1) {
@@ -150,6 +160,7 @@ export function describeStat(s) {
   if (!s) return "";
   switch (s.type) {
     case "percent": return `${fmt(s.value)}% chart`;
+    case "move": return `${s.dir > 0 ? "▲" : "▼"} ${fmt(s.value)}% move`;
     case "split": return `${s.title} split`;
     case "range": return `${s.lo}–${s.hi} ${s.unit.toLowerCase()} timeline`;
     case "growth": return s.every ? `doubling every ${s.every} years` : "growth curve";

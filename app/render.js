@@ -27,7 +27,15 @@ const GAIN = [74, 222, 128], LOSS = [255, 92, 92];
 function feelings(words) {
   const texts = words.map((w) => w.text), dir = directionsOf(texts);
   // A number that isn't a move ("7,324", "1947", "$5,000") pops in the brand colour: emphasis without implying good or bad.
-  return texts.map((t, i) => (dir[i] ? { feel: dir[i], move: true } : { feel: /^\$?\d/.test(t.replace(/^[^\w$]+/, "")) ? 2 : emphasisOf(t), move: false }));
+  const out = texts.map((t, i) => (dir[i] ? { feel: dir[i], move: true } : { feel: /^\$?\d/.test(t.replace(/^[^\w$]+/, "")) ? 2 : emphasisOf(t), move: false }));
+  // "Interest" depends on which side you're on: green when it's earned (compound interest, savings), red on debt.
+  const low = texts.map((t) => t.toLowerCase().replace(/[^a-z]/g, ""));
+  low.forEach((w, i) => {
+    if (w !== "interest" || out[i].move) return;
+    const near = low.slice(Math.max(0, i - 4), i + 4).join(" ");
+    out[i].feel = /\b(compound|earn|earns|earned|earning|savings|saving|save|grows?)\b/.test(near) ? 1 : /\b(debt|loans?|cards?|apr|owe|borrow\w*|mortgage)\b/.test(near) ? -1 : 0;
+  });
+  return out;
 }
 
 /* ------------------------------------------------------------------ scene backgrounds */

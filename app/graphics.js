@@ -60,7 +60,7 @@ export class StatBg {
     if (this.continued) p = 1;
     const a = ease(p / 0.5), s = this.s;
     const fn = { percent: this.percent, split: this.split, range: this.range, growth: this.growth, compare: this.compare,
-      money: this.counter, bignum: this.counter, year: this.year }[s.type];
+      money: this.counter, bignum: this.counter, year: this.year, move: this.move }[s.type];
     fn?.call(this, ctx, a, p);
   }
   percent(ctx, a) {
@@ -179,6 +179,18 @@ export class StatBg {
       ctx.fillStyle = "rgba(255,255,255,0.1)"; ctx.beginPath(); ctx.roundRect(W / 2 - w / 2, cy + 260, w, 76, 38); ctx.fill();
       ctx.fillStyle = "rgba(255,255,255,0.85)"; ctx.fillText(txt, W / 2, cy + 300); ctx.restore();
     }
+  }
+  // A move: a big arrow and the percentage, red for a fall and green for a rise, and what moved.
+  move(ctx, a, p) {
+    const { cy } = this, up = this.s.dir > 0, col = up ? [74, 222, 128] : [255, 92, 92], v = this.s.value * ease(p / 0.45);
+    const bob = Math.sin(p * Math.PI * 3) * 8, k = ease(a);
+    ctx.save(); ctx.translate(W / 2, cy - 150 + (up ? -1 : 1) * (1 - k) * 80 + bob); ctx.globalAlpha = k;
+    ctx.fillStyle = rgba(col); ctx.beginPath();
+    if (up) { ctx.moveTo(0, -150); ctx.lineTo(150, 30); ctx.lineTo(60, 30); ctx.lineTo(60, 150); ctx.lineTo(-60, 150); ctx.lineTo(-60, 30); ctx.lineTo(-150, 30); }
+    else { ctx.moveTo(0, 150); ctx.lineTo(150, -30); ctx.lineTo(60, -30); ctx.lineTo(60, -150); ctx.lineTo(-60, -150); ctx.lineTo(-60, -30); ctx.lineTo(-150, -30); }
+    ctx.closePath(); ctx.shadowColor = rgba(col, 0.6); ctx.shadowBlur = 50; ctx.fill(); ctx.restore();
+    bigText(ctx, `${up ? "+" : "−"}${fmt(v, this.s.value % 1 ? 1 : 0)}%`, W / 2, cy + 170, 210, rgba(col), 760);
+    label(ctx, this.s.label, W / 2, cy + 340, this.a);
   }
   dispose() { this.bg.width = this.bg.height = 0; }
 }

@@ -272,7 +272,8 @@ export function addSoundEffects(audio, scenes) {
     if (sc.tone === "question") bloop(audio, sc.start + 0.1, 0.2);
     if (sc.kind === "quiz" && sc.countEnd > sc.countStart) { const step = (sc.countEnd - sc.countStart) / 3; for (let k = 0; k < 3; k++) tick(audio, sc.countStart + k * step, 0.22); }
     if (sc.kind === "answer") (sc.answer ? chime : buzzer)(audio, sc.start + 0.05, sc.answer ? 0.2 : 0.16);
-    if (sc.kind === "outro") sparkle(audio, sc.start + 0.1, 0.14);
+    if (sc.kind === "outro") { sparkle(audio, sc.start + 0.1, 0.14); pop(audio, sc.start + 0.42 * (sc.end - sc.start), 0.26); }   // the button tapped on the end card
+    if (sc.kind === "board") (sc.markets || []).slice(0, 4).forEach((_, k) => tick(audio, sc.start + (0.04 + k * 0.07) * (sc.end - sc.start) + 0.05, 0.12));   // each row of the day's board
     if (i > 0 && !sc.payoff) whoosh(audio, sc.start, sc.kind === "section" ? 0.5 : 0.24 + 0.12 * ((i * 7) % 5) / 4);
     if (sc.kind === "stat" || sc.stat) (/^\$/.test(sc.stat || "") ? coins : pop)(audio, sc.start + 0.15, 0.22);
     if (sc.kind === "recap") chime(audio, sc.start + 0.1, 0.18);
