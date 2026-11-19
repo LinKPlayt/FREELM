@@ -1,9 +1,17 @@
 // The app's version and its update notes, shown once in a "What's new" window after each update.
 // When you deploy: bump APP_VERSION, add an entry at the top of UPDATES, and set the same number in
 // sw.js (VERSION = "reelbot-v<APP_VERSION>"). A test checks the two match.
-export const APP_VERSION = 46;
+export const APP_VERSION = 47;
 
 export const UPDATES = [
+  { version: 47, title: "A redesigned ReelBot", items: [
+    "A new look throughout: a refined dark theme, clearer type, consistent spacing, and smooth, subtle animation.",
+    "New Home dashboard: your videos, posted count, total and average views, the queue, what's up next, recent videos, performance and activity, all from what's on your phone.",
+    "The Studio is now five clear steps (Topic, Voice, Look, Research, Extras) with a live preview and summary beside them; on a phone, “Make my reel” stays within reach.",
+    "New Automation page: plan the week, today's video, the queue with Make all and calendar reminders, and how many videos you've posted.",
+    "Library cards with badges and grouped actions; Settings organised into sections.",
+    "Works beautifully on phones, tablets (an icon rail) and computers (a full sidebar).",
+  ] },
   { version: 46, title: "A safer Library, reminders and backups", items: [
     "The Library now keeps up to 60 videos (it was 8, and older ones vanished without warning). Older videos are only removed when your phone runs short of space, posted ones first, and the app tells you which.",
     "Mark videos as posted (adding their views does it too), filter to “Not posted yet”, and clear posted videos in one tap. The Library shows how much space it uses.",

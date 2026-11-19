@@ -8,6 +8,8 @@ const write = (all) => { try { localStorage.setItem(KEY, JSON.stringify(all)); r
 export const FIELDS = [["views", "Views"], ["likes", "Likes"], ["comments", "Comments"], ["saves", "Saves"]];
 
 export function getResult(id) { return read()[id] || null; }
+// Every logged result (including videos since deleted), newest first: for the dashboard's totals.
+export function allResults() { return Object.entries(read()).map(([id, r]) => ({ id, ...r })).sort((a, b) => (b.created || 0) - (a.created || 0)); }
 
 // Saves the numbers for a reel, with the settings it was made with (for the comparisons).
 export function saveResult(reel, stats) {

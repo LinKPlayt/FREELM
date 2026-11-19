@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ReelBot</title>
 <meta name="description" content="Make 30–45 second finance reels on your phone">
-<meta name="theme-color" content="#0b0f1e">
+<meta name="theme-color" content="#07080d">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -13,364 +13,353 @@
 <link rel="apple-touch-icon" href="app/icons/icon-180.png">
 <link rel="icon" type="image/png" href="app/icons/icon-192.png">
 <link rel="manifest" href="manifest.webmanifest">
-<style>
-  :root {
-    --bg: #0b0f1e; --surface: #141a2e; --surface-2: #1c2440; --line: #2a3354;
-    --text: #f3f5fb; --muted: #9aa3bf; --accent: #ffd60a; --accent-ink: #14120a;
-    --good: #2ed573; --bad: #ff4757; --radius: 16px;
-    --safe-top: env(safe-area-inset-top); --safe-bottom: env(safe-area-inset-bottom);
-    color-scheme: dark;
-  }
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { margin: 0; background: var(--bg); color: var(--text);
-    font: 16px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif; }
-  body { min-height: 100dvh; padding: calc(var(--safe-top) + 8px) 16px calc(var(--safe-bottom) + 92px); }
-  a { color: var(--accent); }
-  header { display: flex; align-items: center; justify-content: space-between; padding: 8px 2px 16px; }
-  header h1 { font-size: 28px; font-weight: 800; margin: 0; letter-spacing: -0.5px; }
-  header h1 span { color: var(--accent); }
-  .pill { font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 99px; background: var(--surface-2); color: var(--good); }
-  main { max-width: 560px; margin: 0 auto; }
-  section.tab { display: none; } section.tab.active { display: block; }
-  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
-  .card h2 { font-size: 17px; margin: 0 0 4px; } .card p { margin: 4px 0 12px; color: var(--muted); font-size: 14px; }
-  label.field { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin: 14px 0 8px; text-transform: uppercase; letter-spacing: .4px; }
-  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
-  .chip { border: 1px solid var(--line); background: var(--surface-2); color: var(--text); padding: 9px 14px; border-radius: 99px;
-    font-size: 15px; font-weight: 600; cursor: pointer; }
-  .chip.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-  input[type=text], input[type=search], select { width: 100%; background: var(--surface-2); color: var(--text);
-    border: 1px solid var(--line); border-radius: 12px; padding: 12px; font-size: 16px; font-family: inherit; }
-  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; }
-  .row > div:first-child { flex: 1; min-width: 0; }
-  .row small { display: block; color: var(--muted); font-size: 13px; }
-  .switch { position: relative; width: 52px; height: 32px; flex: none; }
-  .switch input { opacity: 0; width: 0; height: 0; }
-  .switch span { position: absolute; inset: 0; background: var(--line); border-radius: 99px; transition: .2s; }
-  .switch span::after { content: ""; position: absolute; width: 26px; height: 26px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .2s; }
-  .switch input:checked + span { background: var(--good); }
-  .switch input:checked + span::after { transform: translateX(20px); }
-  button.primary { display: block; width: 100%; background: var(--accent); color: var(--accent-ink);
-    border: 0; border-radius: 14px; padding: 16px; font-size: 17px; font-weight: 800; cursor: pointer; }
-  button.primary:disabled { opacity: .5; }
-  .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
-  .btn { background: var(--surface-2); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 12px 10px;
-    font-size: 15px; font-weight: 600; text-align: center; text-decoration: none; cursor: pointer; }
-  .btn.main { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 800; }
-  .btn.danger { color: var(--bad); } .btn.wide { grid-column: 1 / -1; }
-  .progress { height: 10px; background: var(--surface-2); border-radius: 99px; overflow: hidden; margin: 12px 0 8px; }
-  .progress div { height: 100%; width: 0; background: var(--accent); transition: width .4s; }
-  #preview { width: 132px; aspect-ratio: 9 / 16; border-radius: 10px; background: #000; display: block; margin: 12px auto 0; }
-  video { width: 100%; border-radius: 12px; background: #000; aspect-ratio: 9 / 16; max-height: 70vh; display: block; }
-  .reel-title { font-weight: 700; margin: 12px 0 2px; }
-  .meta { color: var(--muted); font-size: 13px; }
-  .empty { text-align: center; color: var(--muted); padding: 40px 10px; }
-  nav { position: fixed; left: 0; right: 0; bottom: 0; background: rgba(11, 15, 30, .92); backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px); border-top: 1px solid var(--line); display: flex; padding: 8px 8px calc(var(--safe-bottom) + 8px); z-index: 10; }
-  nav button { flex: 1; background: none; border: 0; color: var(--muted); font-size: 11px; font-weight: 600; padding: 4px; cursor: pointer; }
-  nav button svg { display: block; margin: 0 auto 3px; width: 24px; height: 24px; }
-  nav button.active { color: var(--accent); }
-  .toast { position: fixed; left: 50%; bottom: calc(var(--safe-bottom) + 96px); transform: translateX(-50%); background: var(--text); color: var(--bg);
-    padding: 10px 16px; border-radius: 99px; font-weight: 600; font-size: 14px; opacity: 0; transition: .25s; pointer-events: none; z-index: 30; max-width: 90vw; text-align: center; }
-  .toast.show { opacity: 1; }
-  ol.steps, ul.steps { padding-left: 20px; margin: 8px 0; color: var(--muted); font-size: 14px; } .steps li { margin: 6px 0; } .steps b { color: var(--text); }
-  .swatches { display: flex; gap: 10px; flex-wrap: wrap; }
-  .swatch { width: 38px; height: 38px; border-radius: 50%; border: 3px solid transparent; cursor: pointer; box-shadow: inset 0 0 0 1px rgba(255,255,255,.25); }
-  .swatch.on { border-color: var(--text); }
-  .scene { display: grid; grid-template-columns: 76px 1fr; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
-  .scene:first-of-type { border-top: 0; padding-top: 4px; }
-  .thumb { width: 76px; aspect-ratio: 9 / 16; border-radius: 8px; background: var(--surface-2); display: grid; place-items: center;
-    color: var(--muted); font-size: 11px; font-weight: 700; text-align: center; overflow: hidden; }
-  .thumb canvas { width: 100%; height: 100%; display: block; }
-  .scene textarea { width: 100%; min-height: 64px; resize: vertical; background: var(--surface-2); color: var(--text); border: 1px solid var(--line);
-    border-radius: 10px; padding: 9px 10px; font: 15px/1.4 inherit; font-family: inherit; }
-  .scene-tag { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; margin-bottom: 6px; display: flex; justify-content: space-between; }
-  .mini { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-  .mini button, .mini label { background: var(--surface-2); color: var(--text); border: 1px solid var(--line); border-radius: 99px; padding: 6px 11px;
-    font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
-  .mini .del { color: var(--bad); }
-  .mini.vis button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-  .sticky-actions { position: sticky; bottom: calc(var(--safe-bottom) + 76px); background: linear-gradient(transparent, var(--bg) 30%); padding-top: 18px; }
-  .estimate { font-weight: 700; } .estimate.warn { color: var(--accent); }
-  .draft { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
-  .draft:first-of-type { border-top: 0; }
-  .copy-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
-  .copy-row .btn { padding: 10px 6px; font-size: 14px; }
-  .idea { position: relative; }
-  .idea h3 { margin: 6px 0 6px; font-size: 18px; line-height: 1.3; }
-  .tag { display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase; padding: 3px 8px; border-radius: 99px; background: var(--surface-2); color: var(--muted); margin-right: 6px; }
-  .tag.ai { background: var(--accent); color: var(--accent-ink); }
-  .idea .hook { color: var(--text); font-size: 15px; margin: 0 0 8px; }
-  .idea ul { margin: 6px 0 4px; padding-left: 18px; color: var(--muted); font-size: 14px; } .idea li { margin: 4px 0; }
-  .src { font-size: 12px; color: var(--muted); }
-  .chiplink { display: inline-block; margin: 4px 6px 0 0; padding: 6px 10px; border-radius: 99px; background: var(--surface-2); border: 1px solid var(--line); color: var(--text); font-size: 13px; font-weight: 600; cursor: pointer; }
-  .writing { animation: pulse 1.2s ease-in-out infinite; } @keyframes pulse { 50% { opacity: .45; } }
-  @media (prefers-reduced-motion: reduce) { .writing { animation: none; } }
-  .coach { background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 0 0 8px; }
-  .coach-score { display: flex; align-items: baseline; gap: 6px; } .coach-score b { font-size: 30px; } .coach-score span { color: var(--muted); font-size: 14px; }
-  .fact { margin: 6px 0 2px; font-size: 13px; color: var(--muted); }
-  .fact summary { cursor: pointer; font-weight: 700; list-style: none; } .fact summary::-webkit-details-marker { display: none; }
-  .fact.s-verified summary { color: var(--good); } .fact.s-partial summary { color: var(--accent); }
-  .fact.s-unverified summary, .fact.s-conflict summary { color: var(--bad); }
-  .fact ul { margin: 6px 0 0; padding-left: 18px; } .fact li { margin-bottom: 6px; color: var(--text); } .fact small { color: var(--muted); }
-  .fact p { margin: 6px 0 0; }
-  #say-as { width: 100%; background: var(--surface-2); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font: inherit; font-size: 16px; resize: vertical; }
-  .results { margin-top: 10px; } .results summary { cursor: pointer; font-weight: 700; color: var(--muted); font-size: 14px; }
-  .results-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
-  .results-grid label { font-size: 12px; color: var(--muted); } .results-grid input { width: 100%; font-size: 16px; background: var(--surface-2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 8px; }
-  .insight { padding: 6px 0; border-top: 1px solid var(--line); } .insight b { color: var(--accent); }
-  .job-steps { list-style: none; padding: 0; margin: 10px 0 4px; font-size: 14px; }
-  .job-steps li { padding: 3px 0; color: var(--muted); } .job-steps li.done { color: var(--good); } .job-steps li.now { color: var(--text); font-weight: 700; }
-  .job-steps li::before { content: "○ "; } .job-steps li.done::before { content: "✓ "; } .job-steps li.now::before { content: "● "; }
-  .news h3 { margin: 12px 0 4px; font-size: 16px; } .news ul { margin: 0; padding-left: 18px; } .news li { margin: 4px 0; }
-  .card.today { border: 2px solid var(--accent); }
-  .btn.on { border-color: var(--good); color: var(--good); }
-  .lib-tools { margin: 0 0 12px; } .lib-tools input { width: 100%; margin-bottom: 8px; }
-  .card.today .btns { display: flex; gap: 8px; } .card.today .btns > * { flex: 1; }
-  .art-gallery { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; padding: 8px 0 2px; }
-  .art-gallery img { width: 100%; aspect-ratio: 9 / 16; object-fit: cover; border-radius: 8px; display: block; }
-  .store-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
-  .copy-sheet { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: flex-end; justify-content: center; z-index: 60; padding: 16px; }
-  .copy-box { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 16px; width: 100%; max-width: 520px; margin-bottom: env(safe-area-inset-bottom); }
-  .copy-box h3 { margin: 0 0 6px; } .copy-box textarea { width: 100%; font: inherit; font-size: 16px; line-height: 1.4; background: var(--surface-2); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 10px; -webkit-user-select: text; user-select: text; }
-  .hidden { display: none !important; }
-</style>
+<link rel="stylesheet" href="app/styles.css">
 </head>
 <body>
-<main>
-  <header><h1>Reel<span>Bot</span></h1><span class="pill">Made on this phone</span></header>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="lm-bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1b2550"/><stop offset="1" stop-color="#0b1022"/></linearGradient>
+    <symbol id="logo" viewBox="0 0 32 32"><rect width="32" height="32" rx="9" fill="url(#lm-bg)"/><rect x=".5" y=".5" width="31" height="31" rx="8.5" fill="none" stroke="rgba(255,255,255,.12)"/>
+      <circle cx="11.5" cy="12" r="4.6" fill="#FACC15"/><path d="M10.2 9.7v4.6l3.6-2.3z" fill="#0b1022"/>
+      <path d="M6.5 24.5l5.6-4.8 3.6 2.8 8.4-8.6" fill="none" stroke="#FACC15" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M19.6 13.9h4.6v4.6" fill="none" stroke="#FACC15" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  </defs>
+</svg>
 
-  <!-- CREATE -->
-  <section id="tab-create" class="tab active">
-    <div class="card hidden" id="job">
-      <h2 id="job-title">Working…</h2>
-      <div class="progress"><div id="bar"></div></div>
-      <div class="meta" id="job-step"></div>
-      <ol class="job-steps hidden" id="job-steps"></ol>
-      <div class="meta" id="job-eta"></div>
-      <canvas id="preview" width="1080" height="1920"></canvas>
-      <p class="meta" style="text-align:center;margin-top:10px">Keep this screen open until it finishes.</p>
+<div class="shell">
+<nav class="nav" aria-label="Main">
+  <div class="nav-brand"><svg class="logo-mark" aria-hidden="true"><use href="#logo"/></svg><span class="logo-word">Reel<span>Bot</span></span></div>
+  <div class="nav-items">
+    <button data-tab="home" title="Home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 10.2 12 3.5l8.5 6.7"/><path d="M5.5 8.8V19a1.5 1.5 0 0 0 1.5 1.5h3.5V15h3v5.5H17a1.5 1.5 0 0 0 1.5-1.5V8.8"/></svg><span>Home</span></button>
+    <button data-tab="create" class="active" aria-current="page" title="Studio"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6" width="13" height="12" rx="2.5"/><path d="m15.5 10.4 6-3.4v10l-6-3.4"/></svg><span>Studio</span></button>
+    <button data-tab="ideas" title="Idea Lab"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/></svg><span>Ideas</span></button>
+    <button data-tab="library" title="Library"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7.5" height="9" rx="1.8"/><rect x="13.5" y="3" width="7.5" height="9" rx="1.8"/><rect x="3" y="15" width="7.5" height="6" rx="1.8"/><rect x="13.5" y="15" width="7.5" height="6" rx="1.8"/></svg><span>Library</span></button>
+    <button data-tab="auto" title="Automation"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2.5 4.5 13.5H11l-1 8 8.5-11H12l1-8z"/></svg><span class="long">Automation</span><span class="short">Auto</span></button>
+    <button data-tab="about" title="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.6 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Settings</span></button>
+  </div>
+  <div class="nav-foot">
+    <div class="nav-job hidden" id="nav-job" data-go="create" role="button" tabindex="0"><span class="spinner" aria-hidden="true"></span><span id="nav-job-text">Making a video…</span></div>
+    <span class="pill"><span class="dot"></span>Runs on this phone</span>
+    <small class="meta" id="nav-version"></small>
+  </div>
+</nav>
+
+<main class="app-main" id="main">
+  <header class="topbar">
+    <svg class="logo-mark topbar-logo" aria-hidden="true"><use href="#logo"/></svg>
+    <div class="topbar-title"><h1 id="page-title">Studio</h1><p id="page-sub">Make a video in five steps</p></div>
+    <div class="topbar-actions"><button class="btn primary-sm hidden" id="top-new" data-go="create">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>New video</span></button></div>
+  </header>
+
+  <!-- HOME: your channel at a glance (everything here comes from what's on this phone) -->
+  <section id="tab-home" class="tab" aria-labelledby="page-title">
+    <div class="status-card hidden" id="home-status" data-go="create" role="button" tabindex="0" aria-live="polite"></div>
+    <div class="stats" id="home-stats">
+      <div class="stat skeleton"></div><div class="stat skeleton"></div><div class="stat skeleton"></div><div class="stat skeleton"></div>
     </div>
-    <div class="card hidden" id="result"></div>
+    <div class="grid-2">
+      <div class="card" id="home-next"><div class="skeleton-lines"></div></div>
+      <div class="card" id="home-perf"><div class="skeleton-lines"></div></div>
+    </div>
+    <div class="card" id="home-recent"><div class="skeleton-lines"></div></div>
+    <div class="card" id="home-activity"><div class="skeleton-lines"></div></div>
+  </section>
+
+  <!-- STUDIO -->
+  <section id="tab-create" class="tab active">
+    <div class="card job hidden" id="job">
+      <div class="job-grid">
+        <canvas id="preview" width="1080" height="1920"></canvas>
+        <div class="job-info">
+          <span class="eyebrow">In progress</span>
+          <h2 id="job-title">Working…</h2>
+          <div class="progress"><div id="bar"></div></div>
+          <div class="meta" id="job-step"></div>
+          <ol class="job-steps hidden" id="job-steps"></ol>
+          <div class="meta" id="job-eta"></div>
+          <p class="note">Keep this screen open until it finishes.</p>
+        </div>
+      </div>
+    </div>
+    <div class="card result hidden" id="result"></div>
 
     <div id="review" class="hidden">
-      <div class="card">
-        <h2 id="review-title">Review your reel</h2>
-        <p>Edit any line, change photos, or remove scenes. Length: <span class="estimate" id="estimate"></span></p>
-        <div id="coach" class="coach"></div>
-        <div id="scenes"></div>
-        <div class="mini" style="margin-top:12px"><button id="undo-remove" class="hidden">↶ Undo remove</button><button id="add-line">+ Add a line</button><button id="reroll">New script</button><button id="save-draft">Save draft</button></div>
-      </div>
-      <div class="sticky-actions">
-        <button class="primary" id="produce">Make the video</button>
-        <button class="btn" id="series" style="width:100%;margin-top:8px">Make a 3-part series</button>
-        <button class="btn" id="cancel-review" style="width:100%;margin-top:8px">Start over</button>
+      <div class="review-grid">
+        <div class="card review-main">
+          <div class="review-head">
+            <div><span class="eyebrow">Step 3 · Review</span><h2 id="review-title">Review your reel</h2>
+              <p>Edit any line, change photos, or remove scenes. Length: <span class="estimate" id="estimate"></span></p></div>
+          </div>
+          <div id="coach" class="coach"></div>
+          <div id="scenes"></div>
+          <div class="mini toolbar"><button id="undo-remove" class="hidden">↶ Undo remove</button><button id="add-line">+ Add a line</button><button id="reroll">New script</button><button id="save-draft">Save draft</button></div>
+        </div>
+        <div class="sticky-actions">
+          <button class="primary" id="produce">Make the video</button>
+          <button class="btn" id="series">Make a 3-part series</button>
+          <button class="btn ghost" id="cancel-review">Start over</button>
+        </div>
       </div>
     </div>
     <input type="file" id="photo-pick" accept="image/*" class="hidden">
 
-    <div id="form">
-      <div class="card hidden today" id="resume"></div>
-      <div class="card hidden today" id="today"></div>
-      <div class="card">
-        <h2>Make a finance reel</h2>
-        <p>Everything happens on your phone: script, voice, photos, music and video. Nothing is uploaded.</p>
-        <label class="field">Niche</label>
-        <div class="chips" id="niches"></div>
-        <label class="field">Type</label>
-        <div class="chips" id="modes"></div>
-        <div id="topic-wrap" class="hidden">
-          <label class="field">Topic</label>
-          <select id="topic"></select>
+    <div id="form" class="studio">
+      <div class="studio-main">
+        <div class="card hidden today" id="resume"></div>
+        <div class="card hidden today" id="today"></div>
+        <div class="stepnav" aria-label="Studio steps">
+          <a href="#step-topic"><b>1</b>Topic</a><a href="#step-voice"><b>2</b>Voice</a><a href="#step-look"><b>3</b>Look</a><a href="#step-research"><b>4</b>Research</a><a href="#step-extras"><b>5</b>Extras</a>
         </div>
-        <div id="custom-wrap" class="hidden">
-          <label class="field">Your topic</label>
-          <input id="custom" type="text" maxlength="80" placeholder="e.g. Roth IRA, inflation, Warren Buffett" enterkeyhint="go">
-          <p class="meta" style="margin:6px 0 0">Researched on Wikipedia, then written into a script.</p>
+
+        <section class="card step" id="step-topic">
+          <header class="step-head"><span class="step-num">1</span><div><h2>Topic</h2><p>What the video is about. Everything happens on your phone: script, voice, photos, music and video.</p></div></header>
+          <label class="field">Niche</label>
+          <div class="chips" id="niches"></div>
+          <label class="field">Type</label>
+          <div class="chips" id="modes"></div>
+          <div id="topic-wrap" class="hidden">
+            <label class="field" for="topic">Topic</label>
+            <select id="topic"></select>
+          </div>
+          <div id="custom-wrap" class="hidden">
+            <label class="field" for="custom">Your topic</label>
+            <input id="custom" type="text" maxlength="80" placeholder="e.g. Roth IRA, inflation, Warren Buffett" enterkeyhint="go">
+            <p class="hint">Researched on Wikipedia, then written into a script.</p>
+          </div>
+        </section>
+
+        <section class="card step" id="step-voice">
+          <header class="step-head"><span class="step-num">2</span><div><h2>Voice &amp; sound</h2><p>Who narrates, how fast, and the music underneath.</p></div></header>
+          <label class="field">Narrator</label>
+          <div class="chips" id="voices"></div>
+          <div class="row"><div><small id="voice-note"></small></div>
+            <button class="btn" id="voice-preview">▶ Hear it</button></div>
+          <label class="field">Voice speed</label>
+          <div class="chips" id="speeds"></div>
+          <label class="field">Music</label>
+          <div class="chips" id="moods"></div>
+          <div class="row"><div><small id="music-hear-note">Auto picks a mood for each video: suspense for quizzes, bright for news, cinematic for big market drops.</small></div>
+            <button class="btn" id="music-preview">▶ Hear it</button></div>
+          <div class="row"><div><small id="music-note">My music: upload a track you have the rights to use. It loops under the voice and dips when the narrator speaks.</small></div>
+            <div class="inline-btns"><label class="btn">Choose track<input id="music-file" type="file" accept="audio/*" hidden></label><button class="btn hidden" id="music-remove">Remove</button></div></div>
+          <label class="field">Music volume</label>
+          <div class="chips" id="music-vol"></div>
+        </section>
+
+        <section class="card step" id="step-look">
+          <header class="step-head"><span class="step-num">3</span><div><h2>Look</h2><p>Your brand, captions, pictures and ending.</p></div></header>
+          <div class="field-grid">
+            <div><label class="field" for="brand">Brand name</label><input id="brand" type="text" maxlength="30"></div>
+            <div><label class="field" for="handle">Your @handle <span class="opt">(optional)</span></label>
+              <input id="handle" type="text" maxlength="31" placeholder="@yourchannel" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+          </div>
+          <label class="field">Your logo <span class="opt">(optional, top-left corner)</span></label>
+          <div class="row"><div id="logo-preview"></div>
+            <div class="inline-btns"><label class="btn">Choose image<input id="logo-file" type="file" accept="image/*" hidden></label><button class="btn hidden" id="logo-remove">Remove</button></div></div>
+          <label class="field">Caption and brand colour</label>
+          <div class="swatches" id="swatches"></div>
+          <label class="field">Captions</label>
+          <div class="chips" id="cap-styles"></div>
+          <label class="field">Caption position</label>
+          <div class="chips" id="cap-pos"></div>
+          <label class="field">Illustration style <span class="opt">(drawn on your phone when no photo fits)</span></label>
+          <div class="chips" id="art-styles"></div>
+          <label class="field">Cover image style</label>
+          <div class="chips" id="covers"></div>
+          <label class="field">Ending (call to action)</label>
+          <div class="chips" id="ctas"></div>
+        </section>
+
+        <section class="card step" id="step-research">
+          <header class="step-head"><span class="step-num">4</span><div><h2>Length &amp; research</h2><p>How long the video runs and how carefully it's checked.</p></div></header>
+          <label class="field">Length</label>
+          <div class="chips" id="lengths"></div>
+          <label class="field">Research depth</label>
+          <div class="chips" id="depths"></div>
+          <p class="hint" id="depth-note"></p>
+          <div class="toggles">
+            <div class="row"><div>Fact check<small>Checks every fact in the script against its sources, and shows you the evidence</small></div>
+              <label class="switch"><input id="factcheck" type="checkbox" checked><span></span></label></div>
+            <div class="row"><div>Strict accuracy<small>Facts no source confirms are swapped for verified ones or left out</small></div>
+              <label class="switch"><input id="strict" type="checkbox" checked><span></span></label></div>
+          </div>
+        </section>
+
+        <section class="card step" id="step-extras">
+          <header class="step-head"><span class="step-num">5</span><div><h2>Extras</h2><p>Finishing touches, quality and how the video is made.</p></div></header>
+          <div class="toggles">
+            <div class="row"><div>Number pops<small>Show key figures big on screen, like “20%”</small></div>
+              <label class="switch"><input id="pops" type="checkbox" checked><span></span></label></div>
+            <div class="row"><div>Hook title<small>The first line appears big on screen, word by word, over the opening picture</small></div>
+              <label class="switch"><input id="hooktitle" type="checkbox" checked><span></span></label></div>
+            <div class="row"><div>Quick cuts<small>Long lines cut to a second picture halfway, like an edited video</small></div>
+              <label class="switch"><input id="cuts" type="checkbox" checked><span></span></label></div>
+            <div class="row"><div>Sound effects<small>A whoosh between scenes, a pop when a number lands</small></div>
+              <label class="switch"><input id="sfx" type="checkbox" checked><span></span></label></div>
+            <div class="row"><div>Show sources<small>“Source: …” on scenes with researched facts</small></div>
+              <label class="switch"><input id="sources" type="checkbox" checked><span></span></label></div>
+            <div class="row"><div>Review before making<small>Edit the script and photos first</small></div>
+              <label class="switch"><input id="review-on" type="checkbox" checked><span></span></label></div>
+            <div class="row"><div>Offline mode<small>Zero downloads: uses your photos or animated backgrounds. News and market recaps need the internet.</small></div>
+              <label class="switch"><input id="offline" type="checkbox"><span></span></label></div>
+          </div>
+          <label class="field">Video quality</label>
+          <div class="chips" id="quality"></div>
+          <label class="field" for="say-as">Pronunciations <span class="opt">(optional, one per line)</span></label>
+          <textarea id="say-as" rows="2" placeholder="Roth = rawth&#10;ETF = E T F" autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
+        </section>
+      </div>
+
+      <aside class="studio-side" aria-label="Preview and make">
+        <div class="card preview-card">
+          <div class="preview-head"><span class="eyebrow">Live preview</span><span class="estimate-chip" id="studio-length"></span></div>
+          <canvas id="style-preview" width="360" height="640"></canvas>
+          <dl class="summary" id="studio-summary"></dl>
         </div>
-        <label class="field">Brand name</label>
-        <input id="brand" type="text" maxlength="30">
-        <label class="field">Your @handle <span style="text-transform:none;font-weight:500">(optional)</span></label>
-        <input id="handle" type="text" maxlength="31" placeholder="@yourchannel" autocapitalize="off" autocorrect="off" spellcheck="false">
-      </div>
-      <div class="card">
-        <h2>Style</h2>
-        <canvas id="style-preview" width="360" height="640" style="width:150px;aspect-ratio:9/16;display:block;margin:6px auto 4px;border-radius:12px;background:#000"></canvas>
-        <p class="meta" style="text-align:center;margin:0 0 4px">Live preview</p>
-        <label class="field">Caption and brand colour</label>
-        <div class="swatches" id="swatches"></div>
-        <label class="field">Captions</label>
-        <div class="chips" id="cap-styles"></div>
-        <label class="field">Caption position</label>
-        <div class="chips" id="cap-pos"></div>
-        <label class="field">Music</label>
-        <div class="chips" id="moods"></div>
-        <div class="row" style="padding:6px 0 0"><div><small id="music-hear-note">Auto picks a mood for each video: suspense for quizzes, bright for news, cinematic for big market drops.</small></div>
-          <button class="btn" id="music-preview" style="flex:none">▶ Hear it</button></div>
-        <div class="row" style="padding:6px 0 0"><div><small id="music-note">My music: upload a track you have the rights to use. It loops under the voice and dips when the narrator speaks.</small></div>
-          <div class="btns" style="margin:0;flex:none"><label class="btn" style="cursor:pointer">Choose track<input id="music-file" type="file" accept="audio/*" hidden></label><button class="btn hidden" id="music-remove">Remove</button></div></div>
-        <label class="field">Narrator</label>
-        <div class="chips" id="voices"></div>
-        <div class="row" style="padding-top:8px"><div><small id="voice-note"></small></div>
-          <button class="btn" id="voice-preview" style="flex:none">▶ Hear it</button></div>
-        <label class="field">Voice speed</label>
-        <div class="chips" id="speeds"></div>
-        <label class="field">Music volume</label>
-        <div class="chips" id="music-vol"></div>
-        <label class="field">Illustration style <span style="text-transform:none;font-weight:500">(drawn on your phone when no photo fits)</span></label>
-        <div class="chips" id="art-styles"></div>
-        <label class="field">Video quality</label>
-        <div class="chips" id="quality"></div>
-        <label class="field">Cover image style</label>
-        <div class="chips" id="covers"></div>
-        <label class="field">Ending (call to action)</label>
-        <div class="chips" id="ctas"></div>
-        <label class="field">Your logo <span style="text-transform:none;font-weight:500">(optional, top-left corner)</span></label>
-        <div class="row" style="padding:4px 0"><div id="logo-preview"></div>
-          <div class="btns" style="margin:0;flex:none"><label class="btn" style="cursor:pointer">Choose image<input id="logo-file" type="file" accept="image/*" hidden></label><button class="btn hidden" id="logo-remove">Remove</button></div></div>
-        <label class="field">Pronunciations <span style="text-transform:none;font-weight:500">(optional, one per line)</span></label>
-        <textarea id="say-as" rows="2" placeholder="Roth = rawth&#10;ETF = E T F" autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
-        <label class="field">Length</label>
-        <div class="chips" id="lengths"></div>
-        <label class="field">Research depth</label>
-        <div class="chips" id="depths"></div>
-        <p class="meta" id="depth-note" style="margin:6px 0 0"></p>
-        <div class="row" style="margin-top:14px"><div>Fact check<small>Checks every fact in the script against its sources, and shows you the evidence</small></div>
-          <label class="switch"><input id="factcheck" type="checkbox" checked><span></span></label></div>
-        <div class="row"><div>Strict accuracy<small>Facts no source confirms are swapped for verified ones or left out</small></div>
-          <label class="switch"><input id="strict" type="checkbox" checked><span></span></label></div>
-        <div class="row" style="margin-top:14px"><div>Number pops<small>Show key figures big on screen, like “20%”</small></div>
-          <label class="switch"><input id="pops" type="checkbox" checked><span></span></label></div>
-        <div class="row"><div>Hook title<small>The first line appears big on screen, word by word, over the opening picture</small></div>
-          <label class="switch"><input id="hooktitle" type="checkbox" checked><span></span></label></div>
-        <div class="row"><div>Quick cuts<small>Long lines cut to a second picture halfway, like an edited video</small></div>
-          <label class="switch"><input id="cuts" type="checkbox" checked><span></span></label></div>
-        <div class="row"><div>Sound effects<small>A whoosh between scenes, a pop when a number lands</small></div>
-          <label class="switch"><input id="sfx" type="checkbox" checked><span></span></label></div>
-        <div class="row"><div>Show sources<small>“Source: …” on scenes with researched facts</small></div>
-          <label class="switch"><input id="sources" type="checkbox" checked><span></span></label></div>
-        <div class="row"><div>Review before making<small>Edit the script and photos first</small></div>
-          <label class="switch"><input id="review-on" type="checkbox" checked><span></span></label></div>
-        <div class="row"><div>Offline mode<small>Zero downloads: uses your photos or animated backgrounds. News and market recaps need the internet.</small></div>
-          <label class="switch"><input id="offline" type="checkbox"><span></span></label></div>
-      </div>
-      <button class="primary" id="go">Make my reel</button>
-      <button class="btn" id="plan-week" style="width:100%;margin-top:8px">Plan my week (5 drafts)</button>
-      <p class="meta" style="text-align:center;margin-top:10px" id="first-run">The first reel downloads the narrator's voice once (about 92 MB for the natural voices, 63 MB for Classic). Wi-Fi recommended.</p>
+        <div class="make-bar">
+          <button class="primary" id="go"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l1.9 4.6 4.6 1.9-4.6 1.9L12 16.5l-1.9-4.6L5.5 10l4.6-1.9z"/><path d="M18.5 15.5l.8 1.9 1.9.8-1.9.8-.8 1.9-.8-1.9-1.9-.8 1.9-.8z"/></svg>Make my reel</button>
+        </div>
+        <p class="hint center first-run" id="first-run">The first reel downloads the narrator's voice once (about 92 MB for the natural voices, 63 MB for Classic). Wi-Fi recommended.</p>
+      </aside>
     </div>
   </section>
 
   <!-- IDEAS -->
   <section id="tab-ideas" class="tab">
-    <div class="card">
-      <h2>Idea Lab</h2>
+    <div class="card hero-card">
+      <span class="eyebrow">Idea Lab</span>
+      <h2>Research a topic, get video ideas</h2>
       <p>Researches thousands of finance, business and economics topics and invents video ideas, <b>entirely on your phone</b>. No internet, no accounts, no API.</p>
-      <input id="idea-q" type="text" maxlength="80" placeholder="Research a topic, e.g. index funds, inflation" enterkeyhint="search">
-      <div class="btns"><button class="btn main" id="idea-research">Research</button><button class="btn" id="idea-surprise">Endless ideas</button></div>
-      <p class="meta" id="lib-info" style="margin:10px 0 0"></p>
+      <div class="search-row">
+        <input id="idea-q" type="text" maxlength="80" placeholder="Research a topic, e.g. index funds, inflation" enterkeyhint="search">
+        <div class="btns"><button class="btn main" id="idea-research">Research</button><button class="btn" id="idea-surprise">Endless ideas</button></div>
+      </div>
+      <p class="meta" id="lib-info"></p>
     </div>
-    <div class="card" id="ai-card">
-      <div class="row" style="padding:0"><div><b>On-device AI</b><small id="ai-sub">Optional: rewrites titles to be catchier (checked against the research). One-time 137 MB download from this app, then it works offline.</small></div>
-        <button class="btn" id="ai-load" style="flex:none">Download</button></div>
-      <div class="progress hidden" id="ai-progress"><div></div></div>
-    </div>
-    <div class="card" id="lib-card">
-      <div class="row" style="padding:0"><div><b>Full-text library</b><small id="lib-sub">Deep research reads whole articles, section by section. They load as needed; save them all to research in full offline.</small></div>
-        <button class="btn" id="lib-save" style="flex:none">Save offline</button></div>
-      <div class="progress hidden" id="lib-progress"><div></div></div>
+    <div class="grid-2">
+      <div class="card" id="ai-card">
+        <div class="row"><div><b>On-device AI</b><small id="ai-sub">Optional: rewrites titles to be catchier (checked against the research). One-time 137 MB download from this app, then it works offline.</small></div>
+          <button class="btn" id="ai-load">Download</button></div>
+        <div class="progress hidden" id="ai-progress"><div></div></div>
+      </div>
+      <div class="card" id="lib-card">
+        <div class="row"><div><b>Full-text library</b><small id="lib-sub">Deep research reads whole articles, section by section. They load as needed; save them all to research in full offline.</small></div>
+          <button class="btn" id="lib-save">Save offline</button></div>
+        <div class="progress hidden" id="lib-progress"><div></div></div>
+      </div>
     </div>
     <div class="card hidden" id="brief"></div>
     <div id="idea-feed"></div>
-    <div id="idea-more" class="meta hidden" style="text-align:center;padding:14px"></div>
+    <div id="idea-more" class="meta hidden center pad"></div>
     <div id="saved-ideas"></div>
   </section>
 
   <!-- LIBRARY -->
   <section id="tab-library" class="tab">
-    <div id="drafts"></div>
+    <div id="lib-space" class="card space-card hidden"></div>
     <div id="insights"></div>
-    <div id="lib-space" class="card hidden"></div>
     <div id="lib-tools" class="lib-tools hidden">
-      <input id="lib-q" type="search" placeholder="Search your reels" autocomplete="off">
+      <div class="search-field"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+        <input id="lib-q" type="search" placeholder="Search your reels" autocomplete="off" aria-label="Search your reels"></div>
       <div class="chips" id="lib-kinds"></div>
     </div>
-    <div id="reels"></div>
-    <p class="meta" style="text-align:center">Stored only on this phone. The newest 8 are kept.</p>
+    <div id="reels" class="reel-grid"></div>
+    <p class="hint center">Stored only on this phone. Up to 60 are kept; posted ones are removed first if space runs low.</p>
   </section>
 
-  <!-- ABOUT -->
+  <!-- AUTOMATION -->
+  <section id="tab-auto" class="tab">
+    <div class="grid-2">
+      <div class="card plan-card">
+        <span class="eyebrow">Weekly plan</span>
+        <h2>Plan five videos at once</h2>
+        <p>Writes a fact-checked draft for each weekday, using the niche, type and style chosen in the Studio. On Auto, the week mixes explainers, the day's news, a quiz and a market recap.</p>
+        <button class="primary" id="plan-week">Plan my week (5 drafts)</button>
+      </div>
+      <div class="card" id="auto-today"></div>
+    </div>
+    <div id="drafts"></div>
+    <div class="grid-2">
+      <div class="card" id="auto-publish"></div>
+      <div class="card">
+        <span class="eyebrow">Publishing</span>
+        <h2>How posting works</h2>
+        <ol class="steps">
+          <li>Make the video (or <b>Make all</b> from the queue).</li>
+          <li>In the Library, tap <b>Save / Share</b> and pick TikTok, Instagram, YouTube or Save Video.</li>
+          <li>Copy the caption for that platform and paste it in. It includes hashtags and photo credits.</li>
+          <li>Tap <b>Mark as posted</b>, and add the views later to see what works.</li>
+        </ol>
+        <p class="hint">Social apps don't let a phone web app post on your behalf, so ReelBot prepares everything and you post with two taps.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- SETTINGS -->
   <section id="tab-about" class="tab">
-    <div class="card">
-      <div class="row" style="padding:0"><div><b>What's new</b><small id="version-line"></small></div>
-        <button class="btn" id="whats-new" style="flex:none">Show</button></div>
-    </div>
-    <div class="card">
-      <h2>Backup</h2>
-      <p class="meta">Save your settings, drafts, results and channel style to a file (for a new phone, or before clearing Safari). Videos and downloads aren't included.</p>
-      <div class="btns" style="display:flex;gap:8px;margin:0"><button class="btn" id="backup" style="flex:1">Back up</button>
-        <label class="btn" style="flex:1;cursor:pointer;text-align:center">Restore<input id="restore" type="file" accept="application/json,.json" hidden></label></div>
-    </div>
-    <div class="card">
-      <h2>Storage on this phone</h2>
-      <p class="meta" id="storage-total">Checking…</p>
-      <div id="storage-items"></div>
-      <div id="art-gallery" class="art-gallery hidden"></div>
-      <div class="row" style="padding:6px 0 0"><div><small id="art-note" class="meta">Illustrations are drawn when a video needs them. Draw a batch for your niche now so they're ready.</small></div>
-        <button class="btn" id="art-more" style="flex:none">Draw more</button></div>
-    </div>
-    <div class="card">
-      <h2>Save and post</h2>
-      <ol class="steps">
-        <li>Tap <b>Save / Share</b> on a reel.</li>
-        <li>Choose <b>Save Video</b> to put it in Photos, or pick YouTube, TikTok or Instagram to post it.</li>
-        <li>Tap <b>Copy title and caption</b> and paste it into your post. It includes the photo credits.</li>
-      </ol>
-    </div>
-    <div class="card">
-      <h2>Sound test</h2>
-      <p>Makes a 3-second test video with three notes, then checks that the sound made it into the file. If a reel ever comes out silent, run this and send us the results.</p>
-      <button class="btn" id="sound-test" style="width:100%">Run sound test</button>
-      <div id="sound-out"></div>
-    </div>
-    <div class="card">
-      <h2>AI &amp; voice check</h2>
-      <p>Tries the natural voice and the Ideas AI step by step on this phone, and tells you exactly where anything fails. If either doesn't work, run this and send the results.</p>
-      <button class="btn" id="ai-check" style="width:100%">Run AI &amp; voice check</button>
-      <div id="ai-check-out"></div>
-    </div>
-    <div class="card">
-      <h2>Install on iPhone</h2>
-      <ol class="steps">
-        <li>Open this page in <b>Safari</b>.</li>
-        <li>Tap <b>Share</b> (the square with an arrow).</li>
-        <li>Choose <b>Add to Home Screen</b>, then <b>Add</b>.</li>
-      </ol>
-    </div>
-    <div class="card">
-      <h2>Privacy</h2>
-      <ul class="steps">
-        <li>Videos are <b>made and stored on this phone only</b>. Nothing is rendered or kept on a server.</li>
-        <li>The <b>Idea Lab</b> (research, ideas and the on-device AI) runs entirely on this phone from files that ship with the app. It never connects to anything.</li>
-        <li>Making reels looks up public information unless <b>Offline mode</b> is on: news feeds, Wikipedia, and free photo libraries (Openverse, Wikimedia Commons).</li>
-        <li>No account, sign-in or tracking.</li>
-      </ul>
-      <p id="encoder" class="meta"></p>
-      <div class="btns"><button class="btn danger wide" id="wipe">Delete all reels from this phone</button></div>
+    <div class="settings">
+      <div class="card">
+        <div class="row"><div><b>What's new</b><small id="version-line"></small></div>
+          <button class="btn" id="whats-new">Show</button></div>
+      </div>
+      <div class="card">
+        <h2>Backup</h2>
+        <p>Save your settings, drafts, results and channel style to a file (for a new phone, or before clearing Safari). Videos and downloads aren't included.</p>
+        <div class="btns"><button class="btn" id="backup">Back up</button>
+          <label class="btn">Restore<input id="restore" type="file" accept="application/json,.json" hidden></label></div>
+      </div>
+      <div class="card wide">
+        <h2>Storage on this phone</h2>
+        <p class="meta" id="storage-total">Checking…</p>
+        <div id="storage-items"></div>
+        <div id="art-gallery" class="art-gallery hidden"></div>
+        <div class="row"><div><small id="art-note" class="meta">Illustrations are drawn when a video needs them. Draw a batch for your niche now so they're ready.</small></div>
+          <button class="btn" id="art-more">Draw more</button></div>
+      </div>
+      <div class="card">
+        <h2>Sound test</h2>
+        <p>Makes a 3-second test video with three notes, then checks that the sound made it into the file. If a reel ever comes out silent, run this and send us the results.</p>
+        <button class="btn block" id="sound-test">Run sound test</button>
+        <div id="sound-out"></div>
+      </div>
+      <div class="card">
+        <h2>AI &amp; voice check</h2>
+        <p>Tries the natural voice and the Ideas AI step by step on this phone, and tells you exactly where anything fails. If either doesn't work, run this and send the results.</p>
+        <button class="btn block" id="ai-check">Run AI &amp; voice check</button>
+        <div id="ai-check-out"></div>
+      </div>
+      <div class="card">
+        <h2>Save and post</h2>
+        <ol class="steps">
+          <li>Tap <b>Save / Share</b> on a reel.</li>
+          <li>Choose <b>Save Video</b> to put it in Photos, or pick YouTube, TikTok or Instagram to post it.</li>
+          <li>Tap <b>Copy title and caption</b> and paste it into your post. It includes the photo credits.</li>
+        </ol>
+      </div>
+      <div class="card">
+        <h2>Install on iPhone</h2>
+        <ol class="steps">
+          <li>Open this page in <b>Safari</b>.</li>
+          <li>Tap <b>Share</b> (the square with an arrow).</li>
+          <li>Choose <b>Add to Home Screen</b>, then <b>Add</b>.</li>
+        </ol>
+      </div>
+      <div class="card wide">
+        <h2>Privacy</h2>
+        <ul class="steps">
+          <li>Videos are <b>made and stored on this phone only</b>. Nothing is rendered or kept on a server.</li>
+          <li>The <b>Idea Lab</b> (research, ideas and the on-device AI) runs entirely on this phone from files that ship with the app. It never connects to anything.</li>
+          <li>Making reels looks up public information unless <b>Offline mode</b> is on: news feeds, Wikipedia, and free photo libraries (Openverse, Wikimedia Commons).</li>
+          <li>No account, sign-in or tracking.</li>
+        </ul>
+        <p id="encoder" class="meta"></p>
+        <div class="btns"><button class="btn danger wide" id="wipe">Delete all reels from this phone</button></div>
+      </div>
     </div>
   </section>
 </main>
-
-<nav>
-  <button data-tab="create" class="active">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Create</button>
-  <button data-tab="ideas">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/></svg>Ideas</button>
-  <button data-tab="library">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="9" rx="1.5"/><rect x="3" y="15" width="7" height="6" rx="1.5"/><rect x="14" y="15" width="7" height="6" rx="1.5"/></svg>Library</button>
-  <button data-tab="about">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>About</button>
-</nav>
-<div class="toast" id="toast"></div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script type="module" src="app/main.js"></script>
 </body>

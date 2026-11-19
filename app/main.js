@@ -11,7 +11,7 @@ import { KOKORO_VOICES, setVoice, loadVoice, phonemize, synthesize, voiceRate, r
 const factModule = () => import("./ai/factcheck.js");
 import { postedIds, setPosted, listReels, saveReel, deleteReel, clearReels, listDrafts, saveDraft, deleteDraft } from "./store.js";
 import { platformCaptions, setPronunciations, visualMatch } from "./script.js";
-import { FIELDS, getResult, saveResult, insights } from "./results.js";
+import { FIELDS, getResult, saveResult, insights, allResults } from "./results.js";
 import { APP_VERSION, UPDATES } from "./version.js";
 import { USER_CACHE, USER_MUSIC, userMusic, saveUserPhoto, pruneUserPhotos } from "./make.js";
 import { encoderInfo, renderReel, loadFonts, previewFrame } from "./render.js";
@@ -42,6 +42,17 @@ function prefChips(id, labels, key, fallback, after) {
   state[key] = value;
   chips($(id), Object.keys(labels), value, (v) => { state[key] = v; store.set(key, v); after?.(); }, labels);
 }
+// The Studio's summary beside the preview: what this video will be, at a glance.
+function renderStudioSummary() {
+  const el = $("studio-summary"); if (!el || !state.data) return;
+  const topic = state.mode === "custom" ? ($("custom").value.trim() || "Type a topic") : state.mode === "evergreen" ? ($("topic").selectedOptions[0]?.textContent || "Surprise me") : null;
+  const rows = [["Niche", state.niche.replace(/\b\w/g, (c) => c.toUpperCase())], ["Type", MODE_LABELS[state.mode] || state.mode], ...(topic ? [["Topic", topic]] : []),
+    ["Narrator", VOICE_LABELS[state.voice] || "—"], ["Music", MOODS[state.mood] || "—"], ["Captions", CAPTION_STYLES[state.capStyle] || "—"],
+    ["Length", (LENGTH_LABELS[state.length] || "").replace(/^\S+\s/, "") || "—"], ["Quality", state.quality === "standard" ? "Standard" : "High"]];
+  el.innerHTML = rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd title="${esc(v)}">${esc(String(v).replace(/\s*\(.*\)$/, ""))}</dd>`).join("");
+  $("studio-length").textContent = (LENGTH_LABELS[state.length] || "").replace(/^\S+\s/, "");
+}
+
 // Live preview of the current style: a sample scene drawn with the real renderer.
 let sampleBitmap = null;
 async function drawStylePreview() {
@@ -85,7 +96,15 @@ const state = { niche: "personal finance", mode: "auto", data: null, urls: new M
   accent: "#FFD60A", speed: "normal", plan: null };
 const params = new URLSearchParams(location.search);
 
-function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 3200); }
+// Notifications: green for done, red for problems, blue for information (worked out from the message,
+// or given as the second argument).
+function toast(msg, tone) {
+  const t = $("toast"); t.textContent = msg;
+  tone ??= /^(couldn't|can't|that (photo|isn't)|no other|this browser|the natural voice didn't)|\bfailed\b|went wrong|storage full/i.test(msg) ? "err"
+    : /\b(saved|copied|ready|restored|deleted|put back|now using|tidied|backed up|added|done)\b/i.test(msg) ? "ok" : "";
+  t.className = "toast show" + (tone ? " " + tone : "");
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 3400);
+}
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 // Copies text, reliably on iPhone. Returns true when it worked. Order:
 // 1. the Clipboard API (needs the tap that started this; Safari sometimes refuses it in home-screen apps),
@@ -148,14 +167,32 @@ function repo() {   // https://owner.github.io/repo/ -> owner/repo
   return m && seg ? `${m[1]}/${seg}` : "LinKPlayt/FREELM";
 }
 
+// Pages: title and one-line description shown in the top bar.
+const PAGES = {
+  home: ["Home", "Your channel at a glance"],
+  create: ["Studio", "Make a video in five steps"],
+  ideas: ["Idea Lab", "Research and video ideas, on your phone"],
+  library: ["Library", "Your videos, ready to post"],
+  auto: ["Automation", "Plan the week, queue videos, get reminders"],
+  about: ["Settings", "Backup, storage and diagnostics"],
+};
 function show(tab) {
+  if (!PAGES[tab]) tab = "create";
   if (tab === "about") renderStorage();
   document.querySelectorAll("section.tab").forEach((s) => s.classList.toggle("active", s.id === "tab-" + tab));
-  document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+  document.querySelectorAll("nav button").forEach((b) => { const on = b.dataset.tab === tab; b.classList.toggle("active", on); if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
+  $("page-title").textContent = PAGES[tab][0]; $("page-sub").textContent = PAGES[tab][1];
+  document.title = tab === "create" ? "ReelBot" : `${PAGES[tab][0]} · ReelBot`;
+  $("top-new").classList.toggle("hidden", tab === "create");
+  state.tab = tab;
   if (tab === "library") renderLibrary();
   if (tab === "ideas") openIdeas();
+  if (tab === "home") renderHome();
+  if (tab === "auto") renderAuto();
   window.scrollTo(0, 0);
 }
+// Any button with data-go="<page>" opens that page (New video, See all, Open queue…).
+document.addEventListener("click", (e) => { const g = e.target.closest("[data-go]"); if (g) { e.preventDefault(); show(g.dataset.go); } });
 document.querySelectorAll("nav button").forEach((b) => b.addEventListener("click", () => show(b.dataset.tab)));
 
 function chips(el, items, current, onPick, labels = {}) {
@@ -185,28 +222,34 @@ $("swatches").addEventListener("click", (e) => {
 function urlFor(reel) { if (!state.urls.has(reel.id)) state.urls.set(reel.id, URL.createObjectURL(reel.blob)); return state.urls.get(reel.id); }
 // The cover image as the video's poster: the Library shows covers and decodes a video only when played.
 function posterFor(reel) { const k = "poster-" + reel.id; if (!state.urls.has(k)) state.urls.set(k, URL.createObjectURL(reel.cover)); return state.urls.get(k); }
+// Small icons for buttons (stroke icons, sized by CSS).
+const BI = {
+  share: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>',
+  download: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>',
+  image: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>',
+  cc: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10.5 10.2a2.2 2.2 0 1 0 0 3.6M17 10.2a2.2 2.2 0 1 0 0 3.6"/></svg>',
+  remix: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6h17M9 6V4h6v2M6 6l1 14h10l1-14"/></svg>',
+};
 function reelCard(r, inline = false) {
   state.reels.set(r.id, r);
-  const mb = ((r.blob?.size || 0) / 1e6).toFixed(1);
+  const mb = ((r.blob?.size || 0) / 1e6).toFixed(1), posted = postedIds().has(r.id);
   return `<div class="${inline ? "" : "card"}" data-reel="${esc(r.id)}">
     <video src="${urlFor(r)}#t=0.5" controls playsinline preload="${r.cover ? "none" : "metadata"}"${r.cover ? ` poster="${posterFor(r)}"` : ""}></video>
     <div class="reel-title">${esc((r.title || "Untitled reel").replace(" #Shorts", ""))}</div>
-    <div class="meta">${Math.round(r.duration || 0)}s · ${esc(r.kind || "reel")} · ${mb} MB</div>
+    <div class="reel-meta"><span class="badge">${Math.round(r.duration || 0)}s</span><span class="badge">${esc(KIND_ONE[r.kind] || r.kind || "Reel")}</span><span class="badge">${mb} MB</span><span class="badge good${posted ? "" : " hidden"}" data-posted-badge>Posted</span></div>
     <div class="btns">
-      <button class="btn main wide" data-act="share">Save / Share</button>
-      <a class="btn wide" href="${urlFor(r)}" download="${esc(r.id)}.${esc(r.ext)}">Download</a>
+      <button class="btn main" data-act="share">${BI.share}Save / Share</button>
+      <a class="btn" href="${urlFor(r)}" download="${esc(r.id)}.${esc(r.ext)}">${BI.download}Download</a>
     </div>
-    <div class="meta" style="margin-top:12px">Copy the caption for:</div>
+    <div class="copy-label">Copy the caption for:</div>
     <div class="copy-row">
       <button class="btn" data-act="cap-youtube">YouTube</button><button class="btn" data-act="cap-tiktok">TikTok</button><button class="btn" data-act="cap-instagram">Instagram</button>
     </div>
-    ${r.srt || r.cover ? `<div class="btns">${r.cover ? `<button class="btn" data-act="cover">Cover image</button>` : ""}${r.srt ? `<button class="btn" data-act="srt">Captions (.srt)</button>` : ""}</div>` : ""}
-    <div class="btns"><button class="btn wide" data-act="remix">Remix: edit this script and make it again</button></div>
-    ${inline ? "" : `<div class="btns"><button class="btn wide${postedIds().has(r.id) ? " on" : ""}" data-act="posted">${postedIds().has(r.id) ? "✓ Posted" : "Mark as posted"}</button></div>`}
+    <div class="btns btns-3">${r.cover ? `<button class="btn" data-act="cover" data-tip="Save the cover image">${BI.image}Cover image</button>` : ""}${r.srt ? `<button class="btn" data-act="srt" data-tip="Captions file for YouTube and TikTok">${BI.cc}Captions (.srt)</button>` : ""}<button class="btn" data-act="remix" data-tip="Edit this script and make it again">${BI.remix}Remix</button></div>
     ${inline ? "" : resultsForm(r)}
-    <div class="btns" style="margin-top:0">
-      ${inline ? "" : `<button class="btn danger wide" data-act="delete">Delete</button>`}
-    </div></div>`;
+    ${inline ? "" : `<div class="btns card-foot"><button class="btn${posted ? " on" : ""}" data-act="posted">${posted ? "✓ Posted" : "Mark as posted"}</button><button class="btn danger" data-act="delete">${BI.trash}Delete</button></div>`}
+  </div>`;
 }
 function resultsSummary(res) {
   if (!Number(res.views)) return "Add results (views, likes…)";
@@ -242,6 +285,101 @@ function renderInsights() {
     : `<div class="card"><h2>What works for you</h2><p class="meta">Add the views (and likes, comments, saves) of ${ins.count ? "one more reel" : "two or more reels"} under “Add results” and this shows which niche, length, narrator, ending and music get you the most views.</p></div>`;
 }
 
+/* ---------- Home (dashboard) and Automation: built only from what's on this phone ---------- */
+const ICON = {
+  video: '<svg viewBox="0 0 24 24"><rect x="2.5" y="6" width="13" height="12" rx="2.5"/><path d="m15.5 10.4 6-3.4v10l-6-3.4"/></svg>',
+  eye: '<svg viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+  chart: '<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
+  queue: '<svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>',
+  play: '<svg viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z"/></svg>',
+  edit: '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></svg>',
+  cal: '<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>',
+  send: '<svg viewBox="0 0 24 24"><path d="M21 3 10 14"/><path d="M21 3 14.5 21l-4.5-7-7-4.5z"/></svg>',
+  spark: '<svg viewBox="0 0 24 24"><path d="M12 3.5l1.9 4.6 4.6 1.9-4.6 1.9L12 16.5l-1.9-4.6L5.5 10l4.6-1.9z"/></svg>',
+};
+const fmtN = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1).replace(/\.0$/, "") + "M" : n >= 1e4 ? Math.round(n / 1e3) + "k" : n >= 1e3 ? (n / 1e3).toFixed(1).replace(/\.0$/, "") + "k" : String(Math.round(n)));
+function ago(ts) {
+  const m = Math.round((Date.now() - ts) / 60000);
+  if (m < 1) return "just now"; if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60); if (h < 24) return `${h} h ago`;
+  const d = Math.round(h / 24); if (d === 1) return "yesterday"; if (d < 7) return `${d} days ago`;
+  return new Date(ts).toLocaleDateString([], { month: "short", day: "numeric" });
+}
+const stat = (icon, label, value, sub) => `<div class="stat"><div class="stat-label">${ICON[icon]}${esc(label)}</div><div class="stat-value">${value}</div><div class="stat-sub">${sub}</div></div>`;
+
+async function renderHome() {
+  const [reels, drafts, posted, results] = [await listReels(), listDrafts(), postedIds(), allResults()];
+  if (state.tab !== "home") return;
+  state.lib = reels;
+  const withViews = results.filter((r) => r.stats?.views > 0), views = withViews.reduce((n, r) => n + r.stats.views, 0);
+  const done = reels.filter((r) => posted.has(r.id)).length, today = todayDraft(), resume = pendingAutosave();
+  $("home-stats").innerHTML =
+    stat("video", "Videos", reels.length, reels.length ? `${done} posted · ${reels.length - done} to post` : "Make your first one in the Studio")
+    + stat("eye", "Total views", withViews.length ? fmtN(views) : "—", withViews.length ? `from ${withViews.length} video${withViews.length === 1 ? "" : "s"} with results` : "Add views to your videos in the Library")
+    + stat("chart", "Average views", withViews.length ? fmtN(views / withViews.length) : "—", withViews.length ? "per video with results" : "Shows once you add results")
+    + stat("queue", "Queue", drafts.length, today ? `Today: ${esc(today.label.replace(/^\w{3} · /, ""))}` : drafts.length ? "Drafts ready to make" : "Plan a week in Automation");
+  // Up next: what's waiting for you, most urgent first.
+  const items = [];
+  if (resume) items.push(`<div class="next-item"><span class="next-icon accent">${ICON.edit}</span><div><b>Continue: ${esc(resume.label)}</b><small>Script you were reviewing · ${ago(resume.saved)}</small></div><button class="btn" data-resume-act="open">Continue</button></div>`);
+  if (today) items.push(`<div class="next-item"><span class="next-icon accent">${ICON.cal}</span><div><b>${esc(today.label.replace(/^\w{3} · /, ""))}</b><small>Today's planned video</small></div><button class="btn main" data-today-act="make">Make it now</button></div>`);
+  const queued = drafts.filter((d) => d.id !== today?.id);
+  if (queued.length) items.push(`<div class="next-item"><span class="next-icon">${ICON.queue}</span><div><b>${queued.length} draft${queued.length === 1 ? "" : "s"} in the queue</b><small>Make them one by one, or all in one go</small></div><button class="btn" data-go="auto">Open queue</button></div>`);
+  const toPost = reels.length - done;
+  if (toPost) items.push(`<div class="next-item"><span class="next-icon">${ICON.send}</span><div><b>${toPost} video${toPost === 1 ? "" : "s"} not posted yet</b><small>Share, copy the caption, mark as posted</small></div><button class="btn" data-lib-filter="unposted">Show</button></div>`);
+  $("home-next").innerHTML = `<div class="section-head"><h2>Up next</h2></div>` + (items.length ? `<div class="next-list">${items.join("")}</div>`
+    : `<div class="empty"><b>You're all caught up</b>Make a video, or plan a whole week of drafts.<div class="btns"><button class="btn main" data-go="create">New video</button><button class="btn" data-go="auto">Plan my week</button></div></div>`);
+  // Performance: views of recent videos with results, and what works best so far.
+  const ins = insights({ voice: VOICE_LABELS, cta: CTA_LABELS, music: MOODS, captions: CAPTION_STYLES });
+  const recentViews = withViews.slice(0, 6), top = Math.max(1, ...recentViews.map((r) => r.stats.views));
+  $("home-perf").innerHTML = `<div class="section-head"><h2>Performance</h2>${withViews.length ? `<button class="link-btn" data-go="library">All results →</button>` : ""}</div>`
+    + (recentViews.length ? recentViews.map((r) => `<div class="perf-row"><span>${fmtN(r.stats.views)}</span><span>${esc(r.title || "Video")}<div class="bar-track"><i style="width:${Math.max(4, Math.round((r.stats.views / top) * 100))}%"></i></div></span></div>`).join("")
+      + (ins.rows.length ? `<p class="hint">Best so far: ${ins.rows.slice(0, 2).map((x) => `<b>${esc(x.text.split(":")[0])}</b> (${esc(x.name.toLowerCase())})`).join(" · ")}</p>` : "")
+      : `<div class="empty"><b>No results yet</b>After you post, add each video's views in the Library. This shows which videos, hooks and styles get the most views.</div>`);
+  // Recent videos
+  $("home-recent").innerHTML = `<div class="section-head"><h2>Recent videos</h2>${reels.length ? `<button class="link-btn" data-go="library">See all →</button>` : ""}</div>`
+    + (reels.length ? `<div class="recent-grid">${reels.slice(0, 4).map((r) => `<button class="recent" data-open-reel="${esc(r.id)}">${r.cover ? `<img src="${posterFor(r)}" alt="" loading="lazy">` : `<span class="ph">${ICON.play}</span>`}
+        <div><b>${esc((r.title || "Untitled").replace(/\s*#Shorts$/, ""))}</b><small>${Math.round(r.duration || 0)}s · ${ago(r.created)}${posted.has(r.id) ? " · posted" : ""}</small></div></button>`).join("")}</div>`
+      : `<div class="empty"><b>No videos yet</b>Your videos appear here as soon as they're made.<div class="btns"><button class="btn main wide" data-go="create">Make your first video</button></div></div>`);
+  // Activity: what happened, newest first.
+  const events = [...reels.map((r) => ({ t: r.created, cls: "made", html: `Made <b>${esc((r.title || "a video").replace(/\s*#Shorts$/, ""))}</b>` })),
+    ...drafts.map((d) => ({ t: d.saved, cls: "plan", html: `${/^\w{3} · /.test(d.label) ? "Planned" : "Saved draft"} <b>${esc(d.label.replace(/^\w{3} · /, ""))}</b>` }))]
+    .filter((e) => e.t).sort((a, b) => b.t - a.t).slice(0, 8);
+  $("home-activity").innerHTML = `<div class="section-head"><h2>Activity</h2></div>` + (events.length
+    ? `<ul class="activity">${events.map((e) => `<li class="${e.cls}"><span>${e.html}</span><time>${ago(e.t)}</time></li>`).join("")}</ul>`
+    : `<p class="meta">Videos you make and drafts you plan will show here.</p>`);
+  mirrorJob();
+}
+
+function renderAuto() {
+  renderDrafts();
+  const d = todayDraft();
+  $("auto-today").innerHTML = d
+    ? `<span class="eyebrow">Today</span><h2>${esc(d.label.replace(/^\w{3} · /, ""))}</h2><p>Planned for today. Make it now, or review the script first.</p>
+       <div class="btns"><button class="btn main" data-today-act="make">Make it now</button><button class="btn" data-today-act="open">Review first</button></div>`
+    : `<span class="eyebrow">Today</span><h2>Nothing planned for today</h2><p>Plan a week and each weekday's draft shows up here, ready to make in one tap. Add the week to your calendar for a reminder on each day.</p>`;
+  const reels = state.lib || [], posted = postedIds(), done = reels.filter((r) => posted.has(r.id)).length;
+  $("auto-publish").innerHTML = `<span class="eyebrow">Posting</span><h2>${reels.length ? `${done} of ${reels.length} videos posted` : "No videos yet"}</h2>
+    ${reels.length ? `<div class="bar-track" style="margin:10px 0 12px"><i style="width:${Math.round((done / reels.length) * 100)}%;background:var(--good)"></i></div>
+      <p>${reels.length - done ? `${reels.length - done} still to post. Mark each as posted after you share it; if space runs low, posted videos are removed first.` : "Everything in your Library is posted."}</p>
+      <div class="btns">${reels.length - done ? `<button class="btn" data-lib-filter="unposted">Show not posted</button>` : ""}<button class="btn${reels.length - done ? "" : " wide"}" data-go="library">Open Library</button></div>`
+      : `<p>Videos you make are kept in the Library, ready to share to TikTok, Instagram or YouTube.</p>`}`;
+  if (!state.lib) listReels().then((l) => { state.lib = l; if (state.tab === "auto") renderAuto(); });
+}
+
+// Actions shared by Home, Automation and the Studio cards.
+document.addEventListener("click", (e) => {
+  const t = e.target.closest("[data-today-act]"), r = e.target.closest("[data-resume-act]"), f = e.target.closest("[data-lib-filter]"), o = e.target.closest("[data-open-reel]");
+  if (t) {
+    const d = todayDraft(); if (!d || state.busy) return;
+    unlockAudio();   // inside the tap, for iPhone audio
+    if (t.dataset.todayAct === "make") return makeDrafts([d]);
+    show("auto"); document.querySelector(`[data-draft-open="${CSS.escape(d.id)}"]`)?.click();
+  }
+  if (r) resumeAction(r.dataset.resumeAct);
+  if (f) { state.libFilter = { q: "", kind: f.dataset.libFilter, sort: "new" }; const q = $("lib-q"); if (q) q.value = ""; show("library"); }
+  if (o) { state.focusReel = o.dataset.openReel; show("library"); }
+});
+
 // Autosave: an iPhone often reloads an app left in the background, which used to lose the script you
 // were reviewing. The script (not the photos) is saved as you go, and offered back when the app opens.
 const AUTOSAVE = "autosave";
@@ -253,6 +391,15 @@ function autosave(now = false) {
     try { const d = draftFromPlan(state.plan); d.id = AUTOSAVE; d.draftId = state.draftId || null; localStorage.setItem(AUTOSAVE, JSON.stringify(d)); } catch { /* storage full or private */ }
   };
   if (now) run(); else autosaveTimer = setTimeout(run, 700);
+}
+// Continue (or discard) the autosaved script, from the Studio card or Home.
+async function resumeAction(kind) {
+  const d = pendingAutosave(); if (!d || state.busy) return;
+  if (kind === "drop") return clearAutosave();
+  show("create");
+  screen("job"); $("job-title").textContent = "Opening your script…"; $("preview").classList.add("hidden"); say("Finding photos again…", 0);
+  try { state.plan = await planFromDraft(d, { say }); state.draftId = d.draftId || null; showReview(); }
+  catch (err) { screen("form"); showError(err, "The script couldn't be opened"); }
 }
 function clearAutosave() { clearTimeout(autosaveTimer); try { localStorage.removeItem(AUTOSAVE); } catch { /* ignore */ } renderResume(); }
 function pendingAutosave() { try { const d = JSON.parse(localStorage.getItem(AUTOSAVE) || "null"); return d?.script?.lines?.length && Date.now() - d.saved < 3 * 86400e3 ? d : null; } catch { return null; } }
@@ -320,15 +467,16 @@ async function makeDrafts(list) {
 
 function renderDrafts() {
   const drafts = listDrafts();
-  $("drafts").innerHTML = drafts.length ? `<div class="card"><h2>Drafts</h2><p>Scripts you saved to finish later.${drafts.length > 1 ? " Make them all in one go: keep the app open and the phone plugged in." : ""}</p>
+  $("drafts").innerHTML = drafts.length ? `<div class="card"><div class="section-head"><h2>Queue</h2><span class="badge">${drafts.length} draft${drafts.length === 1 ? "" : "s"}</span></div><p>Scripts planned or saved to finish later.${drafts.length > 1 ? " Make them all in one go: keep the app open and the phone plugged in." : ""}</p>
     ${drafts.length > 1 ? `<button class="primary" data-draft-all="1" style="margin:4px 0 10px">Make all ${drafts.length} videos</button>` : ""}${drafts.some((d) => /^\w{3} · /.test(d.label)) ? REMINDER_ROW : ""}${drafts.map((d) => `
     <div class="draft"><div><b>${esc(d.label)}</b><div class="meta">${new Date(d.saved).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} · ${d.script.lines.length} scenes</div></div>
-      <div class="mini" style="margin:0"><button data-draft-open="${esc(d.id)}">Open</button><button class="del" data-draft-del="${esc(d.id)}">Delete</button></div></div>`).join("")}</div>` : "";
+      <div class="mini" style="margin:0"><button data-draft-open="${esc(d.id)}">Open</button><button class="del" data-draft-del="${esc(d.id)}">Delete</button></div></div>`).join("")}</div>`
+    : `<div class="card"><div class="section-head"><h2>Queue</h2></div><div class="empty"><b>The queue is empty</b>Plan a week above, or tap Save draft on a script you're reviewing.</div></div>`;
 }
 $("drafts").addEventListener("click", async (e) => {
   if (e.target.closest("[data-draft-all]")) { unlockAudio(); return makeDrafts(listDrafts().sort((a, b) => a.saved - b.saved)); }
   const open = e.target.closest("[data-draft-open]"), del = e.target.closest("[data-draft-del]");
-  if (del) { deleteDraft(del.dataset.draftDel); renderDrafts(); renderToday(); return; }
+  if (del) { deleteDraft(del.dataset.draftDel); renderDrafts(); renderToday(); if (state.tab === "auto") renderAuto(); toast("Draft deleted"); return; }
   if (!open || state.busy) return;
   const d = listDrafts().find((x) => x.id === open.dataset.draftOpen); if (!d) return;
   state.busy = true; show("create");
@@ -342,15 +490,17 @@ $("reels").addEventListener("change", (e) => {
   const card = input.closest("[data-reel]"), r = state.reels.get(card?.dataset.reel); if (!r) return;
   const stats = Object.fromEntries([...card.querySelectorAll("[data-result]")].map((i) => [i.dataset.result, i.value]));
   if (saveResult(r, stats)) {
-    if (Number(stats.views) > 0 && !postedIds().has(r.id)) { setPosted(r.id, true); const pb = card.querySelector('[data-act="posted"]'); if (pb) { pb.textContent = "✓ Posted"; pb.classList.add("on"); } renderLibSpace(); }
+    if (Number(stats.views) > 0 && !postedIds().has(r.id)) { setPosted(r.id, true); const pb = card.querySelector('[data-act="posted"]'); if (pb) { pb.textContent = "✓ Posted"; pb.classList.add("on"); } card.querySelector("[data-posted-badge]")?.classList.remove("hidden"); renderLibSpace(); }
     card.querySelector(".results summary").textContent = resultsSummary(stats);
     renderInsights();
   } else toast("Couldn't save the results (storage full?)");
 });
 async function renderLibrary() {
   renderDrafts();
+  if (!state.lib) $("reels").innerHTML = `<div class="skeleton"></div>`;
   state.lib = await listReels();
   renderInsights();
+  if (!state.lib.length && !allResults().length) $("insights").innerHTML = "";   // nothing to compare yet
   renderReelList();
   renderLibSpace();
 }
@@ -368,6 +518,7 @@ async function renderLibSpace() {
 }
 // The Library list: search by title or topic, filter by type, newest or most-viewed first.
 const LIB_KINDS = { evergreen: "Explainers", news: "News", market: "Markets", custom: "Your topics", idea: "Ideas", quiz: "Quizzes" };
+const KIND_ONE = { evergreen: "Explainer", news: "News", market: "Market recap", custom: "Your topic", idea: "Idea", quiz: "Quiz" };
 function renderReelList() {
   const all = state.lib || [], f = (state.libFilter ??= { q: "", kind: "all", sort: "new" });
   const kinds = [...new Set(all.map((r) => r.kind).filter((k) => LIB_KINDS[k]))];
@@ -382,9 +533,14 @@ function renderReelList() {
   const posted = postedIds();
   let list = all.filter((r) => (f.kind === "all" || (f.kind === "unposted" ? !posted.has(r.id) : r.kind === f.kind)) && (!q || `${r.title} ${r.topic || ""} ${r.niche || ""}`.toLowerCase().includes(q)));
   if (f.sort === "views") list = list.slice().sort((a, b) => (getResult(b.id)?.stats?.views || 0) - (getResult(a.id)?.stats?.views || 0));
-  $("reels").innerHTML = !all.length ? `<div class="empty">No reels yet.<br>Make your first one in Create.</div>`
+  $("reels").innerHTML = !all.length ? `<div class="empty"><b>No videos yet</b>Make your first one in the Studio. It's saved here, ready to share.<div class="btns"><button class="btn main wide" data-go="create">Make a video</button></div></div>`
     : !list.length ? `<div class="empty">No reels match. <button class="btn" data-lib-clear="1" style="margin-top:8px">Show all</button></div>`
     : list.map((r) => { try { return reelCard(r); } catch (e) { console.warn("reel card", e); return ""; } }).join("");
+  // Opened from Home: scroll to that video and highlight it briefly.
+  if (state.focusReel) {
+    const card = document.querySelector(`#reels [data-reel="${CSS.escape(state.focusReel)}"]`); state.focusReel = null;
+    if (card) { card.scrollIntoView({ block: "center" }); card.classList.add("flash"); setTimeout(() => card.classList.remove("flash"), 1600); }
+  }
 }
 document.addEventListener("click", async (ev) => {
   const btn = ev.target.closest("[data-act]"); if (!btn) return;
@@ -400,6 +556,8 @@ document.addEventListener("click", async (ev) => {
   if (btn.dataset.act === "posted") {
     const on = !postedIds().has(r.id); setPosted(r.id, on);
     btn.textContent = on ? "✓ Posted" : "Mark as posted"; btn.classList.toggle("on", on); renderLibSpace();
+    card.querySelector("[data-posted-badge]")?.classList.toggle("hidden", !on);
+    toast(on ? "Marked as posted" : "Marked as not posted", on ? "ok" : "");
   }
   if (btn.dataset.act === "remix") {
     // The reel's script becomes a draft in the review screen: change the voice, style, lines or hook, then make it again.
@@ -514,8 +672,27 @@ function screen(name) {   // form | job | review
   $("review").classList.toggle("hidden", name !== "review");
   if (name !== "form") $("result").classList.add("hidden");
   window.scrollTo(0, 0);
+  mirrorJob();
 }
-const say = (text, f) => { $("job-step").textContent = text; if (f != null) { $("bar").style.width = Math.round(f * 100) + "%"; jobProgress(f); } };
+const say = (text, f) => {
+  $("job-step").textContent = text;
+  if (f != null) { $("bar").style.width = Math.round(f * 100) + "%"; jobProgress(f); }
+  mirrorJob(text, f);
+};
+// While something is being made, the sidebar and Home show it too, so you can look around meanwhile.
+let lastJobF = 0;
+function mirrorJob(text, f) {
+  if (f != null) lastJobF = f;
+  const busy = state.busy && !$("job").classList.contains("hidden");
+  $("nav-job").classList.toggle("hidden", !busy);
+  if (busy) $("nav-job-text").textContent = `${$("job-title").textContent.replace(/…$/, "")} · ${Math.round(lastJobF * 100)}%`;
+  const hs = $("home-status");
+  if (hs) {
+    hs.classList.toggle("hidden", !busy);
+    if (busy) hs.innerHTML = `<span class="spinner" aria-hidden="true"></span><div><b>${esc($("job-title").textContent)}</b><span class="meta">${esc(text || "")}</span>
+      <div class="progress"><div style="width:${Math.round(lastJobF * 100)}%"></div></div></div><span class="badge accent">${Math.round(lastJobF * 100)}%</span>`;
+  }
+}
 
 // While a video is made: a checklist of the steps, and how long is left (from this phone's past reels).
 const JOB_STEPS = [[0, "Get the voice ready"], [0.25, "Record the voiceover"], [0.555, "Music and scenes"], [0.6, "Make the video"], [0.99, "Cover and captions"]];
@@ -861,6 +1038,8 @@ function showReview() {
   // A series follows a topic into related ones; news, market recaps and quizzes don't have one.
   $("series").classList.toggle("hidden", ["news", "market", "quiz"].includes(script.kind));
   screen("review");
+  // Script boxes grow to fit their text (measured once the screen is showing; they keep growing as you type).
+  document.querySelectorAll(".scene textarea").forEach(fitTextarea);
   autosave(true); $("resume")?.classList.add("hidden");
   $("undo-remove").classList.toggle("hidden", !state.plan.undo);
   warmVoice();
@@ -873,7 +1052,9 @@ function warmVoice() {
   setVoice(v);
   loadVoice().catch(() => {});
 }
+function fitTextarea(ta) { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + 2 + "px"; }
 $("scenes").addEventListener("input", (e) => {
+  if (e.target.matches?.(".scene textarea")) fitTextarea(e.target);
   const i = e.target.dataset.line; if (i == null) return;
   const line = state.plan.script.lines[+i];
   line.text = e.target.value.replace(/\s+/g, " ").trim();
@@ -997,7 +1178,7 @@ $("save-draft").addEventListener("click", () => {
   state.draftId = d.id;
   const ok = saveDraft(d);
   if (ok) { clearTimeout(autosaveTimer); try { localStorage.removeItem(AUTOSAVE); } catch { /* ignore */ } }   // it's safe in Drafts now
-  toast(ok ? "Draft saved. Find it in the Library." : "Couldn't save the draft (storage full?)");
+  toast(ok ? "Draft saved. Find it in Automation → Queue." : "Couldn't save the draft (storage full?)");
 });
 $("undo-remove").addEventListener("click", () => {
   const plan = state.plan; if (!plan?.undo) return;
@@ -1326,6 +1507,15 @@ async function init() {
   $("version-line").textContent = `Version ${APP_VERSION} · ${UPDATES[0].title}`;
   $("whats-new").addEventListener("click", () => showWhatsNew(APP_VERSION - 3));
   $("art-more").addEventListener("click", drawMoreArt);
+  // Studio: the summary follows every choice; the step bar scrolls smoothly to each step.
+  renderStudioSummary();
+  $("form").addEventListener("click", () => setTimeout(renderStudioSummary, 0));
+  $("form").addEventListener("input", () => setTimeout(renderStudioSummary, 0));
+  $("form").addEventListener("change", () => setTimeout(renderStudioSummary, 0));
+  document.querySelector(".stepnav").addEventListener("click", (e) => {
+    const a = e.target.closest("a[href^='#']"); if (!a) return;
+    e.preventDefault(); document.querySelector(a.getAttribute("href"))?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+  });
   $("backup").addEventListener("click", backup);
   $("restore").addEventListener("change", () => { const f = $("restore").files[0]; if (f) restore(f); $("restore").value = ""; });
   $("lib-space").addEventListener("click", async (e) => {
@@ -1344,13 +1534,7 @@ async function init() {
     pruneUserPhotos(keep);
   }, 8000);
   renderResume();
-  $("resume").addEventListener("click", async (e) => {
-    const b = e.target.closest("[data-resume]"), d = pendingAutosave(); if (!b || !d || state.busy) return;
-    if (b.dataset.resume === "drop") return clearAutosave();
-    screen("job"); $("job-title").textContent = "Opening your script…"; $("preview").classList.add("hidden"); say("Finding photos again…", 0);
-    try { state.plan = await planFromDraft(d, { say }); state.draftId = d.draftId || null; showReview(); }
-    catch (err) { screen("form"); showError(err, "The script couldn't be opened"); }
-  });
+  $("resume").addEventListener("click", (e) => { const b = e.target.closest("[data-resume]"); if (b) resumeAction(b.dataset.resume); });
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden" && state.plan) autosave(true); });
   // Hear the chosen music: 8 seconds, made the same way as in a video (Auto plays a sample of each mood it picks from).
   let musicSrc = null;
@@ -1385,7 +1569,7 @@ async function init() {
     const b = e.target.closest("[data-today]"), d = todayDraft(); if (!b || !d || state.busy) return;
     unlockAudio();   // inside the tap, for iPhone audio
     if (b.dataset.today === "make") return makeDrafts([d]);
-    show("library"); document.querySelector(`[data-draft-open="${CSS.escape(d.id)}"]`)?.click();
+    show("auto"); document.querySelector(`[data-draft-open="${CSS.escape(d.id)}"]`)?.click();
   });
   checkWhatsNew();
   $("ai-check").addEventListener("click", aiCheck);
@@ -1394,6 +1578,9 @@ async function init() {
   $("encoder").textContent = info.webcodecs ? `Video encoder: on-device H.264, ${info.video.width}×${info.video.height}, with uncompressed sound.`
     : info.recorder ? "Video encoder: real-time recording (a reel takes about as long to make as it runs)."
     : "This browser can't encode video. Update iOS and use Safari.";
+  $("nav-version").textContent = `Version ${APP_VERSION}`;
+  // Returning users open on Home; the first visit opens the Studio.
+  show(store.get("made") === "1" ? "home" : "create");
   window.__ready = true;
 }
 

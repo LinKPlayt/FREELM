@@ -145,20 +145,20 @@ export default async function ({ t, newPage, BASE }) {
   t.section("Features: plan my week, voice preview, logo");
   try {
     await page.click('nav [data-tab="create"]').catch(() => {}); await page.click('#modes .chip >> text="Auto"');
-    await page.click("#plan-week");
+    await page.click('nav [data-tab="auto"]'); await page.click("#plan-week");
     await until(page, () => /week is planned|Couldn't|stopped/.test(document.getElementById("result").textContent), null, 600000);
     const week = await page.innerText("#result");
     t.ok(/week is planned/.test(week) && /Mon · /.test(week) && /(Tue|Wed|Thu) · [^\n]*Quiz/i.test(week), "Plan my week saves a varied week of drafts (with a mid-week quiz)", week.slice(0, 300));
     const [ics] = await Promise.all([page.waitForEvent("download", { timeout: 15000 }), page.click('#result [data-remind]')]);
     const icsText = readFileSync(await ics.path(), "utf8");
     t.ok((icsText.match(/BEGIN:VEVENT/g) || []).length >= 4 && /SUMMARY:Post: /.test(icsText) && /BEGIN:VALARM/.test(icsText) && /DTSTART:\d{8}T180000/.test(icsText), "the planned week becomes calendar reminders (one per day, with an alert)", icsText.slice(0, 200));
-    await page.click('nav [data-tab="library"]'); await page.locator("[data-draft-open]").first().click();
+    await page.click('nav [data-tab="auto"]'); await page.locator("[data-draft-open]").first().click();
     await page.waitForSelector("#review:not(.hidden)", { timeout: 180000 });
     t.ok(await page.locator(".scene").count() >= 4, "a saved draft opens in the review screen, with photos found again");
     await page.click("#cancel-review");
-    // Library: "Make all" appears with several drafts.
-    await page.click('nav [data-tab="library"]');
-    t.ok(await page.locator("[data-draft-all]").isVisible(), "the Library offers Make all for several drafts", await page.innerText("#drafts").catch(() => ""));
+    // Automation: "Make all" appears with several drafts in the queue.
+    await page.click('nav [data-tab="auto"]');
+    t.ok(await page.locator("[data-draft-all]").isVisible(), "the Automation queue offers Make all for several drafts", await page.innerText("#drafts").catch(() => ""));
     // Today's video: keep one draft, labelled for today, and make it with one tap from the Create tab.
     const left = await page.evaluate(() => {
       const day = new Date().toLocaleDateString("en-US", { weekday: "short" }), all = JSON.parse(localStorage.getItem("drafts") || "[]");
@@ -166,6 +166,9 @@ export default async function ({ t, newPage, BASE }) {
       localStorage.setItem("drafts", JSON.stringify(keep)); return keep.length;
     });
     await page.reload(); await until(page, () => window.__ready, null, 60000); await toastLog();
+    const landed = await page.evaluate(() => document.querySelector("nav button.active")?.dataset.tab);
+    t.ok(landed === "home" && /Make it now/.test(await page.innerText("#home-next")), "a returning user opens on Home, where today's video is up next", landed);
+    await page.click('nav [data-tab="create"]');
     t.ok(left === 1 && await page.locator("#today").isVisible() && /Today's video/.test(await page.innerText("#today")), "a draft planned for today shows as Today's video on the Create tab");
     await page.evaluate(() => { window.__lastReel = null; window.__lastError = null; });
     await page.click('[data-today="make"]');
@@ -297,7 +300,7 @@ export default async function ({ t, newPage, BASE }) {
   try {
     await page.click('#voices .chip >> text="Michael"');
     // one interrupted attempt: still the natural voice
-    await page.reload(); await until(page, () => window.__ready, null, 60000);
+    await page.reload(); await until(page, () => window.__ready, null, 60000); await page.click('nav [data-tab="create"]');
     await page.evaluate(() => { localStorage.setItem("voiceBusy", "1"); localStorage.setItem("voiceStrikes", "0"); });
     await page.click("#voice-preview"); await until(page, () => document.getElementById("voice-preview").textContent.includes("Hear it"), null, 300000);
     t.ok(await page.evaluate(() => localStorage.getItem("voiceLevel")) === "q8", "one interrupted attempt keeps the natural voice");
@@ -305,7 +308,7 @@ export default async function ({ t, newPage, BASE }) {
     await page.click('#modes .chip >> text="Explainer"'); await page.click("#go"); await page.waitForSelector("#review:not(.hidden)", { timeout: 180000 });
     await page.waitForTimeout(6000);
     t.ok(await page.evaluate(() => localStorage.getItem("voiceBusy")) !== "1", "a loaded, idle voice (review warm-up) doesn't leave the busy flag up");
-    await page.reload(); await until(page, () => window.__ready, null, 60000);
+    await page.reload(); await until(page, () => window.__ready, null, 60000); await page.click('nav [data-tab="create"]');
     await page.click("#voice-preview"); await until(page, () => document.getElementById("voice-preview").textContent.includes("Hear it"), null, 300000);
     t.ok(await page.evaluate(() => localStorage.getItem("voiceLevel")) === "q8", "closing the app after the warm-up doesn't switch to the classic voice");
     // phones switched by mistake in earlier versions are switched back once
@@ -317,11 +320,11 @@ export default async function ({ t, newPage, BASE }) {
   t.section("Features: What's new, storage, make-time, Library covers");
   try {
     // a returning user who last saw version 29 (the window shows the newest three updates)
-    await page.evaluate(() => localStorage.setItem("seenVersion", "43"));
+    await page.evaluate(() => localStorage.setItem("seenVersion", "44"));
     await page.reload(); await until(page, () => window.__ready, null, 60000);
     t.ok(await page.locator("#news-sheet").count() === 1 && /What's new/.test(await page.innerText("#news-sheet")), "What's new appears after an update");
     const news = await page.innerText("#news-sheet");
-    t.ok(/safer Library/.test(news) && /photos kept/.test(news) && !/moves with the video/.test(news), "it lists only the updates since the last one seen", news.slice(0, 200));
+    t.ok(/redesigned ReelBot/.test(news) && /safer Library/.test(news) && !/nothing lost/.test(news), "it lists only the updates since the last one seen", news.slice(0, 200));
     await page.click('[data-news="close"]');
     t.ok(await page.locator("#news-sheet").count() === 0, "Got it closes it");
     await page.reload(); await until(page, () => window.__ready, null, 60000);
