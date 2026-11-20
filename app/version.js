@@ -1,9 +1,13 @@
 // The app's version and its update notes, shown once in a "What's new" window after each update.
 // When you deploy: bump APP_VERSION, add an entry at the top of UPDATES, and set the same number in
 // sw.js (VERSION = "reelbot-v<APP_VERSION>"). A test checks the two match.
-export const APP_VERSION = 56;
+export const APP_VERSION = 57;
 
 export const UPDATES = [
+  { version: 57, title: "Acronyms said right, and the British voices fixed", items: [
+    "The natural voice says acronyms the way people do: \u201cAI\u201d is \u201cay-eye\u201d (it was often heard as \u201cuh eye\u201d), and ETF, IPO, IRA, APR and tickers like TSLA get the stress on the last letter. Ones inside a word (\u201cFDIC-insured\u201d) are spelled too.",
+    "Emma, George and Fable (the British voices) work again. Before, choosing one switched the reel, and every reel after it, to the classic voice. If that happened to you, the natural voice comes back on its own.",
+  ] },
   { version: 56, title: "Headlines read like sentences", items: [
     "News headlines written in Title Case (\u201cBitcoin Open Interest Drops 20% as Ethereum and Solana Slide Further\u201d) are said and captioned as normal sentences, with names kept capitalised.",
   ] },

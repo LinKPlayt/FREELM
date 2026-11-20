@@ -114,13 +114,13 @@ export default async function ({ t, newPage }) {
     const T = await import("./app/tts.js");
     const texts = ["", " ", "😀💰🚀", "汉字中文测试", "مرحبا", "\u0000​\t", "<img src=x onerror=1>", "$".repeat(300), "a".repeat(3000), "1e308 NaN Infinity", "Ünïcödé façade naïve", "...!!!???", "U.S. Mr. e.g. i.e.", "−5% (−$1,000) — “quotes” ‘single’"];
     const out = []; let failed = [];
-    for (const engine of ["natural", "fast"]) {
-      T.setVoice({ engine, voice: "af_heart" });
+    for (const [engine, voice] of [["natural", "af_heart"], ["natural", "bf_emma"], ["fast", "af_heart"]]) {
+      T.setVoice({ engine, voice });
       if (engine === "fast") await T.loadVoice();
       for (const x of texts) {
         const t0 = performance.now();
         try { const [p] = await T.phonemize([x]); out.push([engine, Math.round(performance.now() - t0), typeof p === "string" ? p.length : p.length]); }
-        catch (e) { failed.push(`${engine}: ${JSON.stringify(x).slice(0, 30)} threw ${e.message}`); }
+        catch (e) { failed.push(`${engine} ${voice}: ${JSON.stringify(x).slice(0, 30)} threw ${e.message}`); }
       }
     }
     // the classic voice must also speak them without crashing
@@ -128,7 +128,7 @@ export default async function ({ t, newPage }) {
     for (const x of ["😀💰🚀 money", "$".repeat(300), "Ünïcödé façade"]) { try { const [p] = await T.phonemize([x]); const a = await T.synthesize(p, 1); spoken.push(a.length); } catch (e) { failed.push(`speak ${JSON.stringify(x).slice(0, 20)}: ${e.message}`); } }
     return { failed, slowest: Math.max(...out.map((o) => o[1])), n: out.length, spoken };
   });
-  t.ok(ph.failed.length === 0, `eSpeak handles ${ph.n} hostile texts for both voices`, ph.failed.join(" | "));
+  t.ok(ph.failed.length === 0, `eSpeak handles ${ph.n} hostile texts for both voices and both accents`, ph.failed.join(" | "));
   t.ok(ph.slowest < 3000, `slowest pronunciation ${ph.slowest} ms`, String(ph.slowest));
   t.ok(ph.spoken.every((n) => Number.isFinite(n)), "the voice speaks hostile text without crashing", JSON.stringify(ph.spoken));
 

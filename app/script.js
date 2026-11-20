@@ -3,17 +3,19 @@ import { spokenStory, sentencesOf, stripSource, teaserIn } from "./newswriter.js
 // Script writer: turns research into a short spoken script (hook -> points -> call to action).
 // A JavaScript port of reelbot/script.py so reels can be written on the phone.
 
+// Spelled acronyms use dots ("E.T.F."): the natural voice spells them with acronym stress (see kokoro-text.js),
+// and eSpeak reads them as letters. Spaces made eSpeak read a lone "A" as the article ("A I" said "uh eye").
 const ACRONYMS = {
-  ETF: "E T F", ETFs: "E T Fs", IRA: "I R A", IRAs: "I R As", IPO: "I P O", GDP: "G D P", CPI: "C P I", PCE: "P C E",
-  SEC: "S E C", FDIC: "F D I C", AI: "A I", US: "U S", "U.S.": "U S", USD: "U S dollars", CEO: "C E O", CFO: "C F O",
-  EV: "E V", EVs: "E Vs", IRS: "I R S", ECB: "E C B", FOMC: "F O M C", NFT: "N F T", NFTs: "N F Ts", DCA: "D C A",
+  ETF: "E.T.F.", ETFs: "E.T.F.s", IRA: "I.R.A.", IRAs: "I.R.A.s", IPO: "I.P.O.", GDP: "G.D.P.", CPI: "C.P.I.", PCE: "P.C.E.",
+  SEC: "S.E.C.", FDIC: "F.D.I.C.", AI: "A.I.", US: "U.S.", "U.S.": "U.S.", USD: "U.S. dollars", CEO: "C.E.O.", CFO: "C.F.O.",
+  EV: "E.V.", EVs: "E.V.s", IRS: "I.R.S.", ECB: "E.C.B.", FOMC: "F.O.M.C.", NFT: "N.F.T.", NFTs: "N.F.T.s", DCA: "D.C.A.",
   BTC: "bitcoin", ETH: "ether", Q1: "first quarter", Q2: "second quarter", Q3: "third quarter", Q4: "fourth quarter",
-  YoY: "year over year", "vs.": "versus", vs: "versus", "approx.": "approximately", UK: "U K", EU: "E U",
+  YoY: "year over year", "vs.": "versus", vs: "versus", "approx.": "approximately", UK: "U.K.", EU: "E.U.",
   OPEC: "oh peck", REIT: "reet", REITs: "reets", FICO: "fyco", HYSA: "high yield savings",
-  HSA: "H S A", HSAs: "H S As", APR: "A P R", APY: "A P Y", FHA: "F H A", PMI: "P M I", HELOC: "hee lock", HELOCs: "hee locks",
-  "P/E": "P E", EPS: "E P S", YTD: "year to date", NYSE: "N Y S E", USDC: "U S D C", USDT: "U S D T", DeFi: "dee fye",
-  LLC: "L L C", LLCs: "L L Cs", KYC: "K Y C", QE: "Q E", ESG: "E S G", CD: "C D", CDs: "C Ds", ATM: "A T M", ATMs: "A T Ms",
-  "W-2": "W 2", "W-2s": "W 2s", "403(b)": "four oh three b", ROI: "R O I", GDP: "G D P", CPI: "C P I", APRs: "A P Rs",
+  HSA: "H.S.A.", HSAs: "H.S.A.s", APR: "A.P.R.", APY: "A.P.Y.", FHA: "F.H.A.", PMI: "P.M.I.", HELOC: "hee lock", HELOCs: "hee locks",
+  "P/E": "P.E.", EPS: "E.P.S.", YTD: "year to date", NYSE: "N.Y.S.E.", USDC: "U.S.D.C.", USDT: "U.S.D.T.", DeFi: "dee fye",
+  LLC: "L.L.C.", LLCs: "L.L.C.s", KYC: "K.Y.C.", QE: "Q.E.", ESG: "E.S.G.", CD: "C.D.", CDs: "C.D.s", ATM: "A.T.M.", ATMs: "A.T.M.s",
+  "W-2": "W 2", "W-2s": "W 2s", "403(b)": "four oh three b", ROI: "R.O.I.", GDP: "G.D.P.", CPI: "C.P.I.", APRs: "A.P.R.s",
 };
 const SCALE = { k: "thousand", m: "million", mn: "million", b: "billion", bn: "billion", t: "trillion", tn: "trillion" };
 
@@ -42,6 +44,10 @@ export function speakable(text) {
   t = t.split(/\s+/).map((w) => {
     const core = w.replace(/^[,.!?;:"'()]+|[,.!?;:"'()]+$/g, "");
     if (ACRONYMS[core]) return w.replace(core, ACRONYMS[core]);
+    const own = core.match(/^([A-Z][\w./-]*)(['’]s)$/);       // a possessive: "ECB's" is the E.C.B.'s
+    if (own && ACRONYMS[own[1]]) return w.replace(core, ACRONYMS[own[1]] + own[2]);
+    // ...also inside a compound ("FDIC-insured", "ETF-only"), which eSpeak otherwise reads as a word ("ef-dick").
+    if (/^[\w.]+(?:-[\w.]+)+$/.test(core) && core.split("-").some((p) => ACRONYMS[p] && /^[A-Z]/.test(p))) return w.replace(core, core.split("-").map((p) => (/^[A-Z]/.test(p) && ACRONYMS[p]) || p).join("-"));
     // An acronym or ticker the voice would read as a word ("AGNC" -> "agnk", "USDS" -> "usds", "TSLA" -> "teesla")
     // is spelled out with dots, so it's said as one acronym with every letter's name ("A.G.N.C."; with spaces or
     // hyphens an "A" became the word "a"). Ones without a vowel (CNBC, MSFT) the voice already spells: left alone.

@@ -41,7 +41,7 @@ export default async function ({ t, newPage }) {
     out.speakable = [RA.speakable("An example of the debt snowball method in action is shown below."), RA.speakable("Units for smaller amounts of bitcoin are the millibitcoin, equal to bitcoin, and the satoshi."), RA.speakable("Bitcoin was invented in 2008 by an unknown person called Satoshi Nakamoto.")];
     out.offTopic = [RA.offTopic("Inflation (cosmology)"), RA.offTopic("Bond (finance)"), RA.offTopic("Dividend")];
     // natural-voice text normalisation (eSpeak replaced by a stub that echoes the words)
-    const echo = async (texts) => texts.map((x) => `[${x}]`);
+    const echo = async (texts) => texts.map((x) => `[${x.toUpperCase()}]`);   // capitals: the misaki step leaves them alone
     out.kok = [await K.kokoroPhonemes("It costs $5.50 a day.", "a", echo), await K.kokoroPhonemes("In 1987, stocks fell.", "a", echo), await K.kokoroPhonemes("Save 3-6 months.", "a", echo)];
     // captions file
     const words = "This is one sentence. And then, another one follows here quickly".split(" ").map((w, i) => ({ text: w, start: i * 0.4, end: i * 0.4 + 0.35 }));
@@ -209,7 +209,7 @@ export default async function ({ t, newPage }) {
   t.ok(r.speakable.join() === "false,false,true", "pointer and lost-number sentences are rejected, good ones kept", r.speakable.join());
   t.ok(r.offTopic.join() === "true,false,false", "other meanings of a word are recognised", r.offTopic.join());
   t.section("Logic: natural voice text, captions, coach, audio");
-  t.ok(/5 dolla.s and 50 cents/.test(r.kok[0]) && /19 87/.test(r.kok[1]) && /3 to 6/.test(r.kok[2]), "money, years and ranges are normalised for the voice", r.kok.join(" | "));
+  t.ok(/5 DOLLA.S AND 50 CENTS/.test(r.kok[0]) && /19 87/.test(r.kok[1]) && /3 TO 6/.test(r.kok[2]), "money, years and ranges are normalised for the voice", r.kok.join(" | "));
   t.ok(/^1\n00:00:00,000 --> /.test(r.srt) && !/NaN/.test(r.srt) && r.srt.split("-->").length - 1 >= 2, "captions file is valid", r.srt.slice(0, 80));
   const cues = [...r.srt.matchAll(/(\d\d):(\d\d):(\d\d),(\d\d\d) --> (\d\d):(\d\d):(\d\d),(\d\d\d)/g)].map((m) => [m.slice(1, 5), m.slice(5, 9)].map(([h, mi, s, ms]) => +h * 3600 + +mi * 60 + +s + ms / 1000));
   t.ok(cues.every(([a, b], i) => b > a && (i === 0 || a >= cues[i - 1][1])), "caption cues never overlap", JSON.stringify(cues));
@@ -267,7 +267,7 @@ export default async function ({ t, newPage }) {
   t.ok(r.quiz.slice(0, 7).join() === "quiz,9,3,3,true,true,true" && r.quiz[7] === false, "a quiz: hook, 3 true-or-false questions with countdowns, 3 answers, a question and the ending; recent questions aren't repeated", JSON.stringify(r.quiz));
   t.ok(r.refine.slice(0, 5).join() === "true,true,true,false,true" && r.refine[5] === "tree" && r.refine[6] === "Freelance, freelancer, or freelance worker are terms often used for a person.",
     "definitions phrased as “terms for” are found; series and press-release headlines are skipped; illustrations don't repeat the last subject (unless you chose it)", JSON.stringify(r.refine));
-  t.ok(r.say2.join("|") === "Save 3 to 6 months at an A P R of 24 percent.|A hee lock, a four oh three b and a W 2.|Rates hit 5.25 percent to 5.5 percent, up 1.5 times year to date.", "ranges, multiples and finance acronyms are said the way people say them", r.say2.join(" | "));
+  t.ok(r.say2.join("|") === "Save 3 to 6 months at an A.P.R. of 24 percent.|A hee lock, a four oh three b and a W 2.|Rates hit 5.25 percent to 5.5 percent, up 1.5 times year to date.", "ranges, multiples and finance acronyms are said the way people say them", r.say2.join(" | "));
   t.ok(r.moods.join() === "suspense,cinematic,upbeat,bright,cinematic,upbeat", "Auto music picks a mood that suits each video", r.moods.join());
   t.ok(r.drop.every(([len, ok, ratio]) => len && ok && ratio > 1.5), "the new moods play, and the beat drops in after the hook", JSON.stringify(r.drop));
   t.ok(r.keep.join() === "60,T10,true,false,true", "the Library keeps up to 60 videos and removes a posted one before an older unposted one", JSON.stringify(r.keep));
@@ -480,5 +480,42 @@ export default async function ({ t, newPage }) {
     "a column's byline (\"Peterson: …\") isn't read out; a company that is the story keeps its name", v53.byline.join(" | "));
   t.ok(v53.say === "Shares of T.S.L.A. fell; A.G.N.C. and U.S.D.S. rose, CNBC said. NOT a STOP sign for NASA.",
     "a ticker the voice would read as a word is spelled out (TSLA, AGNC, USDS); acronyms it says well and real words are left alone", v53.say);
+
+  t.section("Logic: the voice hears the notation it was trained on (v57)");
+  const v57 = await page.evaluate(async () => {
+    const K = await import("./app/kokoro-text.js"), T = await import("./app/tts.js"), S = await import("./app/script.js");
+    const out = {};
+    out.map = [["fˈɛdɚɹəl", "a"], ["bˈɜːd", "a"], ["bˈɜːd", "b"], ["ɡˈoʊɪŋ", "a"], ["ɡˈəʊɪŋ", "b"], ["kˈeə", "b"], ["bˈʌʔn\u0329", "a"], ["dʒˈʌdʒ tʃˈɜːtʃ", "a"], ["fˈaɪɚ ˈaʊɚ bˈɔɪ pˈeɪ", "a"]]
+      .map(([ph, lang]) => K.toMisaki(ph, lang));
+    // Real eSpeak, both accents: every symbol must be one the model knows (unknown ones are silently dropped).
+    const vocab = (await (await fetch("./app/ai/models/kokoro-82m/tokenizer.json")).json()).model.vocab;
+    const lines = ["The experts say the Federal Reserve might hike rates again in 2026.", "Go home early, judge the church's nature, and buy the boy a toy (or two).",
+      "Your first paycheck: about $1,250 after taxes, or 4.5% of the year's income.", "Their adviser's portfolio rose sharply while bonds fell."];
+    out.ph = {};
+    for (const voice of ["af_heart", "bf_emma", "bm_george"]) {
+      T.setVoice({ engine: "natural", voice });
+      try { out.ph[voice] = await T.phonemize(lines.map((l) => S.speakable(l))); } catch (e) { out.ph[voice] = "threw " + (e.message || e); }
+    }
+    T.setVoice({ engine: "natural", voice: "af_heart" });
+    out.acr = await T.phonemize(["Big bets against AI debt could hit the ETF market.", "Buy an ETF. Then wait for an IPO.", "Two IRAs, a TSLA share and AAPL (for now).", "An ATM fee and the APR."].map((l) => S.speakable(l)));
+    out.acr2 = await T.phonemize(["J.P. Morgan sees the ECB's view.", "It hit the U.S. The rest followed.", "An FDIC-insured bank."].map((l) => S.speakable(l)));
+    T.setVoice({ engine: "natural", voice: "bf_emma" });
+    out.acrGb = await T.phonemize([S.speakable("The UK and the ECB.")]);
+    out.unknown = Object.values(out.ph).flatMap((x) => (Array.isArray(x) ? [...x.join("")] : [])).filter((c) => vocab[c] === undefined);
+    return out;
+  });
+  t.ok(v57.map.join(" | ") === "fˈɛdəɹəl | bˈɜɹd | bˈɜːd | ɡˈOɪŋ | ɡˈQɪŋ | kˈɛː | bˈʌtn | ʤˈʌʤ ʧˈɜɹʧ | fˈIəɹ ˈWəɹ bˈY pˈA",
+    "eSpeak's IPA becomes misaki's: diphthongs as one symbol, ʤ ʧ, an American r in \"bird\", British vowels kept", v57.map.join(" | "));
+  t.ok(["bf_emma", "bm_george"].every((v) => Array.isArray(v57.ph[v]) && v57.ph[v].every((p) => p.length > 10)), "the British voices get their phonemes (eSpeak's British English is \"en\"; \"en-gb\" threw and the reel fell back to the classic voice)",
+    JSON.stringify(v57.ph.bf_emma).slice(0, 200));
+  const us = (v57.ph.af_heart || []).join(" "), gb = (v57.ph.bf_emma || []).join(" ");
+  t.ok(Array.isArray(v57.ph.af_heart) && /ɜɹ/.test(us) && !/aɪ|eɪ|oʊ|aʊ|ɔɪ|dʒ|tʃ|ː|ɚ|ɐ|ɾ/.test(us), "American phonemes: rhotic \"er\", no long marks, no two-letter diphthongs", us.slice(0, 200));
+  t.ok(/Q/.test(gb) && /ː/.test(gb) && !/ɜɹ/.test(gb), "British phonemes keep their own vowels (\"go\" is Q, long marks, no American r)", gb.slice(0, 200));
+  t.ok(v57.acr.join(" | ") === "bˈɪɡ bˈɛts əɡˈɛnst ˌAˈI dˈɛt kʊd hˈɪt ðɪ ˌitˌiˈɛf mˈɑɹkɪt. | bˈI ən ˌitˌiˈɛf. ðˈɛn wˈAt fəɹən ˌIpˌiˈO. | tˈu ˌIˌɑɹˈAz, ə tˌiˌɛsˌɛlˈA ʃˈɛɹ ænd ˌAˌApˌiˈɛl (fɔɹ nˈW). | ən ˌAtˌiˈɛm fˈi ænd ðɪ ˌApˌiˈɑɹ.",
+    "acronyms are spelled with acronym stress (\"AI\" is ˌAˈI, not \"uh eye\"; AAPL keeps both A's), with \"an\", \"a\" and \"thee\" before them and brackets kept", v57.acr.join(" | "));
+  t.ok(v57.acr2.join(" | ") === "ʤˌApˈi mˈɔɹɡən sˈiz ðɪ ˌisˌibˈiz vjˈu. | ɪt hˈɪt ðə jˌuˈɛs. ðə ɹˈɛst fˈɑlOd. | ən ˌɛfdˌiˌIsˈi ɪnʃˈʊɹd bˈæŋk.",
+    "initials before a name get no full stop (\"J.P. Morgan\"), a sentence-ending acronym keeps it, possessives and compounds are spelled", v57.acr2.join(" | "));
+  t.ok(v57.acrGb[0] === "ðə jˌuːkˈA and ðɪ ˌiːsˌiːbˈiː.", "British voices spell acronyms with British letter names", v57.acrGb[0]);
+  t.ok(v57.unknown.length === 0, "every phoneme sent to the voice is in its vocabulary", [...new Set(v57.unknown)].join(" "));
   await page.context().close();
 }

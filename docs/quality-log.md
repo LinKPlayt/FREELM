@@ -10,6 +10,76 @@ before and after on the same inputs, and add tests so it can't come back.
 
 ---
 
+## v57 · Narration · Acronyms said right, British voices fixed
+
+**How it was measured (new).** The weakest area was found by listening with a machine instead of guessing.
+200 real lines the app writes (every news story and market line in the day's snapshot, every stakes and
+stance line, every 4th explainer line and every 3rd quiz line) were spoken through the app's own path
+(`speakable` → `kokoroPhonemes` → Kokoro, af_heart), transcribed by Whisper (small.en, faster-whisper) and
+compared word by word with the script. Naturalness was scored with DNSMOS (P.808 and P.835). Both run on the
+test machine only; the app gets no new dependency.
+
+**Weakest areas found.**
+- **"AI" was said "uh eye".** The acronym table spelled acronyms with spaces ("A I", "A P R", "A T M"), and eSpeak
+  read a lone "A" as the article ("ə I"). Whisper heard "a ice", "our", "are a": "AI" came through in only 6 of 9
+  lines, in the word finance news uses most. Spaced letters also gave every letter a full stress (choppy).
+- **The British voices didn't work at all.** Emma, George and Fable asked eSpeak for "en-gb", a voice file this
+  eSpeak build doesn't have (British English is "en"). It threw a bare number, the reel fell back to the classic
+  voice, and the phone stayed on the classic voice for every reel after. The fuzz test only tried American voices.
+- **Acronyms in compounds and possessives** ("FDIC-insured", "ECB's") skipped the table and were read as words
+  ("ef-dick", "ekbz").
+
+**Technique.** Kokoro v1.0 was trained on misaki's phoneme notation. In its own pipeline, acronyms are spelled
+from letter names with light stress on every letter but the last (GDP is ʤˌidˌipˈi), and eSpeak's output is
+converted by misaki's EspeakFallback table.
+
+**What changed.**
+- `app/script.js`: acronyms are written with dots ("E.T.F."), which the classic voice also reads as letters;
+  compounds and possessives use the table too.
+- `app/kokoro-text.js`:
+  - `spellLetters()` spells dotted acronyms from letter names, with the stress mark before the vowel as in
+    Kokoro's dictionaries; British letter names for British voices; plural and possessive endings.
+  - A dotted acronym keeps its full stop only before a typical sentence opener, not before a name ("J.P. Morgan").
+  - "a", "an" and "the" before an acronym get their unstressed forms ("ðɪ" before a vowel).
+  - `toMisaki()` converts eSpeak IPA to misaki notation. **Measured neutral**: no change in Whisper errors, DNSMOS or
+    F3 (below). It's kept so the spelled letters and the words around them use one notation, and because it
+    stops symbols the model doesn't know (eSpeak's syllabic mark, « ») from being silently dropped.
+  - British voices ask eSpeak for "en".
+- `app/tts.js`: a phone the British-voice crash switched to the classic voice gets the natural voice back, once.
+
+**Measured** on the same 200 lines, same voice, before → after:
+
+| | Before | After |
+|---|---|---|
+| Word errors (Whisper) | 67 (2.42%) | 46 (1.67%), −31% |
+| News lines | 6.1% | 3.9% |
+| Acronyms heard right | 27/34 | 33/34 |
+| "AI" heard right | 6/9 | 9/9 |
+| Lines better / worse | — | 19 / 7 |
+| Mean word confidence | 0.954 | 0.958 |
+| DNSMOS P.808 / overall | 4.155 / 3.375 | 4.151 / 3.374 (no change; ±0.007) |
+| British voice (Emma), 41 lines | crashed, classic voice | spoken; 4.3% errors, as the American voice on the same lines |
+
+Found and fixed along the way:
+- The first letter table put the stress before the consonant ("ˌpi"). "IPO" was heard as "IAPO" (2 of 6 right);
+  with the stress before the vowel it's 6 of 6.
+- "J.P. Morgan" got a full stop after "J.P." and was heard as "and yuppie".
+
+**A claim that didn't hold.** I expected the American voices to lack an "r" in words like "experts" (eSpeak writes
+the British "ɜː"). Measured on 12 words × 2 voices (lowest F3, Praat), the old audio was already r-coloured
+(F3 about 1,800–2,000 Hz for Heart). The notation change moved F3 by −29 Hz and −13 Hz, which is noise. No
+pronunciation improvement is claimed for it.
+
+**Tests.** `tests/web/logic.mjs`, "the voice hears the notation it was trained on (v57)":
+- the notation table;
+- the British voices phonemize, with British vowels and letter names;
+- acronym stress, articles, initials, possessives and compounds;
+- every symbol sent to the voice is in its vocabulary.
+
+`tests/web/fuzz.mjs` runs real eSpeak on hostile text for a British voice too.
+
+---
+
 ## v56 · Scripts · Title Case headlines become sentences
 
 **Weakest area found.** 32 of the day's 72 headlines (44%) are in Title Case (Yahoo Finance, Forbes, U.S. News).
@@ -401,8 +471,15 @@ Found on the live feed right after release and added: a trailing fragment that p
    exports in October surge 20.5%"). A spoken rewrite needs care to stay faithful.
 2. **Emphasis.** The voice gives every word the same weight; key numbers and contrast words ("but", "only",
    "never") could be stressed (Kokoro takes stress marks in its phonemes).
-3. **"Your topic" jargon.** Formal words are now plain (v55), but technical terms remain ("distribution",
+3. **Names and tickers that read as words.** In the v57 run the remaining real errors in news are proper nouns and
+   word-like tickers: IREN → "iron", LITE → "light", VanEck → "van act", Loosdog, Goolsbee → "Goolsby". Ticker
+   context (a list of all-caps tokens) could tell a ticker from a word.
+4. **"Your topic" jargon.** Formal words are now plain (v55), but technical terms remain ("distribution",
    "securitization"); explaining a term needs a source sentence that does.
-4. **Photo supply.** Where no photo fits by meaning (Inflation, Roth IRA, a mortgage explainer), every scene is an
+5. **Photo supply.** Where no photo fits by meaning (Inflation, Roth IRA, a mortgage explainer), every scene is an
    illustration; other searches (the topic's Wikipedia image, related subjects) could find real photos that fit.
-5. **AAPL-like tickers.** A doubled letter in a spelled ticker ("A.A.P.L.") still reduces the second A to "uh".
+6. **A measuring tool in the repo.** The Whisper/DNSMOS check (v57) lives outside the repository; adding it under
+   `scripts/` would let every narration change be measured the same way.
+
+(Done: AAPL-like tickers, queue item 5 before v57: spelled letters now come from a table, so "A.A.P.L." keeps both
+A's.)

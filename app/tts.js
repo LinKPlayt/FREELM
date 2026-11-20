@@ -65,6 +65,11 @@ function naturalLevel() {
   if (/larger than expected|Out of memory|no available backend/i.test(store.get("voiceError") || "") && store.get("voiceRetried") !== "v24") {
     store.set("voiceRetried", "v24"); store.set("voiceLevel", "q8"); store.set("voiceError", "");
   }
+  // v57: a British voice crashed eSpeak (asked for "en-gb", which it doesn't have; the error is a bare number)
+  // and that switched the phone to the classic voice for every reel after. Fixed, so undo that once.
+  if (/^\d+$/.test(store.get("voiceError") || "") && store.get("voiceRetriedGb") !== "v57") {
+    store.set("voiceRetriedGb", "v57"); store.set("voiceLevel", "q8"); store.set("voiceError", ""); store.set("voiceStrikes", "0");
+  }
   // v29: earlier versions could switch to the classic voice by mistake (a background warm-up left the
   // "busy" flag up when you closed the app). Undo that once.
   if (store.get("voiceLevel") === "classic" && !store.get("voiceError") && store.get("voiceRetried") !== "v29") {

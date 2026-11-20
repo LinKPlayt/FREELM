@@ -38,8 +38,33 @@ function normalize(t) {
     .replace(/(?:[A-Za-z]\.){2,} [a-z]/g, (m) => m.replace(/\./g, "-")).replace(/(?<=[A-Z])\.(?=[A-Z])/gi, "-").trim();
 }
 const PUNCT = /(\s*[;:,.!?¡¿—…"«»“”(){}[\]]+\s*)+/g;
+// Letter names, as Kokoro's own dictionaries write them. A spelled acronym ("E.T.F.", which is how the script
+// writes them, see speakable) is built from these instead of going through eSpeak: eSpeak gives every letter
+// a full stress (choppy) and can say a lone "A" as the article "uh". English stresses the last letter and
+// keeps the rest light, as in "GDP" ʤˌidˌipˈi.
+const LETTERS = { A: "A", B: "bi", C: "si", D: "di", E: "i", F: "ɛf", G: "ʤi", H: "Aʧ", I: "I", J: "ʤA", K: "kA", L: "ɛl", M: "ɛm",
+  N: "ɛn", O: "O", P: "pi", Q: "kju", R: "ɑɹ", S: "ɛs", T: "ti", U: "ju", V: "vi", W: "dʌbəlju", X: "ɛks", Y: "wI", Z: "zi" };
+const LETTERS_GB = { O: "Q", R: "ɑː", Z: "zɛd" };
+const ACRONYM = /(?<![\w.])((?:[A-Z]\.){2,})(['’]?s\b)?/g;      // "E.T.F.s" and "E.C.B.'s" both end in s/z
+export function spellLetters(letters, plural = false, lang = "a") {
+  const ls = letters.replace(/[^A-Z]/g, "").split("");
+  const name = (l) => { let n = (lang === "b" && LETTERS_GB[l]) || LETTERS[l]; if (lang === "b") n = n.replace(/i$/, "iː").replace(/u$/, "uː"); return n; };
+  // The stress mark goes right before the vowel, as in Kokoro's dictionaries ("pˌi", not "ˌpi").
+  const ph = ls.map((l, i) => name(l).replace(/[AIOQaeiouæɑɒɔəɛɜɪʊʌ]/, (v) => (i === ls.length - 1 ? "ˈ" : "ˌ") + v)).join("");
+  if (!plural) return ph;
+  return ph + ("HSX".includes(ls.at(-1)) ? "ᵻz" : "F" === ls.at(-1) ? "s" : "z");
+}
 // espeak(texts[], voice) -> phoneme strings, one per text.
 export async function kokoroPhonemes(text, lang, espeak) {
+  // Spelled acronyms are set aside (as private-use placeholders) and spelled from the letter table.
+  const spelled = [];
+  text = String(text).replace(/[\uE000-\uEFFF]/g, "").replace(ACRONYM, (m, letters, s, at, all) => {
+    // An acronym that ends the sentence keeps its full stop ("…buy an E.T.F. Then…"), but not initials before a
+    // name ("J.P. Morgan", "U.S. Steel"): a capital after it ends the sentence only when it starts a typical opener.
+    const end = /^(?:\s*["”]?\s*$|\s+["“]?(?:The|This|That|These|Those|It|Its|It's|They|There|Then|But|And|So|Now|Here|What|Why|How|If|In|We|You|He|She|I|A|An)\b)/.test(all.slice(at + m.length));
+    spelled.push(spellLetters(letters, Boolean(s), lang) + (end ? "." : ""));
+    return ` \uE000${String.fromCharCode(0xE100 + spelled.length - 1)} `;
+  });
   text = normalize(text);
   const parts = []; let last = 0;
   for (const m of text.matchAll(PUNCT)) {
@@ -48,12 +73,54 @@ export async function kokoroPhonemes(text, lang, espeak) {
     last = m.index + m[0].length;
   }
   if (last < text.length) parts.push({ punct: false, text: text.slice(last) });
-  const words = parts.filter((p) => !p.punct && p.text.trim());
-  const said = words.length ? await espeak(words.map((p) => p.text), lang === "a" ? "en-us" : "en-gb") : [];
-  words.forEach((p, i) => { p.ph = said[i]; });
-  const out = parts.map((p) => (p.punct ? p.text : p.ph ?? "")).join("");
-  let ph = out.replace(/ʲ/g, "j").replace(/r/g, "ɹ").replace(/x/g, "k").replace(/ɬ/g, "l")
-    .replace(/(?<=[a-zɹː])(?=hˈʌndɹɪd)/g, " ").replace(/ z(?=[;:,.!?¡¿—…"«»“” ]|$)/g, "z");
+  // Words around a placeholder are phonemized on their own; the placeholder becomes its spelled letters.
+  const split = parts.flatMap((p) => (p.punct ? [p] : p.text.split(/\s*\uE000([\uE100-\uEFFF])\s*/).map((x, i) =>
+    (i % 2 ? { punct: false, ph: " " + spelled[x.charCodeAt(0) - 0xE100] + " ", letters: true } : { punct: false, text: x }))));
+  const words = split.filter((p) => p.ph === undefined && !p.punct && p.text.trim());
+  const said = words.length ? await espeak(words.map((p) => p.text), lang === "a" ? "en-us" : "en") : [];
+  words.forEach((p, i) => { p.ph = toMisaki(fixEspeak(said[i] ?? "", lang), lang); });
+  // Said apart from its acronym, "a" and "an" came out stressed ("ay") and "the" didn't become "thee" before a vowel.
+  split.forEach((p, i) => {
+    const prev = split[i - 1];
+    if (!p.letters || !prev?.ph || prev.letters) return;
+    const art = prev.text.match(/\b(an?|the)\s*$/i)?.[1].toLowerCase();
+    // Only the article's own sounds at the very end change: eSpeak can join it to the word before ("fɔɹən").
+    if (art === "the") prev.ph = prev.ph.replace(/ð[ˈˌ]?[əɪi]ː?$/, /^ [ˌˈ][AIOQiɛɑ]/.test(p.ph) ? "ðɪ" : "ðə");
+    else if (art === "an") prev.ph = prev.ph.replace(/[ˈˌ]?[æəɐ]n$/, "ən");
+    else if (art === "a") prev.ph = prev.ph.replace(/[ˈˌ]?(?:A|ə|ɐ)$/, "ə");
+  });
+  // Brackets were turned into « » for eSpeak; the model knows them as brackets (« » aren't in its vocabulary).
+  return split.map((p) => (p.punct ? p.text : p.ph ?? (p.text.trim() ? "" : p.text))).join("")
+    .replace(/ {2,}/g, " ").replace(/ +(?=[;:,.!?…])/g, "").replace(/«/g, "(").replace(/»/g, ")").trim();
+}
+// kokoro-js's clean-up of eSpeak's output (Apache-2.0, hexgrad and Xenova).
+function fixEspeak(ph, lang) {
+  ph = ph.replace(/ʲ/g, "j").replace(/r/g, "ɹ").replace(/x/g, "k").replace(/ɬ/g, "l")
+    .replace(/(?<=[a-zɹː])(?=hˈʌndɹɪd)/g, " ").replace(/ z(?= |$)/g, "z");
   if (lang === "a") ph = ph.replace(/(?<=nˈaɪn)ti(?!ː)/g, "di");
-  return ph.trim();
+  return ph;
+}
+
+// eSpeak IPA -> the notation Kokoro v1.0 was trained on (misaki). Kokoro's own pipeline looks words up in
+// misaki's dictionaries and only falls back to eSpeak for unknown words, converting its output with this
+// table (misaki/espeak.py, EspeakFallback, Apache-2.0): diphthongs as one symbol ("I" for "aɪ"), "ʤ"/"ʧ",
+// "əɹ" for "ɚ", and for American voices no long-vowel marks. It also stops symbols the model doesn't know
+// (eSpeak's syllabic mark, « ») from being silently dropped. Measured on 200 lines (v57), it changes neither how
+// well the words are understood nor how natural they sound; it's here so the letter-spelled acronyms above, which
+// are written in this notation, and the words around them speak one language.
+// eSpeak here gives no tie marks, so a pair is merged wherever it appears; in eSpeak's English output these
+// pairs are the diphthongs and affricates. misaki's syllabic-l rule ("ə^l") needs the tie, so it's left out.
+const E2M = [
+  [/ʔˌ?n\u0329/g, "ʔn"], [/aɪ/g, "I"], [/aʊ/g, "W"], [/dʒ/g, "ʤ"], [/eɪ/g, "A"], [/tʃ/g, "ʧ"], [/ɔɪ/g, "Y"],
+  [/ɚɹ?/g, "əɹ"], [/ç/g, "k"], [/ɐ/g, "ə"], [/\u0303/g, ""],
+];
+export function toMisaki(ph, lang = "a") {
+  const british = lang === "b";
+  if (british) ph = ph.replace(/eə/g, "ɛː");                // before "e" becomes "A"
+  for (const [re, to] of E2M) ph = ph.replace(re, to);
+  ph = ph.replace(/e/g, "A");
+  ph = ph.replace(/(\S)\u0329/g, "ᵊ$1").replace(/\u0329/g, "");
+  if (british) ph = ph.replace(/iə/g, "ɪə").replace(/əʊ/g, "Q");
+  else ph = ph.replace(/oʊ/g, "O").replace(/ɜːɹ/g, "ɜɹ").replace(/ɜː/g, "ɜɹ").replace(/ɪə/g, "iə").replace(/ː/g, "");
+  return ph.replace(/o/g, "ɔ").replace(/ɾ/g, "T").replace(/ʔ/g, "t");
 }
