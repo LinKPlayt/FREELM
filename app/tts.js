@@ -204,23 +204,60 @@ function loadPhonemizer() {
   });
 }
 
-// eSpeak NG (piper-phonemize, WebAssembly), loaded once. Returns, per text, a list per sentence.
-let espeakModule = null;
+// eSpeak NG (piper-phonemize, WebAssembly). Returns, per text, a list per sentence.
+// Every run of it sets eSpeak up again inside the module and never frees that memory: measured, the module
+// aborts after about 70 lines (the fifth or so reel in one sitting, or a "Make all" queue), and then both
+// voices fail, since the classic one uses it too. Each run costs about 140 + the text's length out of roughly
+// 23,000, so the module is replaced well before that (a fresh one takes a moment; the old one is freed), and a
+// run that fails anyway is retried once on a fresh module.
+let espeakModule = null, espeakSpent = 0;
+const ESPEAK_BUDGET = 8000;
 const espeakOut = [];
-async function espeak(texts, voice) {
-  await loadPhonemizer();
-  espeakModule ??= window.createPiperPhonemize({
+function freshEspeak() {
+  espeakSpent = 0;
+  espeakModule = window.createPiperPhonemize({
     print: (line) => { try { espeakOut.push(JSON.parse(line)); } catch { /* not JSON: ignore */ } },
     printErr: () => {},
     locateFile: (f) => VENDOR + "piper/" + f,
   });
-  const mod = await espeakModule;
-  return texts.map((text) => {
-    espeakOut.length = 0;
-    mod.callMain(["-l", voice, "--input", JSON.stringify([{ text }]), "--espeak_data", "/espeak-ng-data"]);
-    return espeakOut.map((r) => r.phonemes || []);
-  });
+  return espeakModule;
 }
+async function espeakRun(args, cost) {
+  if (!espeakModule || espeakSpent + cost > ESPEAK_BUDGET) freshEspeak();
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const mod = await espeakModule;
+      espeakOut.length = 0; espeakSpent += cost;
+      mod.callMain(args);
+      return espeakOut.slice();
+    } catch (e) {
+      if (attempt) throw e;
+      freshEspeak();
+    }
+  }
+}
+async function espeak(texts, voice) {
+  await loadPhonemizer();
+  const out = [];
+  for (const text of texts) {
+    const lines = await espeakRun(["-l", voice, "--input", JSON.stringify([{ text }]), "--espeak_data", "/espeak-ng-data"], 140 + String(text).length);
+    out.push(lines.map((r) => r.phonemes || []));
+  }
+  return out;
+}
+// The sounds of many short texts (the words of a line) in one eSpeak run, American English, as phoneme strings.
+// For timing the captions: a word's sounds say far better than its letters how long it takes to say
+// ("7,176" is five characters and two seconds). Falls back to null if eSpeak answers unexpectedly.
+export async function wordSounds(texts) {
+  if (!texts.length) return [];
+  try {
+    await loadPhonemizer();
+    const lines = await espeakRun(["-l", "en-us", "--input", JSON.stringify(texts.map((text) => ({ text: String(text) }))), "--espeak_data", "/espeak-ng-data"],
+      140 + texts.reduce((n, t) => n + String(t).length + 12, 0));
+    return lines.length === texts.length ? lines.map((r) => (r.phonemes || []).join("")) : null;
+  } catch (e) { console.warn("word sounds unavailable", e); return null; }
+}
+export const _espeakState = () => ({ spent: espeakSpent, budget: ESPEAK_BUDGET });
 // For the natural voice: IPA strings, sentences joined with a space.
 const espeakIPA = async (texts, voice) => (await espeak(texts, voice)).map((sentences) => sentences.map((p) => p.join("")).join(" "));
 

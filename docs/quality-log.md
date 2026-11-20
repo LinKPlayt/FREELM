@@ -10,6 +10,89 @@ before and after on the same inputs, and add tests so it can't come back.
 
 ---
 
+## v58 · Narration · Captions in step with the voice, and a voice that lasts the sitting
+
+**How it was measured (new).** Every word's true start was found by forced alignment (torchaudio's MMS aligner,
+on the test machine only), on the same 200 real lines as v57, spoken and pause-tightened exactly as in a
+reel. The app's own `timings()` was then run on those recordings and each caption word's start compared with
+the truth. Word timings drive the word-by-word captions, the big-word scenes, the chart's Today / This month
+pills and the number pops.
+
+**Weakest area found.** Captions ran early and drifted.
+
+| On 2,668 words | Before |
+|---|---|
+| Mean error | 127 ms |
+| Words more than 100 ms off | 44% |
+| Words more than 200 ms off | 19% |
+| Worst | 1.2 s |
+| Bias | captions 67 ms early |
+
+Two causes:
+- **Lengths by letters.** Within a phrase, words shared the time by letter count. "7,176" is five characters
+  and two seconds of speech; "A.I." is four characters and two letter names. Letter counts track real word
+  lengths with correlation 0.76.
+- **Breaths ignored.** Only pauses at punctuation were used. When the narrator took a breath with no
+  punctuation, every caption after it ran early by the length of the breath ("There's one number [breath]
+  that tells you…": 0.3 s early for the rest of the line).
+
+**Found on the way: the voice died after about five reels.** eSpeak's WebAssembly module sets eSpeak up again
+on every run and never frees that memory. Measured, it aborted after about 70 line phonemizations (11 runs of
+2,000 characters); v56 too. After that both voices fail for the rest of the sitting, because the classic voice
+uses the same module. A reel phonemizes about 15 lines, so the fifth or so reel in one sitting, or a
+"Make all" queue, lost its voice.
+
+**What changed.**
+- `app/tts.js`:
+  - Each eSpeak run costs about 140 + the text's length out of roughly 23,000 (fitted on the measurements).
+    The module is replaced when 8,000 is spent, and a run that fails anyway is retried once on a fresh module.
+    Old modules are freed: 2,000 lines in a row ran without a problem, which would need gigabytes otherwise.
+  - Cost: about 4 ms a line (60 lines in 944 ms against 686 ms).
+  - `wordSounds()` sounds out all the words of a line in one eSpeak run (its input is a list).
+- `app/make.js`:
+  - `soundWeights()`: a word's share of the time comes from its sounds. About 57 ms a sound, plus 28 ms for a
+    long vowel, 42 ms for a stressed syllable, 16 ms before a comma without a pause. Fitted by least squares on
+    1,615 forced-aligned words. Correlation with real lengths 0.93, against 0.76 for letters; 0.92 on held-out
+    lines. Falls back to letters if the sounds are missing or belong to an older version of the line.
+  - `pauseBounds()`: every pause the voice makes, punctuation or breath, is matched to the word gap where it
+    falls, by a small alignment (dynamic programming): pauses keep their order, a punctuated gap is preferred,
+    and a pause that fits nowhere is left inside a word.
+  - The audio itself is unchanged: pause tightening still uses the old matching.
+
+**Measured**, same recordings, before → after:
+
+| | Before | After |
+|---|---|---|
+| Mean error | 127 ms | 82 ms |
+| Median | 84 ms | 48 ms |
+| 90th percentile | 301 ms | 190 ms |
+| Words more than 100 ms off | 43.7% | 25.4% |
+| Words more than 200 ms off | 19.3% | 8.8% |
+| Bias | 67 ms early | 11 ms early |
+| Michael (a voice not used for fitting), 47 hardest lines (numbers, acronyms, headlines): mean | 229 ms | 157 ms |
+| Same, words more than 200 ms off | 42% | 30% |
+
+Of the two changes, the sounds do most of the work (letters → sounds alone: 43.7% → 27.9% of words more than
+100 ms off); matching every pause takes it to 25.4%.
+
+**Tried and dropped** (measured worse or no different):
+- Snapping word boundaries to dips in loudness: 25.4% → 27.3%.
+- Treating dash tokens ("--") as punctuation: no change.
+- Retuning the alignment's two constants: within ±1%, so the first values were kept.
+
+**Tests.**
+- `tests/web/logic.mjs`, "captions in step with the voice (v58)":
+  - a breath without punctuation;
+  - two pauses, each at its own gap;
+  - sound weights;
+  - stale sounds aren't used;
+  - batched word sounds.
+- `tests/web/fuzz.mjs`:
+  - 60 texts of 2,000 characters in a row (the old module died at 11);
+  - word sounds for hostile text.
+
+---
+
 ## v57 · Narration · Acronyms said right, British voices fixed
 
 **How it was measured (new).** The weakest area was found by listening with a machine instead of guessing.
@@ -474,12 +557,17 @@ Found on the live feed right after release and added: a trailing fragment that p
 3. **Names and tickers that read as words.** In the v57 run the remaining real errors in news are proper nouns and
    word-like tickers: IREN → "iron", LITE → "light", VanEck → "van act", Loosdog, Goolsbee → "Goolsby". Ticker
    context (a list of all-caps tokens) could tell a ticker from a word.
-4. **"Your topic" jargon.** Formal words are now plain (v55), but technical terms remain ("distribution",
+4. **Captions on the hardest lines.** Headlines full of numbers, tickers and names still have 21–30% of words
+   more than 200 ms off (v58). eSpeak's sounds for a word on its own differ from how Kokoro says it in the line;
+   splitting the line's own phonemes by word would be closer.
+5. **"Your topic" jargon.** Formal words are now plain (v55), but technical terms remain ("distribution",
    "securitization"); explaining a term needs a source sentence that does.
-5. **Photo supply.** Where no photo fits by meaning (Inflation, Roth IRA, a mortgage explainer), every scene is an
+6. **Photo supply.** Where no photo fits by meaning (Inflation, Roth IRA, a mortgage explainer), every scene is an
    illustration; other searches (the topic's Wikipedia image, related subjects) could find real photos that fit.
-6. **A measuring tool in the repo.** The Whisper/DNSMOS check (v57) lives outside the repository; adding it under
-   `scripts/` would let every narration change be measured the same way.
+7. **A measuring tool in the repo.** The Whisper/DNSMOS (v57) and forced-alignment (v58) checks live outside the
+   repository; adding them under `scripts/` would let every narration change be measured the same way.
+8. **A review-editor timer.** `app/main.js` rechecks an edited line in a timeout that reads `state.plan.fact`
+   after the plan can be cleared (an occasional uncaught error in the fuzz test). UI code, outside these three areas.
 
 (Done: AAPL-like tickers, queue item 5 before v57: spelled letters now come from a table, so "A.A.P.L." keeps both
 A's.)

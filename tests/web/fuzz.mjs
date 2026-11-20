@@ -131,6 +131,22 @@ export default async function ({ t, newPage }) {
   t.ok(ph.failed.length === 0, `eSpeak handles ${ph.n} hostile texts for both voices and both accents`, ph.failed.join(" | "));
   t.ok(ph.slowest < 3000, `slowest pronunciation ${ph.slowest} ms`, String(ph.slowest));
   t.ok(ph.spoken.every((n) => Number.isFinite(n)), "the voice speaks hostile text without crashing", JSON.stringify(ph.spoken));
+  // eSpeak's module ran out of memory after about 70 lines (11 calls of 2,000 characters), ending both voices for
+  // the rest of the sitting. It's now replaced before that: 60 long texts in a row must all work.
+  const longRun = await page.evaluate(async () => {
+    const T = await import("./app/tts.js"); T.setVoice({ engine: "natural", voice: "af_heart" });
+    const text = "The market moved a lot today, and here is why it matters for your savings. ".repeat(27).slice(0, 2000);
+    for (let i = 0; i < 60; i++) { try { const [p] = await T.phonemize([text]); if (!p || p.length < 500) return `call ${i} gave ${p?.length}`; } catch (e) { return `call ${i} threw ${e.message || e}`; } }
+    return "ok";
+  });
+  const sounds = await page.evaluate(async () => {
+    const T = await import("./app/tts.js");
+    const texts = ["", " ", "😀💰🚀", "汉字", "\u0000\t", "<img src=x onerror=1>", "$".repeat(300), "a".repeat(3000), "\"quoted\" {json}: [1]", "...!!!???", "7,176,"];
+    const r = await T.wordSounds(texts);
+    return r === null || (Array.isArray(r) && r.length === texts.length && r.every((x) => typeof x === "string")) ? "ok" : JSON.stringify(r).slice(0, 200);
+  });
+  t.ok(sounds === "ok", "word sounds for hostile text: one string per text (or none), never a crash", sounds);
+  t.ok(longRun === "ok", "pronunciation keeps working over a long sitting (60 texts of 2,000 characters)", longRun);
 
   t.section("Fuzz: the app's text boxes");
   const ui = await page.evaluate(async () => {

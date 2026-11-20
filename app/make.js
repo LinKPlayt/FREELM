@@ -2,7 +2,7 @@
 import * as research from "./research.js";
 import { buildEvergreen, buildNews, buildMarket, buildCustom, buildMetadata, speakable, statFor, visualMatch } from "./script.js";
 import { MediaFinder, STRONG } from "./media.js";
-import { loadVoice, phonemize, synthesize, voiceRate, setVoice, releaseVoice, voiceDownloadMB, voiceNotice, voiceEngine, naturalFailed } from "./tts.js";
+import { loadVoice, phonemize, synthesize, voiceRate, setVoice, releaseVoice, voiceDownloadMB, voiceNotice, voiceEngine, naturalFailed, wordSounds } from "./tts.js";
 import { generateMusic, mix, resample, SR } from "./music.js";
 import { loadFonts, renderReel, drawMarketCover } from "./render.js";
 import { analyzeLine, iconFor } from "./visuals.js";
@@ -101,6 +101,7 @@ async function voiceScript(script, say, base = 1.0) {
   const all = [...script.lines, ...script.extras];
   const phon = await phonemize(all.map((l) => speakable(l.text)));
   all.forEach((l, i) => { l.phonemes = phon[i]; });
+  for (const l of all) await soundsFor(l);                 // each word's sounds, for timing the captions
   let speed = base;
   const voice = async (line) => tighten(await synthesize(line.phonemes, speed * (line.pace || 1)), line.text, voiceRate());
   const speak = async (lines) => {
@@ -138,7 +139,7 @@ async function voiceScript(script, say, base = 1.0) {
     for (let i = 0; i < script.lines.length; i++) {
       const l = script.lines[i], fixed = l.text.replace(/\b\d+ questions\b/, `${of} questions`).replace(/\bout of \d+\b/, `out of ${of}`);
       if (fixed === l.text) continue;
-      l.text = fixed; [l.phonemes] = await phonemize([speakable(fixed)]); clips[i] = await voice(l);
+      l.text = fixed; [l.phonemes] = await phonemize([speakable(fixed)]); await soundsFor(l); clips[i] = await voice(l);
     }
   }
   while (seconds(clips, script.lines) > MAX_S && script.lines.length > 4) {       // still too long: drop a middle line
@@ -196,6 +197,24 @@ function punctuationPauses(clip, tokens, weights, rate, start, end) {
   return bounds;
 }
 const weightsOf = (tokens) => tokens.map((tok) => speakable(tok).length + 2.5 + (/[.,!?;:]$/.test(tok) ? 3 : 0));
+// How long each word of a line takes to say, from its sounds rather than its letters: "7,176" is five letters but
+// "seven thousand one hundred seventy-six", "A.I." four characters but two letter names. Fitted on 1,615 words of
+// the natural voice, forced-aligned (v58): about 57 ms a sound, plus 28 ms for a long vowel, 42 ms for a stressed
+// syllable and 16 ms before a comma with no pause. It tracks real word lengths far better than letters (correlation
+// 0.93 against 0.76). Null when the sounds aren't there (or are for an older version of the line).
+async function soundsFor(line) {
+  const tokens = String(line.text || "").split(/\s+/).filter(Boolean);
+  const ph = await wordSounds(tokens.map((t) => speakable(t)));
+  line.sounds = ph ? { text: line.text, ph } : null;
+}
+function soundWeights(line, tokens) {
+  const s = line.sounds;
+  if (!s || s.text !== line.text || s.ph.length !== tokens.length) return null;
+  return s.ph.map((p, j) => {
+    const q = String(p).replace(/[ˈˌ\s,.;:!?]/g, ""), long = q.split("ː").length - 1;
+    return Math.max(0.04, 0.057 * (q.length - long) + 0.0275 * long + 0.0415 * (String(p).split("ˈ").length - 1) + (/[.,!?;:—]["”')]*$/.test(tokens[j]) ? 0.0155 : 0) - 0.017);
+  });
+}
 
 // The voice's own pauses inside a line, shaped like a narrator's. It pauses 0.4–0.5 s at every comma (people
 // pause at fewer than half of them, and briefly) and nearly as long at a colon as at a full stop. Each pause
@@ -227,9 +246,50 @@ export function tighten(clip, text, rate) {
   return out;
 }
 
-// Word timings for the captions. Each line is split into phrases at its punctuation, and each phrase
-// is lined up with a real pause in the recorded voice (the narrator pauses at commas and full stops),
-// so the highlighted word stays with the voice. Within a phrase, words share the time by length.
+// Where the line's words break at the voice's pauses: every pause the voice makes (at punctuation, and the
+// breaths it takes where there's none), each matched to the gap between two words where it falls. A breath
+// with no punctuation used to be ignored, and every caption after it ran early by the length of the breath.
+// The match is a small alignment (dynamic programming): pauses keep their order, each takes the word gap whose
+// expected place in the speaking time (by word lengths) is nearest, a gap with punctuation is preferred, and a
+// pause that fits nowhere is left inside a word. Returns [tokenIndex, from, to] like punctuationPauses.
+function pauseBounds(clip, tokens, weights, rate, start, end) {
+  const pauses = pausesIn(clip, rate).filter(([a, b]) => a > start + 0.05 && b < end - 0.03);
+  const n = tokens.length;
+  if (!pauses.length || n < 2) return [];
+  const speech = (end - start) - pauses.reduce((s, [a, b]) => s + (b - a), 0);
+  const total = weights.reduce((a, b) => a + b, 0) || 1;
+  const cum = []; weights.reduce((s, w, j) => (cum[j] = s + w), 0);      // weight up to and including token j
+  const punct = tokens.map((t) => /[.,!?;:—…]["”')]*$/.test(t));
+  // Speaking time before each pause (pauses before it don't count).
+  let before = 0, last = start;
+  const at = pauses.map(([a, b]) => { before += a - last; last = b; return before; });
+  const SKIP = 0.3, BONUS = 0.12;
+  const cost = (k, g) => Math.abs(at[k] - speech * cum[g] / total) - (punct[g] ? BONUS : 0);
+  // dp[h + 1]: least cost so far with the last placed pause at gap h (h = -1: none yet). Each pause is either placed
+  // at a later gap than the one before it, or left inside a word (SKIP). back[k][h + 1] = [previous h, placed?].
+  const K = pauses.length, G = n - 1, INF = 1e9;
+  let dp = new Array(G + 1).fill(INF); dp[0] = 0;
+  const back = [];
+  for (let k = 0; k < K; k++) {
+    const next = dp.map((c) => c + SKIP), bk = dp.map((_, i) => [i - 1, false]);
+    for (let h = -1; h < G; h++) {
+      if (dp[h + 1] >= INF) continue;
+      for (let g = h + 1; g < G; g++) {
+        const c = dp[h + 1] + cost(k, g);
+        if (c < next[g + 1]) { next[g + 1] = c; bk[g + 1] = [h, true]; }
+      }
+    }
+    back.push(bk); dp = next;
+  }
+  let h = dp.indexOf(Math.min(...dp)) - 1;
+  const place = new Array(K).fill(-1);
+  for (let k = K - 1; k >= 0; k--) { const [prev, placed] = back[k][h + 1]; if (placed) place[k] = h; h = prev; }
+  return pauses.map(([a, b], k) => [place[k], a, b]).filter((p) => p[0] >= 0);
+}
+
+// Word timings for the captions (and the big words, chart labels and number pops). Each line is split into
+// phrases at the real pauses in the recorded voice (see pauseBounds), so the highlighted word stays with the
+// voice. Within a phrase, words share the time by how long they take to say (their sounds, see soundWeights).
 function timings(script, clips) {
   const words = [], spans = []; let t = 0;
   const rate = voiceRate();
@@ -237,10 +297,10 @@ function timings(script, clips) {
     const dur = clips[i].length / rate;
     spans.push([t, t + dur]);
     const tokens = line.text.split(/\s+/).filter(Boolean);
-    const weights = weightsOf(tokens);
+    const weights = soundWeights(line, tokens) || weightsOf(tokens);
     const start = 0.04, end = Math.max(start + 0.1, dur - 0.04);
-    // Phrase boundaries: each punctuation mark snapped to the real pause the narrator makes there.
-    const bounds = punctuationPauses(clips[i], tokens, weights, rate, start, end);
+    // Phrase boundaries: every real pause in the voice, each placed at the word gap it belongs to.
+    const bounds = pauseBounds(clips[i], tokens, weights, rate, start, end);
     // Build phrases: [firstToken, lastToken, from, to]
     const phrases = []; let from = 0, at = start;
     for (const b of bounds) { phrases.push([from, b[0], at, b[1]]); from = b[0] + 1; at = b[2]; }
@@ -863,7 +923,7 @@ export async function planFromDraft(draft, ui) {
 }
 
 // For the automated tests (tests/web): internal helpers, no app behaviour depends on this.
-export const _test = { timings, pausesIn, limitAndLevel, gapAfter, tighten };
+export const _test = { timings, pausesIn, limitAndLevel, gapAfter, tighten, pauseBounds, soundWeights };
 
 // After a video is made: draw the other ways each of its scenes could be illustrated, and save them,
 // so a better picture is ready (and instant) if you remix it or the same idea comes up again.

@@ -517,5 +517,34 @@ export default async function ({ t, newPage }) {
     "initials before a name get no full stop (\"J.P. Morgan\"), a sentence-ending acronym keeps it, possessives and compounds are spelled", v57.acr2.join(" | "));
   t.ok(v57.acrGb[0] === "ðə jˌuːkˈA and ðɪ ˌiːsˌiːbˈiː.", "British voices spell acronyms with British letter names", v57.acrGb[0]);
   t.ok(v57.unknown.length === 0, "every phoneme sent to the voice is in its vocabulary", [...new Set(v57.unknown)].join(" "));
+
+  t.section("Logic: captions in step with the voice (v58)");
+  const v58 = await page.evaluate(async () => {
+    const MK = await import("./app/make.js"), T = await import("./app/tts.js"), S = await import("./app/script.js");
+    const rate = 24000, tone = (sec) => Float32Array.from({ length: Math.round(sec * rate) }, (_, i) => 0.5 * Math.sin(i / 3)), sil = (sec) => new Float32Array(Math.round(sec * rate));
+    const cat = (...a) => { const o = new Float32Array(a.reduce((k, x) => k + x.length, 0)); let k = 0; for (const x of a) { o.set(x, k); k += x.length; } return o; };
+    const out = {};
+    // A breath with no punctuation after the 3rd of 6 equal words: the 4th word starts after the breath, not before it.
+    const clip = cat(sil(0.04), tone(1.2), sil(0.34), tone(1.2), sil(0.04)), text = "one two three four five six";
+    const w = MK._test.timings({ lines: [{ text, kind: "media" }] }, [clip]).words;
+    out.breath = [w[3].start.toFixed(2), w[2].end <= 1.3];
+    // Two pauses, only one at punctuation: both are used, in order, each at its own gap.
+    const clip2 = cat(sil(0.04), tone(0.8), sil(0.3), tone(0.8), sil(0.3), tone(0.8), sil(0.04));
+    out.two = MK._test.pauseBounds(clip2, "aa bb, cc dd ee ff".split(" "), [1, 1, 1, 1, 1, 1], rate, 0.04, clip2.length / rate - 0.04).map((b) => b[0]);
+    // Word lengths from their sounds: a number said in full outweighs its digits' letters.
+    const toks = ["The", "S&P", "is", "at", "7,176,", "down", "2.0%."];
+    const ph = await T.wordSounds(toks.map((x) => S.speakable(x)));
+    const line = { text: toks.join(" "), sounds: { text: toks.join(" "), ph } };
+    out.weights = MK._test.soundWeights(line, toks);
+    out.stale = MK._test.soundWeights({ text: "changed", sounds: line.sounds }, ["changed"]);
+    out.batch = (await T.wordSounds(["Hello there. Second sentence", "", "money."])).map((x) => x.length > 0);
+    return out;
+  });
+  t.ok(v58.breath[0] >= "1.55" && v58.breath[0] <= "1.62" && v58.breath[1], "a breath the voice takes where there's no punctuation holds the next caption back until the voice goes on", JSON.stringify(v58.breath));
+  t.ok(v58.two.join() === "1,3", "every pause is matched to its own word gap, in order", JSON.stringify(v58.two));
+  const [wThe, wSP, wIs, wAt, wNum] = v58.weights || [];
+  t.ok(v58.weights && wNum > 4 * wAt && wSP > 2 * wIs && wThe < wSP, "a word's caption time comes from its sounds: \"7,176\" (said in full) gets far more than \"at\"", JSON.stringify(v58.weights));
+  t.ok(v58.stale === null, "sounds for an older version of a line aren't used (the letters are, as before)");
+  t.ok(v58.batch.join() === "true,false,true", "many words are sounded out in one eSpeak run, one answer per word, empty for empty", JSON.stringify(v58.batch));
   await page.context().close();
 }

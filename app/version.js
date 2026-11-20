@@ -1,9 +1,13 @@
 // The app's version and its update notes, shown once in a "What's new" window after each update.
 // When you deploy: bump APP_VERSION, add an entry at the top of UPDATES, and set the same number in
 // sw.js (VERSION = "reelbot-v<APP_VERSION>"). A test checks the two match.
-export const APP_VERSION = 57;
+export const APP_VERSION = 58;
 
 export const UPDATES = [
+  { version: 58, title: "Captions in step with the voice", items: [
+    "Word-by-word captions, big words, chart labels and number pops now follow the narrator much more closely: each word's timing comes from its sounds, not its letters, so \u201c7,176\u201d or \u201cA.I.\u201d no longer throws the words after it off, and a breath the narrator takes mid-sentence holds the next caption back.",
+    "Making several videos in one sitting no longer loses the voice: the pronunciation engine ran out of memory after about five videos and was replaced only when the app restarted.",
+  ] },
   { version: 57, title: "Acronyms said right, and the British voices fixed", items: [
     "The natural voice says acronyms the way people do: \u201cAI\u201d is \u201cay-eye\u201d (it was often heard as \u201cuh eye\u201d), and ETF, IPO, IRA, APR and tickers like TSLA get the stress on the last letter. Ones inside a word (\u201cFDIC-insured\u201d) are spelled too.",
     "Emma, George and Fable (the British voices) work again. Before, choosing one switched the reel, and every reel after it, to the classic voice. If that happened to you, the natural voice comes back on its own.",
