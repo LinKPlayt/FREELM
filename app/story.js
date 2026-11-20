@@ -153,8 +153,21 @@ export function fits(text, topic) {
 /* ---------------------------------------------------------------- saying it simply */
 // Shortens a sentence for speech without rewording it: drops asides and trailing sub-clauses so one
 // idea is said per line. Words are only removed, never added, so the fact check still matches the source.
+// Plain words for formal ones, only where the meaning stays exactly the same (after the US plain-language
+// guidelines): "generally not taxed upon distribution" -> "…on distribution", "individuals" -> "people".
+const PLAIN = [[/\bin order to\b/gi, "to"], [/\bdue to the fact that\b/gi, "because"], [/\bin the event that\b/gi, "if"], [/\bin excess of\b/gi, "more than"],
+  [/\bprior to\b/gi, "before"], [/\bsubsequent to\b/gi, "after"], [/\bsubsequently\b/gi, "later"], [/\b(?<!\ban )approximately\b/gi, "about"], [/\bnumerous\b/gi, "many"],
+  [/\butiliz(?:e|es|ed|ing)\b/gi, (m) => ({ e: "use", es: "uses", ed: "used", ing: "using" })[m.toLowerCase().slice(6)] || "use"], [/\butilization\b/gi, "use"],
+  [/\bcommence(s|d)?\b/gi, (m, e) => (e === "s" ? "starts" : e === "d" ? "started" : "start")], [/\bis able to\b/gi, "can"], [/\bare able to\b/gi, "can"],
+  [/\bobtain(s)?\b/gi, (m, e) => (e === "s" ? "gets" : "get")], [/\bassistance\b/gi, "help"], [/\bsufficient\b/gi, "enough"],
+  [/\bindividuals'/gi, "people's"], [/\bindividuals\b/gi, "people"], [/\bupon\b/gi, "on"], [/\bwhereby\b/gi, "in which"], [/\bin addition to\b/gi, "besides"]];
+export function plainWords(text) {
+  let t = String(text || "");
+  for (const [re, to] of PLAIN) t = t.replace(re, (...a) => { const r = typeof to === "function" ? to(...a) : to; return /^[A-Z]/.test(a[0]) ? r.replace(/^./, (c) => c.toUpperCase()) : r; });
+  return t;
+}
 export function simplify(text, max = 22) {
-  let t = text.replace(/\s+/g, " ").trim();
+  let t = plainWords(text.replace(/\s+/g, " ").trim());
   t = t.replace(/^In (economics|finance|accounting|business|banking|law|investing|macroeconomics|microeconomics|personal finance|real estate|the United States|the U\.S\.),\s+/i, "")
     .replace(/^([A-Z][^,]{2,60}),\s+(?:also|sometimes|often|commonly|formerly|better)?\s*(?:known|called|referred to|abbreviated|spelled) (?:as )?[^,]{2,60},\s+(is|are|was|were|refers|means)\b/, "$1 $2")
     .replace(/[,;]\s+(?:i\.e\.,?|that is,?|in other words,?)\s+[^,;.]{3,80}(?=[,;.])/g, "")

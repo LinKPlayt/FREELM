@@ -10,6 +10,34 @@ before and after on the same inputs, and add tests so it can't come back.
 
 ---
 
+## v55 · Scripts · Plain words for formal ones
+
+**Weakest area found.** Researched sentences keep Wikipedia's register: "generally not taxed upon distribution",
+"individuals", "prior to", "utilized", "in order to". 5,071 of the on-phone library's 123,532 sentences (4.1%)
+contain at least one such phrase; `simplify()` only trimmed structure.
+
+**Technique.** The US federal plain-language guidelines' word list, limited to swaps that keep the meaning exactly.
+
+**What changed** (`app/story.js`): `plainWords()`, run inside `simplify()`. It swaps:
+- in order to → to; due to the fact that → because; in the event that → if; in excess of → more than
+- prior to → before; subsequent to → after; subsequently → later
+- approximately → about; numerous → many; utilize → use; commence → start; is/are able to → can
+- obtain → get; assistance → help; sufficient → enough; individuals → people
+- upon → on; whereby → in which; in addition to → besides
+
+Capitals at the start of a sentence are kept. Ambiguous words ("purchase", noun or verb) are left alone.
+
+**Measured** on 25 random library sentences: 21 read correctly at once. The 4 errors were fixed and are now
+tests:
+- "to be use" (an off-by-one);
+- "people' implementation";
+- "is got" (passive "obtained" is now left alone);
+- "an about" ("an approximately" is now left alone).
+
+**Tests.** "formal words become plain ones only where the meaning stays the same" in `tests/web/logic.mjs`.
+
+---
+
 ## v54 · Scripts · Biographies about the person, not their relatives
 
 **Weakest area found.** On Charlie Munger's real article, one of the four lines was "His grandfather, Thomas
@@ -350,7 +378,8 @@ Found on the live feed right after release and added: a trailing fragment that p
    October surge 20.5%"). A spoken rewrite needs care to stay faithful.
 2. **Emphasis.** The voice gives every word the same weight; key numbers and contrast words ("but", "only",
    "never") could be stressed (Kokoro takes stress marks in its phonemes).
-3. **"Your topic" jargon.** Wikipedia phrasing still comes through ("taxed upon distribution").
+3. **"Your topic" jargon.** Formal words are now plain (v55), but technical terms remain ("distribution",
+   "securitization"); explaining a term needs a source sentence that does.
 4. **Photo supply.** Where no photo fits by meaning (Inflation, Roth IRA, a mortgage explainer), every scene is an
    illustration; other searches (the topic's Wikipedia image, related subjects) could find real photos that fit.
 5. **AAPL-like tickers.** A doubled letter in a spelled ticker ("A.A.P.L.") still reduces the second A to "uh".
