@@ -142,6 +142,17 @@ export function dropParentheticals(text) {
 }
 
 // Research any topic the user types: find the best Wikipedia article and return its key sentences.
+// A person's birth year from Wikipedia's short description ("American investor and philanthropist (born 1930)",
+// "(1924–2023)"), so a life is told in time order. 0 when it isn't a person or isn't known.
+export async function birthYear(title) {
+  try {
+    const res = await fetchT(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(String(title).replaceAll(" ", "_"))}`, 6000);
+    if (!res.ok) return 0;
+    const m = String((await res.json()).description || "").match(/\((?:born |b\. )?(1[6-9]\d\d|20[0-2]\d)\s*(?:[–-]\s*(?:1[6-9]\d\d|20[0-2]\d))?\)/);
+    return m ? Number(m[1]) : 0;
+  } catch { return 0; }
+}
+
 export async function wikipediaTopic(query) {
   const api = "https://en.wikipedia.org/w/api.php?format=json&origin=*&";
   const search = await fetchT(api + new URLSearchParams({ action: "query", list: "search", srsearch: query, srlimit: "5", srnamespace: "0" }), 10000);
@@ -159,6 +170,11 @@ export async function wikipediaTopic(query) {
     const text = (page?.extract || "").replace(/\n+[A-Z][^.\n]{0,60}\n/g, "\n").replace(/\s+/g, " ");
     const text2 = dropParentheticals(text).replace(/\s*\[[^\]]*\]/g, "").replace(/\s+/g, " ").trim();
     if (!text2 || /may refer to/i.test(text)) continue;
+    // A person's birth year, from the opening "(born August 30, 1930)" before the brackets go: it dates
+    // "at age seven" for the story's time order.
+    // (Or a life span: "(January 1, 1924 – November 28, 2023)".)
+    const born = Number((text.match(/\(\s*(?:[^()]{0,60}?;\s*)?born\b[^()]{0,60}?\b(1[6-9]\d\d|20[0-2]\d)\b/i) || text.slice(0, 300).match(/\(\s*(?:[^()]{0,60}?;\s*)?(?:[A-Z][a-z]+ \d{1,2}, )?(1[6-9]\d\d|20[0-2]\d)\s*[–-]\s*(?:[A-Z][a-z]+ \d{1,2}, )?(?:1[6-9]\d\d|20[0-2]\d)\s*\)/)
+      || text.match(/\bwas born\b[^.]{0,50}?\b(1[6-9]\d\d|20[0-2]\d)\b/i) || [])[1] || 0);
     const all = sentencesOf(text2).map((x) => x.trim());
     const sentences = [];
     let prevKept = false;
@@ -175,7 +191,7 @@ export async function wikipediaTopic(query) {
     if (sentences.length >= 2) {
       // "Compound interest or anatocism is …" -> "Compound interest is …"
       sentences[0] = sentences[0].replace(/^([A-Z][\w '-]{2,40}?),? (?:or|also known as|also called) [\w' -]{2,30}?,? (is|are|refers to)\b/, "$1 $2");
-      return { title: page.title, sentences, url: "https://en.wikipedia.org/wiki/" + encodeURIComponent(page.title.replaceAll(" ", "_")) };
+      return { title: page.title, sentences, born, url: "https://en.wikipedia.org/wiki/" + encodeURIComponent(page.title.replaceAll(" ", "_")) };
     }
   }
   return null;

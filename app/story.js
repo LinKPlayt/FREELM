@@ -77,6 +77,18 @@ const RISK = /\b(risks?|risky|volatil\w*)\b/i;
 // A figure worth showing: a percentage, an amount of money or a big number (a bare year isn't one).
 const HAS_NUMBER = /\d\s?%|\bpercent\b|[$€£]\s?\d|\b\d[\d,.]*\s?(million|billion|trillion|thousand)\b|\b(half|double[sd]?|twice|triple[sd]?)\b/i;
 const HAS_YEAR = /\b(1[5-9]\d\d|20\d\d)\b/;
+// When something in a life happened: its year, or the birth year plus the age it gives ("at age seven",
+// "at the age of 11", "aged 19", "when he was 11"), so a childhood moment comes before a 1947 one. 9999 if unknown.
+const NUM_WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
+const AGE = /\b(?:at (?:the )?age (?:of )?|aged |by (?:the )?age (?:of )?|when (?:he|she|they) (?:was|were) )(\d{1,2}|(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:[- ](?:one|two|three|four|five|six|seven|eight|nine))?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen)\b/i;
+export function eventYear(text, born = 0) {
+  const y = String(text).match(HAS_YEAR);
+  if (y) return Number(y[0]);
+  const a = born && String(text).match(AGE);
+  if (!a) return 9999;
+  const age = /^\d/.test(a[1]) ? Number(a[1]) : a[1].toLowerCase().split(/[- ]/).reduce((n, w) => n + (NUM_WORDS[w] || 0), 0);
+  return age > 0 && age < 110 ? born + age : 9999;
+}
 // "…as of October 2018" is old news by now: figures with a date more than a few years back are skipped.
 function stale(text) {
   const m = text.match(/\b(?:as of|as at|since|in early|in late|by the end of)\s+(?:\d{1,2}\s+)?(?:(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+)?(?:\d{1,2},\s+)?(20\d\d)\b/i);
@@ -101,7 +113,7 @@ export function isDefinition(text, topic) {
   const head = words(text).slice(0, 14).join(" ");
   const m = topicRe(topic).exec(head);
   if (!m || ADVICE_START.test(text)) return false;
-  return /^[^.;:]{0,45}?\s+(?:(?:is|are|was|were) (?:(?:a|an|the)\s+)?(?:(?:common|general|broad|informal|technical|popular|legal)\s+)?(?:a|an|the|any|one|when|what|how|money|digital|terms?|names?|words?)\b|means\b|refers to\b|describes\b)/.test(head.slice(m.index + m[0].length));
+  return /^[^.;:]{0,45}?\s+(?:(?:(?:is|are|was|were)(?: also)?|(?:can|may)(?: also)? be) (?:(?:a|an|the)\s+)?(?:(?:common|general|broad|informal|technical|popular|legal)\s+)?(?:a|an|the|any|one|when|what|how|money|digital|terms?|names?|words?)\b|means\b|refers to\b|describes\b)/.test(head.slice(m.index + m[0].length));
 }
 export const isAdvice = (t) => ADVICE_START.test(t) || /\byou (should|can|could|need)\b/i.test(t);
 
@@ -161,9 +173,12 @@ export function simplify(text, max = 22) {
 
 // A sentence that leans on the one before it ("It avoids…", "This increase…") stands on its own again
 // when its opening pronoun is replaced by the topic; otherwise it's only usable right after its neighbour.
-export function standAlone(text, topic, { plural = false, person = false } = {}) {
-  // A person: "He is…" -> "Buffett is…" (their surname).
-  if (person && /^(He|She) (?=[a-z])/.test(text)) return text.replace(/^(He|She) /, topic.replace(/\s+\(.*\)$/, "").split(/\s+/).at(-1) + " ");
+// pronoun: the one the article uses for its person ("He"/"She"). Only that one is replaced: after "Munger married
+// Nancy Barry Borthwick.", a "She was a Pasadena native…" is about her, and must not become "Munger was…".
+export function standAlone(text, topic, { plural = false, person = false, pronoun = null } = {}) {
+  // A person: "He is…" -> "Buffett is…" (their surname), when the pronoun is theirs.
+  const pr = person && text.match(/^(He|She) (?=[a-z])/);
+  if (pr) return pr[1] === pronoun ? text.replace(/^(He|She) /, topic.replace(/\s+\(.*\)$/, "").split(/\s+/).at(-1) + " ") : null;
   const m = text.match(/^(It|They) (?=[a-z])/);
   if (m) {
     const name = /^[A-Z]{2}/.test(topic) ? topic : topic.replace(/^./, (c) => c.toUpperCase());
@@ -180,7 +195,10 @@ const withLead = (role, text) => (LEADS[role] ? `${LEADS[role]} ${role !== "take
 
 // Builds the body of an explainer about `topic` from candidate sentences (in source order).
 // Returns [{ text, claim, role, source, tip }] : definition, how, number, why/risk, takeaway.
-export function composeStory(topic, niche, candidates, { max = 5, takeaway = true, person = false } = {}) {
+export function composeStory(topic, niche, candidates, { max = 5, takeaway = true, person = false, born = 0 } = {}) {
+  // The pronoun the article uses for its person (articles are consistent); none when it isn't clear.
+  const all = candidates.map((c) => c.text || "").join(" "), he = (all.match(/\b(he|his|him|himself)\b/gi) || []).length, she = (all.match(/\b(she|her|hers|herself)\b/gi) || []).length;
+  const pronoun = !person ? null : he >= 2 * she && he >= 2 ? "He" : she >= 2 * he && she >= 2 ? "She" : null;
   const pool = [];
   candidates.forEach((c, i) => {
     const raw = typeof c === "string" ? c : c.text;
@@ -209,7 +227,7 @@ export function composeStory(topic, niche, candidates, { max = 5, takeaway = tru
     if (!follows) {
       // "some of these episodes…", "such loans…" point at a sentence that isn't here.
       if (/\b(these|those|such)\s+[a-z]+|\bthe (above|following|same)\b|^the (first|second|third|last|former|latter|two|three|four|remaining|other|aforementioned)\b/i.test(text)) { used.push(p); return false; }
-      text = standAlone(text, topic, { person }); if (!text) { used.push(p); return false; }
+      text = standAlone(text, topic, { person, pronoun }); if (!text) { used.push(p); return false; }
     }
     used.push(p);
     out.push({ raw: p.raw, text: lead && out.length > 1 ? withLead(role, text) : text, claim: text, role, source: p.source });
@@ -238,21 +256,21 @@ export function composeStory(topic, niche, candidates, { max = 5, takeaway = tru
 
   if (person) {
     // A person: who they are, then what they did, in time order. No "why it matters" labels.
-    const rest = pool.filter((p) => fresh(p) && (p.onTopic || /^(He|She) /.test(p.text)) && p.role !== "definition" && !/\b(was born|grew up|his (father|mother|parents)|her (father|mother|parents)|married|divorced|paper route|pinball|high school)\b/i.test(p.text) && standAlone(p.text, topic, { person }))
-      .sort((a, b) => (Number((a.text.match(HAS_YEAR) || [9999])[0]) - Number((b.text.match(HAS_YEAR) || [9999])[0])) || a.i - b.i);
+    const rest = pool.filter((p) => fresh(p) && (p.onTopic || /^(He|She) /.test(p.text)) && p.role !== "definition" && !/\b(was born|grew up|his (father|mother|parents)|her (father|mother|parents)|married|divorced|paper route|pinball|high school)\b/i.test(p.text) && standAlone(p.text, topic, { person, pronoun }))
+      .sort((a, b) => (eventYear(a.text, born) - eventYear(b.text, born)) || a.i - b.i);
     // What they're known for first, then figures, then dated events.
     const KNOWN = /\b(known (for|as)|chairman|chief executive|CEO|founded|co-founded|founder|richest|wealthiest|net worth|largest|pledged|philanthrop\w*|billion|nicknamed|regarded|considered|famous|won|awarded)\b/i;
     // What they're known for comes straight after who they are; then dated events in time order.
     const ok = rest.filter((p) => !/\bas of\b|mark-to-market|put options|forward contracts/i.test(p.text));
     const known = ok.filter((p) => KNOWN.test(p.text)).slice(0, 2);
-    const year = (p) => Number((p.text.match(HAS_YEAR) || [9999])[0]);
-    const events = ok.filter((p) => !known.includes(p) && (HAS_NUMBER.test(p.text) || HAS_YEAR.test(p.text))).sort((a, b) => year(a) - year(b) || a.i - b.i);
+    const year = (p) => eventYear(p.text, born), dated = (t) => eventYear(t, born) < 9999;
+    const events = ok.filter((p) => !known.includes(p) && (HAS_NUMBER.test(p.text) || dated(p.text))).sort((a, b) => year(a) - year(b) || a.i - b.i);
     const others = ok.filter((p) => !known.includes(p) && !events.includes(p));
     for (const p of [...known, ...events, ...others]) { if (out.length >= max) break; if (fresh(p)) take(p, "how", false); }
     // Keep the dated part in time order.
-    const datedAt = out.map((l, k) => (k > known.length && HAS_YEAR.test(l.text) ? k : -1)).filter((k) => k >= 0);
-    const dated = datedAt.map((k) => out[k]).sort((a, b) => Number((a.text.match(HAS_YEAR) || [9999])[0]) - Number((b.text.match(HAS_YEAR) || [9999])[0]));
-    datedAt.forEach((k, j) => { out[k] = dated[j]; });
+    const datedAt = out.map((l, k) => (k > known.length && dated(l.text) ? k : -1)).filter((k) => k >= 0);
+    const inOrder = datedAt.map((k) => out[k]).sort((a, b) => eventYear(a.text, born) - eventYear(b.text, born));
+    datedAt.forEach((k, j) => { out[k] = inOrder[j]; });
   } else {
     // 2. How it works: what the source says right after the definition, else the first "how" sentence.
     const next = def && pool.find((p) => p.i === def.i + 1 && !p.other && fresh(p) && !["definition", "takeaway", "history"].includes(p.role));

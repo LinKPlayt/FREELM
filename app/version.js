@@ -1,9 +1,15 @@
 // The app's version and its update notes, shown once in a "What's new" window after each update.
 // When you deploy: bump APP_VERSION, add an entry at the top of UPDATES, and set the same number in
 // sw.js (VERSION = "reelbot-v<APP_VERSION>"). A test checks the two match.
-export const APP_VERSION = 52;
+export const APP_VERSION = 53;
 
 export const UPDATES = [
+  { version: 53, title: "Bigger, better-framed photos and truer stories", items: [
+    "Photos are framed around their subject: shown as big as they stay sharp, filling the screen when they can, with room above heads, and the camera moves toward the subject instead of drifting anywhere.",
+    "Stories about people are told in time order (a childhood moment comes before a 1947 one), and a sentence about someone else (\u201cShe was a Pasadena native\u2026\u201d after \u201cMunger married\u2026\u201d) is never turned into one about the person.",
+    "A topic is defined once, not twice in a row.",
+    "The narrator spells out tickers and acronyms it used to read as words (TSLA, AGNC, USDS), and a column writer's name before a headline isn't read out.",
+  ] },
   { version: 52, title: "Photos that show what's being said", items: [
     "Photos are chosen by what they show, judged by meaning on your phone: a line about the Federal Reserve gets a Federal Reserve bank, not a city skyline that happened to match the search.",
     "When no photo really fits, the scene gets its illustration instead of a loosely related picture.",

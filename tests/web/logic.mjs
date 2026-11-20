@@ -429,5 +429,45 @@ export default async function ({ t, newPage }) {
   t.ok(ph.model[0] && ph.sims && ph.sims[0] >= 0.5 && ph.sims[1] <= 0.2, "the meaning model ships with the app, loads and is released; a Fed line is close to a Fed bank and far from a city skyline", JSON.stringify(ph.sims));
   t.ok(ph.visuals.join() === "photo,illus,photo,photo,photo,illus",
     "photos of the same subject never run back to back (a different subject may follow; a scene set to Photo keeps it); an unrelated photo isn't shown", ph.visuals.join());
+
+  // v53: photos framed around their subject; biographies in time order and about the right person; tickers spelled.
+  t.section("Logic: framing, biographies and pronunciation (v53)");
+  const v53 = await page.evaluate(async () => {
+    const R = await import("./app/render.js"), ST = await import("./app/story.js"), SC = await import("./app/script.js");
+    const out = {};
+    // a wide photo with its subject on the right: the window that keeps most of it is on the right
+    const c = document.createElement("canvas"); c.width = 1200; c.height = 800; const x = c.getContext("2d");
+    x.fillStyle = "#87a0b8"; x.fillRect(0, 0, 1200, 800);
+    for (let i = 0; i < 40; i++) { x.fillStyle = i % 2 ? "#c03020" : "#f0e040"; x.fillRect(820 + (i % 8) * 40, 200 + Math.floor(i / 8) * 80, 30, 60); }
+    const bmp = await createImageBitmap(c), I = R.interestOf(bmp), win = R.bestWindow(I.cols, 0.4);
+    out.frame = [I.cx > 0.6, win.start > 0.45, win.coverage > 0.8, R.bestWindow(new Float32Array(20).fill(1), 0.5).start];
+    // a life in time order: "at age seven" (born 1930) comes before 1947
+    const items = ["Warren Edward Buffett is an American investor and philanthropist who is the chairman emeritus and former CEO of Berkshire Hathaway.",
+      "Buffett entered the Wharton School of the University of Pennsylvania in 1947 before graduating from the University of Nebraska at 19.",
+      "Buffett was inspired by a book he borrowed from the Omaha public library at age seven, One Thousand Ways to Make $1000.",
+      "He has given away more than half of his fortune to charity."].map((text) => ({ text, source: "Wikipedia" }));
+    const lines = ST.composeStory("Warren Buffett", "investing", items, { max: 4, takeaway: false, person: true, born: 1930 }).lines.map((l) => l.text);
+    out.order = [lines.findIndex((l) => /age seven/.test(l)), lines.findIndex((l) => /1947/.test(l))];
+    out.year = [ST.eventYear("He bought his first stock at the age of 11.", 1930), ST.eventYear("He entered Wharton in 1947.", 1930), ST.eventYear("at age seven", 0)];
+    // a pronoun for someone else isn't turned into the person's name
+    const m = ["Charles Thomas Munger was an American businessman, investor, and philanthropist.", "He was the vice chairman of Berkshire Hathaway from 1978 until his death in 2023.",
+      "In 1956, Munger married Nancy Barry Borthwick.", "She was a Pasadena native who had been his sister's roommate at Scripps College.", "He is known for his wit and his investing principles."].map((text) => ({ text, source: "Wikipedia" }));
+    const ml = ST.composeStory("Charlie Munger", "investing", m, { max: 4, takeaway: false, person: true, born: 1924 }).lines.map((l) => l.text).join(" | ");
+    out.pronoun = [/Munger was a Pasadena/.test(ml), /(He|Munger) was the vice chairman/.test(ml)];
+    out.def = [ST.isDefinition("A Roth IRA can also be an individual retirement annuity.", "Roth IRA"), ST.isDefinition("A Roth IRA is generally not taxed on the way out.", "Roth IRA")];
+    out.say = SC.speakable("Shares of TSLA fell; AGNC and USDS rose, CNBC said. NOT a STOP sign for NASA.");
+    const NW = await import("./app/newswriter.js");
+    out.byline = [NW.spokenStory({ title: "Peterson: The Fed's chairman sees an AI revolution coming. Now he has to figure out what it means", summary: "Kevin Warsh sees AI at a turning point." })?.text,
+      NW.spokenStory({ title: "Nvidia: Shares jump after a record quarter", summary: "Nvidia beat estimates again." })?.text];
+    return out;
+  });
+  t.ok(v53.frame.join() === "true,true,true,0.25", "a photo is framed around where its detail and colour are (an even photo stays centred)", JSON.stringify(v53.frame));
+  t.ok(v53.order[0] >= 0 && v53.order[1] > v53.order[0] && v53.year.join() === "1941,1947,9999", "a life is told in time order: an age becomes a year from the birth year", JSON.stringify(v53));
+  t.ok(v53.pronoun.join() === "false,true", "\"She…\" after \"Munger married Nancy…\" is about her: it never becomes \"Munger was…\"", JSON.stringify(v53.pronoun));
+  t.ok(v53.def.join() === "true,false", "a second definition (\"can also be an…\") is recognised and dropped", JSON.stringify(v53.def));
+  t.ok(v53.byline.join(" | ") === "The Fed's chairman sees an AI revolution coming. Now he has to figure out what it means. | Nvidia: Shares jump after a record quarter.",
+    "a column's byline (\"Peterson: …\") isn't read out; a company that is the story keeps its name", v53.byline.join(" | "));
+  t.ok(v53.say === "Shares of T.S.L.A. fell; A.G.N.C. and U.S.D.S. rose, CNBC said. NOT a STOP sign for NASA.",
+    "a ticker the voice would read as a word is spelled out (TSLA, AGNC, USDS); acronyms it says well and real words are left alone", v53.say);
   await page.context().close();
 }

@@ -108,6 +108,12 @@ Each scene's picture is chosen from the line being spoken, not from a fixed list
   happened to match a search for "city skyline". Otherwise the scene gets an illustration. The same photo
   is never used twice, and two photos of the same subject never run back to back (the second scene gets its
   illustration), so scenes alternate. Measurements are in [docs/quality-log.md](docs/quality-log.md).
+- **Photos framed around their subject.** Each photo is scored for where its detail, colour and skin tones are
+  (the idea behind smartcrop.js), then shown as big as it stays sharp (at most 1.6x its own pixels), cropped at
+  the sides where nothing is going on as long as 85% of what's interesting stays in view. It fills the whole
+  screen when that works, otherwise it sits on a soft copy of itself. A subject that reaches the top of the photo
+  gets room under the title, and the camera moves toward the subject (ending on it when zooming in), never
+  cropping a head.
 - **Your call on every scene.** The review screen shows each scene's visual and lets you switch it
   between **Auto**, **Photo**, **Chart** (when the line has a number) and **Picture**.
 
@@ -122,8 +128,10 @@ Every script, whatever the type, goes through the same storyteller before you se
 - **Only lines that make sense alone.** Sentences that start with "It", "This" or "these" are used only
   right after the sentence they point to. Jargon, trivia, lists, cut-off fragments, "however" contrasts
   and country-specific details (unless the topic is about that country) are left out, and repeats are cut.
-- **People.** Who they are, what they're known for, then key events in date order. Facts about anyone
-  else are never swapped in by the fact check.
+- **People.** Who they are, what they're known for, then key events in date order; an age ("at age seven") is
+  dated from the birth year in the article, so a childhood moment comes first. A sentence that starts "He" or
+  "She" only becomes one about the person when it's their pronoun ("She was a Pasadena native…" after "Munger
+  married Nancy…" is about her and is left out). Facts about anyone else are never swapped in by the fact check.
 - **News and markets.** Up to three distinct headlines, ordered so related ones sit together, with one
   line naming the thread that links them. Market recaps open and close to match the day ("flat" for
   tiny moves).
@@ -303,6 +311,8 @@ line and quiz answers. Choose Photo or Illustration on a scene to turn the big w
   narrator's (a comma about 0.24 s, a colon 0.3 s, a full stop 0.42 s, a breath 0.34 s) by removing silence only,
   so no word is touched and videos don't get longer. Each cut lands in the pause before its line, with the new
   picture slightly ahead of the words. Measurements are in [docs/quality-log.md](docs/quality-log.md).
+- **Acronyms and tickers.** One the voice would read as a word ("AGNC" as "agnk", "TSLA" as "teesla", "USDS") is
+  spelled out as an acronym (A.G.N.C.); ones it already spells (CNBC) and real words (NOT, NASA, FICO) are left alone.
 - **Pronunciations.** If the narrator says a word wrong, add it under Style (`Roth = rawth`).
 
 ### Results and what works for you

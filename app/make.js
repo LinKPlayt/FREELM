@@ -582,6 +582,8 @@ async function customScript(opts, generic, say) {
         .filter((x, i, a) => x.text && a.findIndex((y) => y.text === x.text) === i);
       const sentences = [...new Set([definition, ...brief.summary, ...own, ...brief.facts.map((f) => f.text)].filter(Boolean))];
       if (sentences.length >= 3) found = { title: brief.main.title, sentences, items, url: "https://en.wikipedia.org/wiki/" + encodeURIComponent(brief.main.title.replaceAll(" ", "_")) };
+      // The library's text has no "(born 1930)": ask for the birth year, so a life is told in time order.
+      if (found && !opts.offline) found.born = await research.birthYear(brief.main.title);
     }
   } catch (e) { console.warn("local research failed", e); }
   if (!found && opts.offline) throw new Error(`"${topic}" isn't in the on-phone library. Try a broader topic, or turn off Offline mode.`);

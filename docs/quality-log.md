@@ -10,6 +10,113 @@ before and after on the same inputs, and add tests so it can't come back.
 
 ---
 
+## v53 · All three · Framed photos, truer biographies, spelled-out tickers
+
+### Visuals: photos framed around their subject
+
+**Weakest area found.** A photo wider than 0.72 (width/height) was shown whole, about 96% of the screen's width,
+on a blurred copy of itself. That covers almost every photo the finder returns, because 3:4 portrait shots fall
+in that range too. The camera then drifted in a random direction. On 12 real photos (Fed buildings, Warren
+Buffett, a credit card, bitcoin, gold, the stock exchange, an EV charger…), the photo filled 54% of the screen
+on average, and only 1 filled it.
+
+**Technique.** Automatic cropping as in smartcrop.js: score a small copy of the photo for detail (edges), colour
+and skin tones; crop where the interest is; size the photo by how much it can be enlarged while staying sharp.
+Plus two rules from photography:
+- **Headroom:** a subject at the top of the frame gets room under the title.
+- **Motivated camera moves:** the camera moves toward the subject, not just anywhere.
+
+**What changed** (`app/render.js`):
+- `interestOf()` scores a photo's interest; `bestWindow()` finds the crop that keeps the most of it.
+- `ImageBg` sizes each wide photo:
+  - as big as it stays sharp (≤ 1.6x),
+  - while keeping ≥ 85% of the interest in view,
+  - filling the screen when it nearly does.
+- Tall photos are cropped where the subject is.
+- Top-heavy subjects get set lower; the close-up never crops the top of the subject.
+
+**Measured** on the same 12 photos:
+
+| | Before | After |
+|---|---|---|
+| Average share of the screen the photo fills | 54% | 73% |
+| Photos filling the whole screen | 1 | 3 |
+| Photos filling ≥ 88% of it | 1 | 5 |
+| Largest enlargement | — | 1.6x |
+| Interest kept in view | — | 81–100% |
+| Camera | random direction | toward the subject, headroom kept |
+
+The two tiny photos (≤ 632 px) stay as they were.
+
+### Scripts: one definition, lives in time order, pronouns that agree
+
+**Weakest area found.**
+- **A second definition.** Roth IRA read "…is an individual retirement account…" and then "A Roth IRA can be an
+  individual retirement account containing…". The one-definition rule only knew "is/are/was/were".
+- **Time order.** Buffett's library book "at age seven" came after Wharton "in 1947": ages had no year.
+- **A factual error.** Charlie Munger's script said "Munger was a Pasadena native who had been Munger's sister's
+  roommate". `standAlone()` turned any leading "She" into the subject's surname, and here "She" meant his wife.
+
+**What changed** (`app/story.js`, `app/research.js`, `app/script.js`):
+- **Definitions:** "can be", "may be", "is also" and "can also be" count as definitions.
+- **Time order:**
+  - the birth year is read from the article's opening "(born August 30, 1930)" or a life span "(1924 – 2023)";
+  - well-known people come from the on-phone library, whose text has no brackets, so `birthYear()` reads it
+    from Wikipedia's short description ("American investor and philanthropist (born 1930)") with one small
+    request. The first real render exposed this: the unit test had passed while the reel was still out of order;
+  - `eventYear()` dates "at age seven", "at the age of 11", "aged 19" and "when he was 11" from it.
+- **Pronouns:**
+  - `composeStory` works out the article's pronoun for its subject;
+  - `standAlone()` only renames a pronoun that matches it;
+  - a mismatched one stays tied to its own sentence, so it's dropped when that sentence is.
+
+**Measured:**
+- Roth IRA: the duplicate definition is gone; the slot went to a researched fact.
+- Buffett: age seven (1937) now comes before 1947, confirmed in a real render (the childhood line even gets a
+  baby photo of Buffett, framed on his face).
+- The Munger sentence about his wife is no longer produced, while every legitimate line matches v52 (a
+  regression found and fixed along the way: the filter that picks a life's events must pass the pronoun too).
+
+### Narration: tickers and acronyms the voice read as words
+
+**Weakest area found.** The phonemizer spells vowel-less all-caps tokens well (CNBC, MSFT, XRP) but reads
+unsayable ones that contain a vowel as words. In today's headlines and common tickers:
+- AGNC → "agnk"
+- USDS → "usds"
+- TSLA → "teesla"
+- AMZN → "amzen"
+- AAPL → "ahpul"
+- IEMG → "eemg"
+
+**What changed** (`app/script.js`): `unsayable()` flags an all-caps token as unsayable when it has:
+- no vowel;
+- three or more consonants in a row (except English onsets like STR);
+- an ending English words don't have.
+
+`speakable()` spells such tokens with dots ("A.G.N.C."), and only when they contain a vowel. That form is read
+as one acronym with every letter's name: with spaces, "A" became the article "a"; with hyphens, a final A was
+reduced to "uh". Real words (NOT, STOP, NASA, FICO, REIT, HELOC) are unchanged.
+
+**Measured** on 32 real tokens, phonemes before → after:
+- 6 now correct: AGNC, USDS, TSLA, AMZN, IEMG, GOOGL (now spelled).
+- 2 unchanged in letters, stress only: OKX, NVDA.
+- 1 edge case left: AAPL's doubled A.
+- 23 unchanged.
+
+**Also.** A column writer's byline before a headline ("Peterson: The Fed's chairman sees…", seen in the live feed)
+is dropped when neither the rest of the headline nor the summary mentions it ("Nvidia: Shares jump…" keeps it).
+The 72-headline set is unchanged by it.
+
+**Tests.** `tests/web/logic.mjs` → "Logic: framing, biographies and pronunciation (v53)":
+- framing toward the detailed side;
+- time order from ages;
+- the pronoun rule;
+- "can also be" definitions;
+- ticker spelling;
+- the byline rule.
+
+---
+
 ## v52 · Visuals · Photos chosen by meaning
 
 **Weakest area found.** With photos on (the default), the app planned eight real "Your topic" reels: Federal
@@ -222,18 +329,13 @@ Found on the live feed right after release and added: a trailing fragment that p
 
 ## Queue: weaknesses found, not fixed yet (highest impact first)
 
-1. **"Your topic" scripts are encyclopedic.** Wikipedia sentences are read close to verbatim: two definitions in a
-   row (Roth IRA: "…is an individual retirement account…", then "A Roth IRA can be an individual retirement account
-   containing investments in securities…"), jargon ("taxed upon distribution"), and facts out of time order
-   (Buffett: Wharton in 1947, then a book at age seven).
-2. **Headlinese.** Even complete headlines are written for the eye (Title Case, no articles: "Japan exports in
+1. **Headlinese.** Even complete headlines are written for the eye (Title Case, no articles: "Japan exports in
    October surge 20.5%"). A spoken rewrite needs care to stay faithful.
-3. **Pronunciation of new names.** Tickers and company names from the day's news (CoreWeave, AGNC, HELOC) aren't
-   in the pronunciation list; check how the voice says them.
-4. **Photo framing.** A landscape or square photo (most of what Openverse and Commons return) is shown whole in
-   the middle of the screen, about 96% of the width, on a blurred copy of itself. A 3:2 photo then covers about a
-   third of the frame. The camera pans in a random direction, sometimes away from the subject. A subject-aware
-   crop (find the busy, detailed region; fill the frame when it fits; move the camera toward it) would look far
-   more cinematic.
-5. **Emphasis.** The voice gives every word the same weight; key numbers and contrast words ("but", "only",
+2. **Emphasis.** The voice gives every word the same weight; key numbers and contrast words ("but", "only",
    "never") could be stressed (Kokoro takes stress marks in its phonemes).
+3. **"Your topic" jargon and relatives.** Wikipedia phrasing still comes through ("taxed upon distribution"), and
+   a biography can include a line about a relative ("His grandfather, Thomas Charles Munger, was a state
+   representative…").
+4. **Photo supply.** Where no photo fits by meaning (Inflation, Roth IRA, a mortgage explainer), every scene is an
+   illustration; other searches (the topic's Wikipedia image, related subjects) could find real photos that fit.
+5. **AAPL-like tickers.** A doubled letter in a spelled ticker ("A.A.P.L.") still reduces the second A to "uh".

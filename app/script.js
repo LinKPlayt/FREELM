@@ -41,9 +41,25 @@ export function speakable(text) {
   t = t.replaceAll("S&P", "S and P").replaceAll("&", " and ").replace(/\b401\(?k\)?/gi, "four oh one k").replace(/\b403\(?b\)?/gi, "four oh three b").replace(/\b457\(?b\)?/gi, "four fifty-seven b");
   t = t.split(/\s+/).map((w) => {
     const core = w.replace(/^[,.!?;:"'()]+|[,.!?;:"'()]+$/g, "");
-    return ACRONYMS[core] ? w.replace(core, ACRONYMS[core]) : w;
+    if (ACRONYMS[core]) return w.replace(core, ACRONYMS[core]);
+    // An acronym or ticker the voice would read as a word ("AGNC" -> "agnk", "USDS" -> "usds", "TSLA" -> "teesla")
+    // is spelled out with dots, so it's said as one acronym with every letter's name ("A.G.N.C."; with spaces or
+    // hyphens an "A" became the word "a"). Ones without a vowel (CNBC, MSFT) the voice already spells: left alone.
+    return unsayable(core) && /[AEIOU]/.test(core) ? w.replace(core, core.split("").join(".") + ".").replace(/\.\.$/, ".") : w;
   }).join(" ");
   return t.replace(/\s+/g, " ").trim();
+}
+
+// An all-caps token that can't be said as a word: no vowel, three consonants in a row (except an English onset
+// like STR), or an ending English words don't have ("AGNC", "USDS", "NVDA", "TSLA"). NOT, STOP or SOL are words.
+const ONSET3 = /^(STR|SPR|SCR|SPL|THR|SHR|CHR|SCH|SQU)/, END2 = /(NT|ND|NK|NG|ST|SK|SP|CK|RK|RT|RN|RD|RM|RP|RS|LT|LD|LK|LF|LM|LP|LS|MP|MS|FT|PT|CT|XT|SH|CH|TH|PH|GH|WN|WS|WL|NS|TS|DS|KS|PS|GS|LL|SS|FF|ZZ|TT)$/;
+export function unsayable(w) {
+  if (!/^[A-Z]{2,5}$/.test(w)) return false;
+  if (!/[AEIOUY]/.test(w)) return true;
+  if (/[^AEIOUY]{3,}/.test(w.replace(ONSET3, "S"))) return true;
+  if (/[AEIOUY]$/.test(w) && /^[^AEIOUY]{2}/.test(w) && !ONSET3.test(w) && !/^(BL|BR|CL|CR|DR|FL|FR|GL|GR|PL|PR|SC|SK|SL|SM|SN|SP|ST|SW|TR|TW|WH|SH|CH|TH|PH|QU)/.test(w)) return true;   // "NVDA"-like starts
+  const tail = w.match(/[^AEIOUY]{2}$/);
+  return Boolean(tail) && !END2.test(w);
 }
 
 const HEADLINE_VISUALS = [
@@ -266,7 +282,7 @@ export function buildCustom(found, opts) {
   // The storyteller picks and orders the sentences: what it is, how it works, a number, why it
   // matters, and a practical takeaway.
   const src = "Wikipedia · " + found.title;
-  const story = composeStory(title, opts.niche, found.items || found.sentences.map((text) => ({ text, source: src })), { max: person ? 4 : 5, takeaway: !person, person });
+  const story = composeStory(title, opts.niche, found.items || found.sentences.map((text) => ({ text, source: src })), { max: person ? 4 : 5, takeaway: !person, person, born: found.born || 0 });
   const asLine = (p, i) => ({ ...line(p.text, visual(p.claim || p.text, i + 1)), source: p.source || undefined, claim: p.claim || undefined, tip: p.tip || undefined });
   const lines = [line(hook, titleVisual), ...story.lines.map(asLine)];
   lines.push(line(opts.cta, "", "outro"));

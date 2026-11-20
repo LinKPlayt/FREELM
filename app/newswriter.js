@@ -100,6 +100,11 @@ export function spokenStory(item, { maxWords = 30 } = {}) {
   if (/^(?:I|I'm|I've|I'd|My|We|We're|We've|Our)\b/.test(head)) return null;
   if (/^\W*c\s?o\s?r\s?r\s?e\s?c\s?t\s?i\s?o\s?n\b|^\//i.test(head)) return null;      // wire corrections
   head = cleanHeadline(head, 99).replace(/\.$/, "");
+  // A column's byline ("Peterson: The Fed's chairman sees…"): one word before a colon that neither the rest
+  // of the headline nor the summary mentions is the writer's name, not the story's subject ("Nvidia: Shares
+  // jump…" keeps it: the story is about Nvidia).
+  const byline = head.match(/^([A-Z][a-z]+):\s+(?=[A-Z])/);
+  if (byline && !new RegExp(`\\b${byline[1]}\\b`, "i").test(`${head.slice(byline[0].length)} ${item.summary || ""}`)) head = head.slice(byline[0].length);
   if (junkHeadline(head)) return null;
   // The summary's sentences that say something (not "Here's how to play it.", not a teaser of its own).
   const facts = sentencesOf(stripSource(item.summary || "")).filter((s) => words(s) >= 6 && !teaserIn(s) && !/…$|\.\.\.$/.test(s) && !/^(?:need to know|read more|click|subscribe|watch|sign up)/i.test(s));

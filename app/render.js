@@ -40,55 +40,107 @@ function feelings(words) {
 
 /* ------------------------------------------------------------------ scene backgrounds */
 
+// Where a photo's subject is: detail (edges), colour and skin tones, scored on a small copy (the idea behind
+// smartcrop.js). Returns interest per column and per row, and its centre (0..1 of the photo); null if unreadable.
+export function interestOf(bitmap) {
+  try {
+    const w = 96, h = Math.max(8, Math.round(96 * bitmap.height / bitmap.width)), c = canvas(w, h), x = c.getContext("2d", { willReadFrequently: true });
+    x.drawImage(bitmap, 0, 0, w, h);
+    const d = x.getImageData(0, 0, w, h).data, L = new Float32Array(w * h);
+    for (let i = 0; i < w * h; i++) L[i] = (0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2]) / 255;
+    const cols = new Float32Array(w), rows = new Float32Array(h);
+    let total = 0, sx = 0, sy = 0;
+    for (let y = 1; y < h - 1; y++) for (let k = 1; k < w - 1; k++) {
+      const i = y * w + k, r = d[i * 4] / 255, g = d[i * 4 + 1] / 255, b = d[i * 4 + 2] / 255;
+      const edge = Math.abs(4 * L[i] - L[i - 1] - L[i + 1] - L[i - w] - L[i + w]);
+      const mx = Math.max(r, g, b), sat = mx > 0.2 ? (mx - Math.min(r, g, b)) / mx : 0;
+      const sum = r + g + b || 1, skin = L[i] > 0.2 && L[i] < 0.95 && Math.hypot(r / sum - 0.45, g / sum - 0.31) < 0.05 ? 1 : 0;
+      const v = edge * 4 + sat * 0.25 + skin * 0.6;
+      cols[k] += v; rows[y] += v; total += v; sx += v * k; sy += v * y;
+    }
+    if (total <= 0) return null;
+    // where the subject begins at the top (8% of the interest lies above): heads need room under the title
+    let acc = 0, top = 0; for (let y = 0; y < h; y++) { acc += rows[y]; if (acc >= total * 0.08) { top = y / h; break; } }
+    return { cols, rows, total, cx: sx / total / w, cy: sy / total / h, top };
+  } catch { return null; }
+}
+// The window of a given share of a line of interest (columns or rows) that holds the most of it, a little in
+// favour of the middle when it's even. Returns its start (0..1) and the share of the interest inside.
+export function bestWindow(arr, frac) {
+  const n = arr.length, k = Math.max(1, Math.min(n, Math.round(frac * n)));
+  const v = Array.from(arr, (a, i) => a * (1 + 0.15 * (1 - Math.abs(2 * (i + 0.5) / n - 1))));
+  let sum = 0; for (let i = 0; i < k; i++) sum += v[i];
+  let best = sum, at = 0;
+  for (let i = k; i < n; i++) { sum += v[i] - v[i - k]; if (sum > best + 1e-9) { best = sum; at = i - k + 1; } }
+  let raw = 0; for (let i = at; i < at + k; i++) raw += arr[i];
+  return { start: at / n, coverage: raw / (arr.reduce((a, b) => a + b, 0) || 1) };
+}
+
 class ImageBg {
+  // Each photo is framed around its subject. A wide photo is shown as big as it stays sharp (at most 1.6x its
+  // own pixels), cropped at the sides where nothing is going on, as long as 85% of what's interesting stays
+  // in view; it fills the whole screen when that works, otherwise it sits on a soft, darkened copy of itself.
+  // A tall photo is cropped around its subject. The camera then moves toward the subject, not just anywhere.
   constructor(bitmap) {
     const S = 1.18, bw = Math.round(W * S), bh = Math.round(H * S);
     this.S = S;
     const base = canvas(bw, bh), c = base.getContext("2d");
-    c.imageSmoothingQuality = "high";
-    const iw = bitmap.width, ih = bitmap.height;
-    const cover = (ctx, dw, dh, cy = 0.5) => {
-      const s = Math.max(dw / iw, dh / ih), sw = dw / s, sh = dh / s;
-      ctx.drawImage(bitmap, (iw - sw) / 2, (ih - sh) * cy, sw, sh, 0, 0, dw, dh);
-    };
+    c.imageSmoothingEnabled = true; c.imageSmoothingQuality = "high";
+    const iw = bitmap.width, ih = bitmap.height, I = interestOf(bitmap);
+    const cols = I?.cols || new Float32Array(16).fill(1), rows = I?.rows || new Float32Array(16).fill(1);
+    let focus = [bw / 2, bh * 0.47], fill = 1;
     if (iw / ih > 0.72) {
-      // Landscape or square: soft blurred backdrop (scaled up from a tiny copy) + the whole photo in the middle.
-      // (An averaged blur at low resolution, then scaled up: smooth on every browser, no canvas filters.)
-      const small = canvas(bw / 8, bh / 8);
-      cover(small.getContext("2d"), small.width, small.height);
-      const blur = canvas(small.width, small.height), bc = blur.getContext("2d");
-      let n = 0;
-      for (let dy = -8; dy <= 8; dy += 4) for (let dx = -8; dx <= 8; dx += 4) {
-        bc.globalAlpha = 1 / ++n;            // running average of 25 shifted copies
-        bc.drawImage(small, dx, dy);
+      const hFit = Math.min(bh * 0.62, ih * (bw * 0.96) / iw), hMax = Math.max(hFit, Math.min(bh, ih * 1.6));
+      const shown = (hd) => Math.min(1, bw * ih / (hd * iw));             // the share of the photo's width in view
+      let hd = hMax;
+      while (hd > hFit && bestWindow(cols, shown(hd)).coverage < 0.85) hd = Math.max(hFit, hd - bh * 0.03);
+      if (hd >= bh * 0.92 && bestWindow(cols, shown(bh)).coverage >= 0.8) hd = bh;   // nearly full: fill the screen
+      // Headroom: a subject that reaches the top of the photo would sit under the title, so the photo is set a
+      // little smaller and lower, leaving the soft backdrop above it.
+      const topHeavy = (I?.top ?? 0.5) < 0.2 && hd > bh * 0.86;
+      if (topHeavy) hd = bh * 0.86;
+      const frac = shown(hd), win = bestWindow(cols, frac), sx = win.start * iw, sw = frac * iw;
+      const dw = Math.min(bw, iw * hd / ih), dx = (bw - dw) / 2, dy = hd >= bh ? 0 : topHeavy ? bh - hd : bh * 0.47 - hd / 2;
+      if (hd < bh) {
+        // a soft backdrop: the photo averaged at low resolution, scaled up (smooth on every browser, no canvas filters)
+        const small = canvas(bw / 8, bh / 8), sc = small.getContext("2d"), k = Math.max(small.width / iw, small.height / ih);
+        sc.drawImage(bitmap, (small.width - iw * k) / 2, (small.height - ih * k) / 2, iw * k, ih * k);
+        const blur = canvas(small.width, small.height), bc = blur.getContext("2d");
+        let n = 0;
+        for (let oy = -8; oy <= 8; oy += 4) for (let ox = -8; ox <= 8; ox += 4) { bc.globalAlpha = 1 / ++n; bc.drawImage(small, ox, oy); }
+        c.drawImage(blur, 0, 0, bw, bh);
+        c.fillStyle = "rgba(0,0,0,0.45)"; c.fillRect(0, 0, bw, bh);
       }
-      c.imageSmoothingEnabled = true; c.imageSmoothingQuality = "high";
-      c.drawImage(blur, 0, 0, bw, bh);
-      c.fillStyle = "rgba(0,0,0,0.45)"; c.fillRect(0, 0, bw, bh);
-      let fw = bw * 0.96, fh = ih * fw / iw;
-      if (fh > bh * 0.62) { fh = bh * 0.62; fw = iw * fh / ih; }
-      c.drawImage(bitmap, (bw - fw) / 2, bh * 0.47 - fh / 2, fw, fh);
+      c.drawImage(bitmap, sx, 0, sw, ih, dx, dy, dw, hd);
+      focus = [dx + dw * Math.min(1, Math.max(0, ((I?.cx ?? 0.5) - win.start) / frac)), dy + hd * (I?.cy ?? 0.45)];
+      this.top = dy + hd * (I?.top ?? 0);
+      fill = (dw * hd) / (bw * bh);
+      this.frame = { coverage: win.coverage, scale: hd / ih, fill };
     } else {
-      cover(c, bw, bh, 0.4);
+      // tall: cover the screen, the crop placed where the subject is
+      const s = Math.max(bw / iw, bh / ih), fw = Math.min(1, bw / (iw * s)), fh = Math.min(1, bh / (ih * s));
+      const wx = bestWindow(cols, fw), wy = bestWindow(rows, fh);
+      c.drawImage(bitmap, wx.start * iw, wy.start * ih, fw * iw, fh * ih, 0, 0, bw, bh);
+      focus = [bw * Math.min(1, Math.max(0, ((I?.cx ?? 0.5) - wx.start) / fw)), bh * Math.min(1, Math.max(0, ((I?.cy ?? 0.4) - wy.start) / fh))];
+      this.top = bh * Math.max(0, ((I?.top ?? 0) - wy.start) / fh);
+      this.frame = { coverage: Math.min(wx.coverage, wy.coverage), scale: s, fill };
     }
-    this.base = base;
+    this.base = base; this.focus = focus;
     this.zoomIn = Math.random() < 0.65;
-    this.pan = [Math.random() * 2 - 1, Math.random() * 2 - 1];
   }
   draw(ctx, p) {
-    const bw = this.base.width, bh = this.base.height, e = ease(p);
-    const z = 1 + (this.S - 1) * (this.zoomIn ? e : 1 - e);
-    const cw = bw / z, ch = bh / z;
-    const cx = bw / 2 + this.pan[0] * ((bw - cw) / 2) * (e - 0.5), cy = bh / 2 + this.pan[1] * ((bh - ch) / 2) * (e - 0.5);
+    // Wide and centred at one end of the move, close on the subject at the other.
+    const bw = this.base.width, bh = this.base.height, k = this.zoomIn ? ease(p) : 1 - ease(p);
+    const z = 1 + (this.S - 1) * k, cw = bw / z, ch = bh / z;
+    const cx = Math.min(bw - cw / 2, Math.max(cw / 2, bw / 2 + (this.focus[0] - bw / 2) * k));
+    // the close-up keeps the top of the subject in view, clear of the title (no cropped heads)
+    const fy = Math.min(this.focus[1], (this.top || 0) + 0.38 * bh / this.S);
+    const cy = Math.min(bh - ch / 2, Math.max(ch / 2, bh / 2 + (fy - bh / 2) * k));
     ctx.drawImage(this.base, cx - cw / 2, cy - ch / 2, cw, ch, 0, 0, W, H);
   }
   dispose() { this.base.width = this.base.height = 0; }
 }
 
-// A live market chart. It draws the same month the voice talks about ("down 5.0% this month"), so the line,
-// its colour and its label always agree with what's said; today's move and the month's pop up as pills when
-// they're spoken.
-const pctTxt = (v) => (Math.abs(v) < 0.05 ? "FLAT" : `${v >= 0 ? "▲" : "▼"} ${Math.abs(v).toFixed(1)}%`);
 class ChartBg {
   constructor(chart, words = []) {
     let values = chart?.values;
