@@ -76,6 +76,8 @@ const RISK_STRONG = /\b(criticis\w*|fraud\w*|collapse\w*|crash\w*|scams?|danger\
 const RISK = /\b(risks?|risky|volatil\w*)\b/i;
 // A figure worth showing: a percentage, an amount of money or a big number (a bare year isn't one).
 const HAS_NUMBER = /\d\s?%|\bpercent\b|[$€£]\s?\d|\b\d[\d,.]*\s?(million|billion|trillion|thousand)\b|\b(half|double[sd]?|twice|triple[sd]?)\b/i;
+// A sentence about a relative, not the person ("His grandfather, Thomas Charles Munger, was a state representative…").
+const RELATIVE = /^(?:his|her|their) (?:late |elder |younger |older )?(?:great-)?(?:grand)?(?:father|mother|parents?|sons?|daughters?|wife|husband|spouse|brothers?|sisters?|siblings?|uncle|aunt|cousins?|family|children|kids)\b/i;
 const HAS_YEAR = /\b(1[5-9]\d\d|20\d\d)\b/;
 // When something in a life happened: its year, or the birth year plus the age it gives ("at age seven",
 // "at the age of 11", "aged 19", "when he was 11"), so a childhood moment comes before a 1947 one. 9999 if unknown.
@@ -256,7 +258,7 @@ export function composeStory(topic, niche, candidates, { max = 5, takeaway = tru
 
   if (person) {
     // A person: who they are, then what they did, in time order. No "why it matters" labels.
-    const rest = pool.filter((p) => fresh(p) && (p.onTopic || /^(He|She) /.test(p.text)) && p.role !== "definition" && !/\b(was born|grew up|his (father|mother|parents)|her (father|mother|parents)|married|divorced|paper route|pinball|high school)\b/i.test(p.text) && standAlone(p.text, topic, { person, pronoun }))
+    const rest = pool.filter((p) => fresh(p) && (p.onTopic || /^(He|She) /.test(p.text)) && p.role !== "definition" && !/\b(was born|grew up|his (father|mother|parents)|her (father|mother|parents)|married|divorced|paper route|pinball|high school)\b/i.test(p.text) && !RELATIVE.test(p.text) && standAlone(p.text, topic, { person, pronoun }))
       .sort((a, b) => (eventYear(a.text, born) - eventYear(b.text, born)) || a.i - b.i);
     // What they're known for first, then figures, then dated events.
     const KNOWN = /\b(known (for|as)|chairman|chief executive|CEO|founded|co-founded|founder|richest|wealthiest|net worth|largest|pledged|philanthrop\w*|billion|nicknamed|regarded|considered|famous|won|awarded)\b/i;

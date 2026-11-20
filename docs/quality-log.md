@@ -10,6 +10,23 @@ before and after on the same inputs, and add tests so it can't come back.
 
 ---
 
+## v54 · Scripts · Biographies about the person, not their relatives
+
+**Weakest area found.** On Charlie Munger's real article, one of the four lines was "His grandfather, Thomas
+Charles Munger, was a state representative and later a U.S. district court judge…". The biography filter only
+dropped "his father/mother/parents".
+
+**What changed** (`app/story.js`): a sentence whose subject is a relative ("His/Her/Their" + grandparent,
+parent, spouse, sibling, child, uncle, aunt, cousin, family) is left out of a person's events. "The son of
+Howard Buffett, he developed…" is about the person and stays.
+
+**Measured** on the saved Munger article: the grandfather line → "Munger enrolled in the University of
+Michigan, where he studied mathematics." Buffett's script is unchanged.
+
+**Tests.** "a biography doesn't spend a line on a relative" in `tests/web/logic.mjs`.
+
+---
+
 ## v53 · All three · Framed photos, truer biographies, spelled-out tickers
 
 ### Visuals: photos framed around their subject
@@ -333,9 +350,7 @@ Found on the live feed right after release and added: a trailing fragment that p
    October surge 20.5%"). A spoken rewrite needs care to stay faithful.
 2. **Emphasis.** The voice gives every word the same weight; key numbers and contrast words ("but", "only",
    "never") could be stressed (Kokoro takes stress marks in its phonemes).
-3. **"Your topic" jargon and relatives.** Wikipedia phrasing still comes through ("taxed upon distribution"), and
-   a biography can include a line about a relative ("His grandfather, Thomas Charles Munger, was a state
-   representative…").
+3. **"Your topic" jargon.** Wikipedia phrasing still comes through ("taxed upon distribution").
 4. **Photo supply.** Where no photo fits by meaning (Inflation, Roth IRA, a mortgage explainer), every scene is an
    illustration; other searches (the topic's Wikipedia image, related subjects) could find real photos that fit.
 5. **AAPL-like tickers.** A doubled letter in a spelled ticker ("A.A.P.L.") still reduces the second A to "uh".

@@ -1,9 +1,12 @@
 // The app's version and its update notes, shown once in a "What's new" window after each update.
 // When you deploy: bump APP_VERSION, add an entry at the top of UPDATES, and set the same number in
 // sw.js (VERSION = "reelbot-v<APP_VERSION>"). A test checks the two match.
-export const APP_VERSION = 53;
+export const APP_VERSION = 54;
 
 export const UPDATES = [
+  { version: 54, title: "Biographies about the person", items: [
+    "A video about a person no longer spends a line on a relative (\u201cHis grandfather\u2026 was a state representative\u201d); that slot goes to a fact about the person.",
+  ] },
   { version: 53, title: "Bigger, better-framed photos and truer stories", items: [
     "Photos are framed around their subject: shown as big as they stay sharp, filling the screen when they can, with room above heads, and the camera moves toward the subject instead of drifting anywhere.",
     "Stories about people are told in time order (a childhood moment comes before a 1947 one), and a sentence about someone else (\u201cShe was a Pasadena native\u2026\u201d after \u201cMunger married\u2026\u201d) is never turned into one about the person.",
