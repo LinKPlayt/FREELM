@@ -396,5 +396,38 @@ export default async function ({ t, newPage }) {
   const [cut1, left1, cut2, left2, same, clean] = nr.tight;
   t.ok(Math.abs(cut1 - 0.36) < 0.03 && Math.abs(left1 - 0.24) < 0.04 && Math.abs(cut2 - 0.26) < 0.03 && Math.abs(left2 - 0.34) < 0.04 && same && clean,
     "a comma's long pause is cut to 0.24 s and a breath to 0.34 s, by removing silence only; a clip without long pauses is untouched", JSON.stringify(nr.tight));
+
+  // Photos chosen by meaning: what a photo shows, judged against the line and the topic, not its title's words.
+  t.section("Logic: photos chosen by meaning (v52)");
+  const ph = await page.evaluate(async () => {
+    const M = await import("./app/media.js"), MK = await import("./app/make.js"), S = await import("./app/ai/semantic.js");
+    const out = {};
+    out.describe = [M.describe({ title: "Old House of Keys - geograph.org.uk - 1817310.jpg" }), M.describe({ title: "Warren Buffett at the 2015 SelectUSA Investment Summit (cropped).jpg" }),
+      M.describe({ title: "IMG_2345", tags: "bitcoin, coin" })];
+    const cands = () => [{ title: "Perth City Skyline", about: "Perth City Skyline city skyline", width: 1024, height: 576 }, { title: "Federal Reserve Bank, Richmond, Virginia", width: 1280, height: 1707 }];
+    out.rank = [M.rank(cands(), "city skyline", [0.05, 0.72])[0].title, M.rank(cands(), "city skyline")[0].title];
+    const ok = await S.loadEmbedder();
+    if (ok) {
+      const [l, a, b] = await S.embedTexts(["The Federal Reserve System is the central banking system of the United States.", "Federal Reserve Bank, Richmond, Virginia", "Perth City Skyline"]);
+      out.sims = [S.cosine(l, a), S.cosine(l, b)];
+    }
+    await S.releaseEmbedder(); out.model = [ok, true];
+    const A = (query, extra = {}) => ({ bitmap: {}, query, relevant: true, sem: 0.6, credit: "x", ...extra });
+    const lines = [
+      { kind: "media", text: "Bitcoin can swing more in a day than most stocks do in a month.", concrete: true, query: "bitcoin", asset: A("bitcoin") },
+      { kind: "media", text: "Bitcoin transactions are verified by network nodes.", concrete: true, query: "bitcoin", asset: A("bitcoin") },
+      { kind: "media", text: "So here's what to do: never put in more than you could afford to lose.", concrete: false, query: "cryptocurrency coins", asset: A("cryptocurrency coins", { sem: 0.56 }) },
+      { kind: "media", text: "The Federal Reserve sets interest rates for the whole country.", concrete: true, query: "federal reserve building", asset: A("federal reserve building") },
+      { kind: "media", text: "Rates touch your mortgage and your savings account too.", concrete: true, query: "federal reserve building", asset: A("federal reserve building"), vmode: "photo" },
+      { kind: "media", text: "Interest builds on whatever you leave unpaid each month.", concrete: true, query: "credit card", asset: A("credit card", { relevant: false, sem: 0.2 }) },
+    ];
+    out.visuals = lines.map((l, i) => MK.decideVisual(l, i, "Bitcoin", lines).type);
+    return out;
+  });
+  t.ok(ph.describe.join(" | ") === "Old House of Keys | Warren Buffett at the 2015 SelectUSA Investment Summit | bitcoin, coin", "a photo is described by what it shows, without file names, catalogue numbers or camera codes", ph.describe.join(" | "));
+  t.ok(ph.rank.join() === "Federal Reserve Bank, Richmond, Virginia,Perth City Skyline", "judged by meaning, a photo of the Fed beats \"Perth City Skyline\" even for the search \"city skyline\" (by words alone, the old order stays)", ph.rank.join());
+  t.ok(ph.model[0] && ph.sims && ph.sims[0] >= 0.5 && ph.sims[1] <= 0.2, "the meaning model ships with the app, loads and is released; a Fed line is close to a Fed bank and far from a city skyline", JSON.stringify(ph.sims));
+  t.ok(ph.visuals.join() === "photo,illus,photo,photo,photo,illus",
+    "photos of the same subject never run back to back (a different subject may follow; a scene set to Photo keeps it); an unrelated photo isn't shown", ph.visuals.join());
   await page.context().close();
 }

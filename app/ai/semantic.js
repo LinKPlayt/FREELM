@@ -14,14 +14,15 @@ env.backends.onnx.wasm.wasmPaths = { mjs: BASE + "vendor/ort-wasm-simd-threaded.
 // hundreds of MB of extra memory (too much for an iPhone).
 env.backends.onnx.wasm.numThreads = 1;
 
-let embedder = null, loading = null, vectors = null, dim = 384;
+let embedder = null, loading = null, loadingModel = null, vectors = null, dim = 384;
+const model = () => pipeline("feature-extraction", "all-MiniLM-L6-v2", { device: "wasm", dtype: "q8" });
 
 export async function loadSemantic(lib) {
   if (embedder && vectors) return true;
   if (!lib.vectorsInfo) return false;                      // library built without vectors
   loading ??= (async () => {
     const [ext, buf] = await Promise.all([
-      pipeline("feature-extraction", "all-MiniLM-L6-v2", { device: "wasm", dtype: "q8" }),
+      embedder ? Promise.resolve(embedder) : loadingModel || model(),
       fetch(new URL("./data/" + lib.vectorsInfo.file, import.meta.url)).then((r) => { if (!r.ok) throw new Error("vectors missing"); return r.arrayBuffer(); }),
     ]);
     vectors = new Int8Array(buf); dim = lib.vectorsInfo.dim; embedder = ext;
@@ -31,6 +32,23 @@ export async function loadSemantic(lib) {
 }
 
 export const semanticReady = () => Boolean(embedder && vectors);
+
+// The model alone, without the library: for judging whether a photo shows what a line is about. Loaded on
+// demand (it ships with the app, so no download after the first), and released again afterwards unless
+// semantic search is using it: the voice and the video need the memory.
+export async function loadEmbedder(timeoutMs = 20000) {
+  if (embedder) return true;
+  loadingModel ??= model().then((e) => (embedder ??= e));
+  try {
+    await Promise.race([loadingModel, new Promise((_, no) => setTimeout(() => no(new Error("timed out")), timeoutMs))]);
+    return Boolean(embedder);
+  } catch (e) { console.warn("meaning model unavailable", e); loadingModel = null; return false; }
+}
+export async function releaseEmbedder() {
+  if (!embedder || vectors || loading) return;             // semantic search is using it
+  const e = embedder; embedder = null; loadingModel = null;
+  try { await e.dispose?.(); } catch { /* already gone */ }
+}
 
 // Cosine similarity of the query with every article. Returns [[docId, similarity]] best first.
 export async function semanticSearch(query, k = 30) {

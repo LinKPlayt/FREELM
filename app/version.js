@@ -1,9 +1,15 @@
 // The app's version and its update notes, shown once in a "What's new" window after each update.
 // When you deploy: bump APP_VERSION, add an entry at the top of UPDATES, and set the same number in
 // sw.js (VERSION = "reelbot-v<APP_VERSION>"). A test checks the two match.
-export const APP_VERSION = 51;
+export const APP_VERSION = 52;
 
 export const UPDATES = [
+  { version: 52, title: "Photos that show what's being said", items: [
+    "Photos are chosen by what they show, judged by meaning on your phone: a line about the Federal Reserve gets a Federal Reserve bank, not a city skyline that happened to match the search.",
+    "When no photo really fits, the scene gets its illustration instead of a loosely related picture.",
+    "In a video about your own topic, lines that name it get photos of it (a video about Warren Buffett shows Warren Buffett), and the same photo is never used twice.",
+    "Photos of the same thing no longer run back to back: scenes alternate with illustrations, charts and big words.",
+  ] },
   { version: 51, title: "A narrator with natural timing", items: [
     "The narrator pauses like a person: briefly when a thought carries on (\u201cBut\u2026\u201d, \u201cSo\u2026\u201d), longer between points and stories, and a beat before the bottom line, the question and the sign-off.",
     "Long pauses inside sentences are tightened (the voice paused almost as long at a comma as at a full stop), so sentences flow and videos don't get longer.",

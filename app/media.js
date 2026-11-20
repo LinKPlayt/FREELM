@@ -22,6 +22,21 @@ function fit(text, query) {
   return words.filter((w) => t.includes(w) || t.includes(w.replace(/s$/, ""))).length / words.length;
 }
 const strip = (s) => (s || "").replace(/<[^>]+>/g, "").trim();
+// What a photo shows, in words, for judging it by meaning: its title and tags without file names,
+// camera codes or catalogue numbers ("Old House of Keys - geograph.org.uk - 1817310.jpg" -> "Old House of Keys").
+export function describe(c) {
+  return `${c.title || ""} ${c.tags || ""}`.replace(/\.(jpe?g|png|webp|tiff?|gif)\b/gi, " ").replace(/\b(geograph\.org\.uk|flickr|wikimedia|commons)\b/gi, " ")
+    .replace(/\((cropped|edited|retouched|\d+)\)/gi, " ").replace(/\b(img|dsc|dscn|dscf|p|pict|photo)[-_ ]?\d{3,}\b/gi, " ").replace(/\b\d{5,}\b/g, " ")
+    .replace(/[_|]+/g, " ").replace(/(^|\s)[-–—]+(?=\s|$)/g, " ").replace(/\s+/g, " ").trim();
+}
+// A photo shows what the line is about when its meaning is this close to the line or the topic (cosine,
+// all-MiniLM-L6-v2). Measured on real searches (docs/quality-log.md, v52): photos of the subject itself score
+// 0.47–0.86 (Federal Reserve banks, Warren Buffett, credit cards); unrelated ones 0.00–0.34 (city skylines for
+// the Fed, a phone with stock charts for a line about a library book). A search for the line's own subject
+// ("suburban house" for a mortgage) needs a little less (houses score 0.29–0.32 there); a clear match (STRONG)
+// is worth showing even where an illustration would otherwise be chosen.
+export const RELEVANT = 0.36, RELEVANT_OWN = 0.3, STRONG = 0.52;
+const sameTitle = (t) => String(t || "").toLowerCase().replace(/\.(jpe?g|png|webp)$/, "").replace(/\([^)]*\)/g, "").replace(/[^a-z0-9]+/g, " ").trim();   // "(cropped)" is the same photo
 
 async function searchOpenverse(query) {
   const url = `https://api.openverse.org/v1/images/?q=${encodeURIComponent(query)}&license=cc0,pdm,by,by-sa&page_size=12&mature=false`;
@@ -34,7 +49,7 @@ async function searchOpenverse(query) {
       // Openverse's own image proxy serves the file with the headers a web page needs.
       url: `https://api.openverse.org/v1/images/${r.id}/thumb/?full_size=true`,
       width: r.width || 0, height: r.height || 0, title: r.title || query,
-      about: `${r.title || ""} ${(r.tags || []).map((t) => t.name).join(" ")}`,
+      about: `${r.title || ""} ${(r.tags || []).map((t) => t.name).join(" ")}`, tags: (r.tags || []).slice(0, 8).map((t) => t.name).join(", "),
       credit: `"${r.title || "Untitled"}" by ${r.creator || "unknown"} (${lic}) ${r.foreign_landing_url || ""}`,
     };
   });
@@ -76,32 +91,47 @@ async function loadBitmap(url) {
   return bmp;
 }
 
+// Best photo first. Foreign banknotes and coins go last (used only if nothing else turns up). Then the photos
+// that show what the line means (sems, from the meaning model) or, without it, whose title and tags name the
+// subject; then portrait and large images, which crop best into 9:16.
+export function rank(candidates, query, sems = null) {
+  candidates.forEach((c, i) => {
+    c.fit = fit(c.about || c.title, query); c.foreign = FOREIGN_MONEY.test(`${c.title} ${c.about || ""}`) && !FOREIGN_MONEY.test(query);
+    if (sems) c.sem = sems[i];
+  });
+  const by = (c) => (sems ? Math.round(c.sem * 50) / 50 : c.fit);
+  return candidates.sort((a, b) => (Number(a.foreign) - Number(b.foreign)) || (by(b) - by(a)) || (b.fit - a.fit) || (Number(b.height >= b.width) - Number(a.height >= a.width)) || (Math.min(b.width, 2400) - Math.min(a.width, 2400)));
+}
+
 export class MediaFinder {
-  constructor(generic) { this.generic = generic; this.used = new Set(); }
+  // judge (optional): async (meaning, texts) -> how close each text is to the meaning (0..1), or null.
+  constructor(generic, judge = null) { this.generic = generic; this.used = new Set(); this.usedTitles = new Set(); this.judge = judge; }
 
   // Tries the line's own subject first, then the topic's general visuals. The result says whether the
   // photo actually fits what the line is about (relevant), so the app can use an illustration instead.
-  async find(query) {
+  // With a meaning ({ line, topic, own }: own when the query is the line's own subject), photos are judged by
+  // what they show, not by their words: "Perth City Skyline" matches a search for "city skyline", not a line
+  // about the Federal Reserve.
+  async find(query, meaning = null) {
     for (const [k, q] of [query, ...this.generic.filter((g) => g !== query)].slice(0, 3).entries()) {
-      const asset = await this.findImage(q).catch(() => null);
-      if (asset) return { ...asset, query: q, relevant: k === 0 && asset.fit >= 0.5 };
+      const asset = await this.findImage(q, meaning).catch(() => null);
+      if (asset) return { ...asset, query: q, relevant: asset.sem != null ? asset.sem >= (k === 0 && meaning?.own ? RELEVANT_OWN : RELEVANT) : k === 0 && asset.fit >= 0.5 };
     }
     return null;
   }
 
-  async findImage(query) {
+  async findImage(query, meaning = null) {
     const lists = await Promise.allSettled([searchOpenverse(query), searchCommons(query)]);
     const candidates = lists.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
-    // Photos whose title/tags name the subject first; then portrait and large images, which crop best into 9:16.
-    for (const c of candidates) { c.fit = fit(c.about || c.title, query); c.foreign = FOREIGN_MONEY.test(`${c.title} ${c.about || ""}`) && !FOREIGN_MONEY.test(query); }
-    // Foreign banknotes and coins go last (used only if nothing else turns up).
-    candidates.sort((a, b) => (Number(a.foreign) - Number(b.foreign)) || (b.fit - a.fit) || (Number(b.height >= b.width) - Number(a.height >= a.width)) || (Math.min(b.width, 2400) - Math.min(a.width, 2400)));
+    const sems = meaning && this.judge && candidates.length ? await this.judge(meaning, candidates.map(describe)).catch(() => null) : null;
+    rank(candidates, query, sems);
     let attempts = 0;
     for (const c of candidates) {
-      if (this.used.has(c.url) || (c.width && c.width < 640)) continue;
+      // The same photo is often listed twice under different addresses: never show it twice in a video.
+      if (this.used.has(c.url) || this.usedTitles.has(sameTitle(c.title)) || (c.width && c.width < 640)) continue;
       if (++attempts > 4) break;
-      this.used.add(c.url);
-      try { return { bitmap: await loadBitmap(c.url), credit: c.credit, title: c.title, fit: c.fit }; } catch { /* try the next one */ }
+      this.used.add(c.url); this.usedTitles.add(sameTitle(c.title));
+      try { return { bitmap: await loadBitmap(c.url), credit: c.credit, title: c.title, fit: c.fit, sem: c.sem ?? null }; } catch { /* try the next one */ }
     }
     return null;
   }

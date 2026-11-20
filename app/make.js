@@ -1,7 +1,7 @@
 // The whole pipeline, on the phone: research -> script -> voice -> photos -> music -> render.
 import * as research from "./research.js";
 import { buildEvergreen, buildNews, buildMarket, buildCustom, buildMetadata, speakable, statFor, visualMatch } from "./script.js";
-import { MediaFinder } from "./media.js";
+import { MediaFinder, STRONG } from "./media.js";
 import { loadVoice, phonemize, synthesize, voiceRate, setVoice, releaseVoice, voiceDownloadMB, voiceNotice, voiceEngine, naturalFailed } from "./tts.js";
 import { generateMusic, mix, resample, SR } from "./music.js";
 import { loadFonts, renderReel, drawMarketCover } from "./render.js";
@@ -444,24 +444,55 @@ export async function planReel(opts, ui) {
 
 // Finds a photo for every scene (skipped in offline mode: scenes then use animated backgrounds).
 async function attachPhotos(script, generic, opts, say) {
-  const finder = new MediaFinder(opts.offline ? [] : generic), usedQueries = new Set();
-  if (opts.offline || opts.noPhotos) finder.find = finder.findImage = async () => null;   // drafts find photos when opened
+  const offline = opts.offline || opts.noPhotos;
+  const judge = offline ? null : await photoJudge();
+  const finder = new MediaFinder(opts.offline ? [] : generic, judge), usedQueries = new Set();
+  if (offline) finder.find = finder.findImage = async () => null;   // drafts find photos when opened
+  const topic = (script.topicTitle || script.title || "").replace(/\s*#Shorts$/, "").replace(/\s+\(.*\)$/, "");
+  // Your own topic (a person, a company, an idea): a line that names it searches for it ("Buffett entered the
+  // Wharton School…" looks for photos of Warren Buffett, not for "stock chart").
+  const key = script.kind === "custom" ? (topic.split(/\s+/).filter((w) => w.length > 3).pop() || "") : "";
+  const names = key ? new RegExp(`\\b${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i") : null;
   const media = [...script.lines, ...script.extras].filter((l) => l.kind === "media");
   for (const line of media) {
-    // Search for what THIS line talks about; fall back to the topic's own visuals.
-    const own = visualMatch(line.text);
+    // Search for what THIS line talks about; fall back to the topic's own visuals. A line keeps its own
+    // subject even if another line searched it too (the finder never repeats a photo); only the general
+    // visuals are swapped for variety. (Swapping a line's own subject for a general one, while still treating
+    // the photo as the line's own, once put Perth's skyline on a line about the Federal Reserve.)
+    const own = visualMatch(line.text) || (names?.test(line.text) ? topic : null);
     line.concrete = Boolean(own);
     let q = own || line.visual || generic[0];
-    if (usedQueries.has(q)) q = generic.find((g) => !usedQueries.has(g)) || q;   // avoid repeating the same subject
+    if (q !== own && usedQueries.has(q)) q = generic.find((g) => !usedQueries.has(g)) || q;
     usedQueries.add(q);
     line.query = q;
-    line.asset = finder.find(q).catch(() => null);
+    line.asset = finder.find(q, { line: line.text, topic, own: q === own }).catch(() => null);
   }
   // Wait for the photos you'll see on the review screen; extras keep loading in the background.
   let got = 0;
   const shown = script.lines.filter((l) => l.kind === "media");
   await Promise.all(shown.map(async (l) => { l.asset = await l.asset; say("Finding free photos…", 0.2 + 0.8 * (++got / shown.length)); }));
+  // The meaning model gives its memory back once every photo is chosen (the voice and the video need it).
+  if (judge) Promise.allSettled(media.map((l) => l.asset)).then(() => judge.release());
   return { script, finder, generic, edited: false };
+}
+
+// Judges photos by meaning: how close what a photo shows (its title and tags) is to the line, or to the
+// topic itself (a photo of Warren Buffett fits any line of a video about him). Uses the meaning model that
+// ships with the app, loaded on demand; without it (an old phone, no memory), photos are judged by their words.
+async function photoJudge() {
+  try {
+    const S = await import("./ai/semantic.js");
+    if (!(await S.loadEmbedder())) return null;
+    const known = new Map();
+    const vec = async (t) => { if (!known.has(t)) known.set(t, (await S.embedTexts([t]))?.[0] || null); return known.get(t); };
+    const judge = async ({ line, topic }, texts) => {
+      const [l, t] = [await vec(line), topic ? await vec(topic) : null], v = await S.embedTexts(texts);
+      if (!l || !v) return null;
+      return v.map((x) => Math.max(S.cosine(l, x), t ? S.cosine(t, x) - 0.03 : -1));
+    };
+    judge.release = () => S.releaseEmbedder();
+    return judge;
+  } catch (e) { console.warn("photo judging unavailable", e); return null; }
 }
 
 // An idea from the Idea Lab -> a plan for the review screen.
@@ -629,7 +660,7 @@ export async function produceReel(plan, opts, ui) {
     else if (line.kind === "media" && (line.stance || line.question) && !line.vmode && opts.kinetic !== false) { sc.kind = "kinetic"; sc.chip = ""; }
     else {
       line.asset = await line.asset;
-      const v = decideVisual(line, i, script.title);
+      const v = decideVisual(line, i, script.title, script.lines);
       if (v.type === "photo") {
         sc.kind = "image"; sc.bitmap = line.asset.bitmap; sc.relevant = line.asset.relevant !== false;
         if (line.asset.credit && !credits.includes(line.asset.credit)) credits.push(line.asset.credit);
@@ -757,7 +788,20 @@ function coverBackground(ctx, scenes, accent, style = "bold", marketRecap = fals
 // Which visual a scene uses. mode: "auto" (default), "photo", "chart" or "illus".
 //   auto: a spoken number -> its chart; a photo of what the line itself names -> the photo;
 //         otherwise an illustration of the line's concept (rather than a loosely related stock photo).
-export function decideVisual(line, i, topicTitle = "") {
+// lines (optional, the whole script): photos in a row only when each shows its own line's different subject.
+// Two photos of the same thing back to back look like a jump cut (five bitcoin coins in a row), so the second
+// line gets its illustration instead. A scene you set to Photo yourself keeps its photo.
+export function decideVisual(line, i, topicTitle = "", lines = null) {
+  const v = pickVisual(line, i, topicTitle);
+  const prev = lines && i > 0 ? lines[i - 1] : null, q = (x) => String(x?.asset?.query || x?.query || "").toLowerCase();
+  if (v.type === "photo" && (line.vmode || "auto") === "auto" && prev?.kind === "media" && prev.asset?.bitmap && (!line.concrete || q(prev) === q(line))
+    && decideVisual(prev, i - 1, topicTitle, lines).type === "photo") {
+    const an = line.analysis ??= analyzeLine(line.text);
+    return { type: "illus", icon: an.icon || iconFor(topicTitle)?.icon || "coins", label: an.icon ? an.label : iconFor(topicTitle)?.label || null };
+  }
+  return v;
+}
+function pickVisual(line, i, topicTitle = "") {
   if (line.kind !== "media") return { type: line.kind };
   const an = line.analysis ??= analyzeLine(line.text);
   const icon = an.icon || iconFor(topicTitle)?.icon || "coins";
@@ -772,7 +816,8 @@ export function decideVisual(line, i, topicTitle = "") {
   if (mode === "illus") return { type: "illus", icon, label };
   if (mode === "photo") return photo ? { type: "photo" } : { type: "illus", icon, label };
   if (an.stat && i > 0) return { type: "stat", spec: an.stat };
-  if (photo && matches && (line.concrete || i === 0)) return { type: "photo" };
+  // A photo that clearly shows what the line means (judged by meaning) is as good as one of its own subject.
+  if (photo && matches && (line.concrete || i === 0 || (line.asset.sem ?? 0) >= STRONG)) return { type: "photo" };
   if (an.icon) return { type: "illus", icon, label };
   if (photo && matches) return { type: "photo" };
   if (an.stat) return { type: "stat", spec: an.stat };

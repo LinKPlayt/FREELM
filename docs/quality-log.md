@@ -10,6 +10,84 @@ before and after on the same inputs, and add tests so it can't come back.
 
 ---
 
+## v52 · Visuals · Photos chosen by meaning
+
+**Weakest area found.** With photos on (the default), the app planned eight real "Your topic" reels: Federal
+Reserve, Warren Buffett, Mortgage, Credit card, Bitcoin, Inflation, Roth IRA and Gold. Every scene that showed a
+photo was drawn exactly as in the video. 10 of the 23 photos shown were wrong for what was being said:
+- Perth's skyline for "The Federal Reserve System is the central banking system of the United States" and for a
+  mortgage line; another skyline for inflation.
+- Shipping containers for "The Federal Reserve System is composed of several layers".
+- A 19th-century Chinese banknote for a Roth IRA.
+- A phone showing stock charts for "Gold is a chemical element".
+
+Only 5 of the 23 showed the actual subject.
+
+Two causes:
+- **A logic bug.** When a line's own subject had already been searched by another line, the search was swapped
+  for one of the niche's general visuals ("city skyline"), but the photo was still treated as the line's own.
+- **Matching by words, not meaning.** A photo counted as relevant if its title contained the search words, and
+  nothing checked it against what the line actually says. "Perth City Skyline" was a perfect match for "city skyline".
+
+**Technique.** Judge photos the way an editor does, by what they show. The app already ships a small sentence
+embedding model (all-MiniLM-L6-v2, 23 MB, used by deep research). Each candidate's title and tags (cleaned of file
+names, catalogue numbers and camera codes) are compared by meaning with the line, and with the topic (a photo of
+Warren Buffett fits any line of a video about him). An editing rule from film is added too: no two shots of the
+same subject back to back.
+
+**What changed:**
+- `app/media.js`:
+  - `describe()` cleans a photo's title and tags.
+  - `rank()` sorts by meaning when it's available.
+  - `MediaFinder` takes a judge. A photo is relevant at cosine ≥ 0.36, or ≥ 0.30 when the search was the line's
+    own subject.
+  - The same photo is never used twice, including duplicate listings and "(cropped)" copies.
+- `app/ai/semantic.js`: `loadEmbedder()` / `releaseEmbedder()` load the model alone, on demand (775 ms on a
+  laptop), and free it once the photos are chosen (unless semantic search is using it). The voice and the
+  video get the memory back.
+- `app/make.js` `attachPhotos`:
+  - A line keeps its own subject.
+  - In "Your topic" reels, a line that names the topic searches for it.
+  - Photos are judged by meaning. Without the model, photos are judged by their words as before.
+- `decideVisual`:
+  - A clear match (≥ 0.52) is shown even where an illustration would otherwise be chosen.
+  - Photos in a row only when each shows its own line's different subject; otherwise the second line gets its
+    illustration.
+  - A scene set to Photo by hand keeps it.
+
+**Calibration** (the same searches, cosine to the line or topic):
+- Photos of the subject itself: 0.47–0.86 (Federal Reserve banks 0.47–0.72, Warren Buffett 0.67–0.86, credit
+  cards 0.60–0.84).
+- Unrelated photos: 0.00–0.34 (city skylines for the Fed 0.00–0.13, stock charts on a phone for a line about a
+  library book 0.21).
+- Houses for mortgage lines: 0.29–0.32 (hence the lower bar when the search was the line's own subject).
+
+**Measured**, same 8 topics, same day, v51 against v52; each shown photo labelled by whether it shows the
+line's subject or the topic:
+
+| | v51 | v52 |
+|---|---|---|
+| Photos shown | 23 | 15 |
+| Show the subject | 5 | 13 |
+| Generic but on-theme (a house for a mortgage) | 8 | 2 |
+| Wrong or misleading | 10 | 0 |
+| Share of shown photos that show the subject | 22% | 87% |
+| Longest run of photos in a row | 4 (Gold: ingot, phone, Wall Street, NYSE) | 1 |
+
+Where no photo fits (Inflation, Roth IRA), every scene now gets its on-topic illustration. A full render of the
+Federal Reserve reel alternates two real Federal Reserve banks with illustrations.
+
+**Tests.** `tests/web/logic.mjs` → "Logic: photos chosen by meaning (v52)":
+- `describe()` cleaning.
+- Ranking: the Fed photo beats "Perth City Skyline" even for the search "city skyline".
+- The real model: a Fed line scores ≥ 0.5 against a Fed bank and ≤ 0.2 against a skyline; the model loads and
+  is released.
+- The no-repeat rule.
+
+`tests/web/fuzz.mjs` runs `describe()` on hostile input.
+
+---
+
 ## v51 · Narration · Natural timing: pauses that follow the story
 
 **Weakest area found.** Measured with the app's own voice (Kokoro, af_heart) on real scripts the app wrote, the
@@ -152,7 +230,10 @@ Found on the live feed right after release and added: a trailing fragment that p
    October surge 20.5%"). A spoken rewrite needs care to stay faithful.
 3. **Pronunciation of new names.** Tickers and company names from the day's news (CoreWeave, AGNC, HELOC) aren't
    in the pronunciation list; check how the voice says them.
-4. **Photo relevance.** Photos are matched by words in their titles; judge them by meaning (the on-device
-   semantic model is already used by the fact check).
+4. **Photo framing.** A landscape or square photo (most of what Openverse and Commons return) is shown whole in
+   the middle of the screen, about 96% of the width, on a blurred copy of itself. A 3:2 photo then covers about a
+   third of the frame. The camera pans in a random direction, sometimes away from the subject. A subject-aware
+   crop (find the busy, detailed region; fill the frame when it fits; move the camera toward it) would look far
+   more cinematic.
 5. **Emphasis.** The voice gives every word the same weight; key numbers and contrast words ("but", "only",
    "never") could be stressed (Kokoro takes stress marks in its phonemes).

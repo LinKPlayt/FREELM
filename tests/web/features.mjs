@@ -323,12 +323,13 @@ export default async function ({ t, newPage, BASE }) {
 
   t.section("Features: What's new, storage, make-time, Library covers");
   try {
-    // a returning user who last saw version 29 (the window shows the newest three updates)
-    await page.evaluate(() => localStorage.setItem("seenVersion", "47"));
+    // a returning user who last saw the version two updates back: the window shows the two newest updates, not the one they saw
+    const notes = await page.evaluate(async () => { const V = await import("./app/version.js"); return { v: V.APP_VERSION, titles: V.UPDATES.slice(0, 3).map((u) => u.title) }; });
+    await page.evaluate((v) => localStorage.setItem("seenVersion", String(v - 2)), notes.v);
     await page.reload(); await until(page, () => window.__ready, null, 60000);
     t.ok(await page.locator("#news-sheet").count() === 1 && /What's new/.test(await page.innerText("#news-sheet")), "What's new appears after an update");
     const news = await page.innerText("#news-sheet");
-    t.ok(/newsreader/.test(news) && /make sense/.test(news) && !/redesigned ReelBot/.test(news), "it lists only the updates since the last one seen", news.slice(0, 200));
+    t.ok(news.includes(notes.titles[0]) && news.includes(notes.titles[1]) && !news.includes(notes.titles[2]), "it lists only the updates since the last one seen", news.slice(0, 200));
     await page.click('[data-news="close"]');
     t.ok(await page.locator("#news-sheet").count() === 0, "Got it closes it");
     await page.reload(); await until(page, () => window.__ready, null, 60000);

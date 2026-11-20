@@ -974,7 +974,7 @@ function updateEstimate() {
     : secs < lo ? (spare ? ` (researched lines will be added to reach ${lo}s)` : " (short: tap + Add a line, or the end card stays on longer)") : "");
   el.classList.toggle("warn", secs > hi || secs < lo);
   // Reel coach: a score and the top things to improve.
-  const visuals = plan.script.lines.map((l, i) => decideVisual(l, i, plan.script.title));
+  const visuals = plan.script.lines.map((l, i) => decideVisual(l, i, plan.script.title, plan.script.lines));
   const c = coach(plan.script.lines, { estimate: secs, range: [lo, hi], visuals });
   const color = c.score >= 80 ? "var(--good)" : c.score >= 60 ? "var(--accent)" : "var(--bad)";
   const facts = plan.script.lines.map((l) => l.check).filter((x) => x && x.kind === "fact");
@@ -1033,7 +1033,7 @@ function showReview() {
   const { script } = state.plan;
   $("review-title").textContent = script.title;
   const content = script.lines.filter((l) => l.kind !== "outro").length;
-  const visuals = script.lines.map((l, i) => decideVisual(l, i, script.title));
+  const visuals = script.lines.map((l, i) => decideVisual(l, i, script.title, script.lines));
   $("scenes").innerHTML = script.lines.map((l, i) => {
     const v = visuals[i];
     let tag = i === 0 ? "Hook" : l.kind === "outro" ? "Ending" : l.kind === "quiz" ? `Question ${l.quiz?.n || ""} · countdown` : l.kind === "answer" ? `Answer · ${l.answer ? "True" : "False"}` : l.kind === "chart" ? "Chart" : l.kind === "section" ? `Chapter ${l.num}` : l.kind === "recap" ? "Recap" : `Scene ${i}`;

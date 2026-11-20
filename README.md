@@ -99,10 +99,15 @@ Each scene's picture is chosen from the line being spoken, not from a fixed list
 - **Illustrations for concepts.** 17 drawn icons (piggy bank, house, credit card, bank, shield,
   coins, rising and falling charts, shopping cart, hourglass, graduation cap, briefcase, scales,
   target, calendar, bitcoin, receipt), picked from the line's meaning and animated.
-- **Photos only when they fit.** The photo search uses the line's own subject and ranks photos by
-  how well their title and tags match it. A photo is used (including on the first scene and the
-  cover) only when it matches what was searched for. Otherwise the scene gets an illustration instead of
-  an unrelated stock photo.
+- **Photos chosen by meaning.** The photo search uses the line's own subject (for your own topic, a line
+  that names it searches for it: a video about Warren Buffett looks for photos of him). Each photo found is
+  then judged by what it shows, not by its title's words: its title and tags are compared by meaning with
+  the line and the topic, on the phone, by the small language model that ships with the app
+  (all-MiniLM-L6-v2). A photo is used (including on the first scene and the cover) only when it really shows
+  what's being said: a line about the Federal Reserve gets a Federal Reserve bank, not a city skyline that
+  happened to match a search for "city skyline". Otherwise the scene gets an illustration. The same photo
+  is never used twice, and two photos of the same subject never run back to back (the second scene gets its
+  illustration), so scenes alternate. Measurements are in [docs/quality-log.md](docs/quality-log.md).
 - **Your call on every scene.** The review screen shows each scene's visual and lets you switch it
   between **Auto**, **Photo**, **Chart** (when the line has a number) and **Picture**.
 
