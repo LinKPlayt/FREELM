@@ -546,5 +546,41 @@ export default async function ({ t, newPage }) {
   t.ok(v58.weights && wNum > 4 * wAt && wSP > 2 * wIs && wThe < wSP, "a word's caption time comes from its sounds: \"7,176\" (said in full) gets far more than \"at\"", JSON.stringify(v58.weights));
   t.ok(v58.stale === null, "sounds for an older version of a line aren't used (the letters are, as before)");
   t.ok(v58.batch.join() === "true,false,true", "many words are sounded out in one eSpeak run, one answer per word, empty for empty", JSON.stringify(v58.batch));
+
+  t.section("Logic: \"Your topic\" scripts that use their research (v59)");
+  const v59 = await page.evaluate(async () => {
+    const ST = await import("./app/story.js");
+    const out = {};
+    const story = (topic, niche, texts) => ST.composeStory(topic, niche, texts.map((text) => ({ text, source: "Wikipedia · " + topic }))).lines.map((l) => l.text);
+    // 401(k): a name ending in a bracket, and a definition with a legal tail.
+    out.k = story("401(k)", "investing", ["In the United States, a 401(k) plan is an employer-sponsored defined-contribution personal pension account, as defined in subsection 401 of the U.S. Internal Revenue Code.",
+      "Periodic employee contributions come directly out of their paychecks, and may be matched by the employer.", "At the end of the first quarter of 2026, assets held in 401(k) plans were estimated at $9.9 trillion."]);
+    // An article that calls its topic by its abbreviation, and a definition left with a stray comma.
+    out.heloc = story("Home equity line of credit", "real estate", ["A home equity line of credit, is a revolving type of secured loan in which the lender agrees to lend a maximum amount within an agreed period, where the collateral is the borrower's property.",
+      "HELOCs are usually offered at attractive interest rates.", "A reason for the popularity of HELOCs is their flexibility, both in terms of borrowing and repaying."]);
+    out.alias = [ST.topicAliases("Exchange-traded fund", ["ETFs own stocks.", "An ETF trades all day."]), ST.topicAliases("Index fund", ["IF this.", "IF that.", "if so"]), ST.topicAliases("( ) S&P x", ["( ) S", "( ) S"])];
+    out.contrast = [ST.fits("In contrast, a few governments have used bitcoin in some capacity.", "Bitcoin"), ST.fits("By contrast, bonds pay interest to holders.", "Bond")];
+    out.it = [ST.standAlone("It was true of virtually all plans offered by large employers.", "Health savings account"), ST.standAlone("It pays interest every year.", "Bond")];
+    out.risk = [ST.roleOf("Hedge funds take large positions to generate a risk-adjusted return.", "Hedge fund"), ST.roleOf("Early credit cards were mailed to customers thought to be low risk.", "Credit card"), ST.roleOf("Stocks carry the risk of losing money.", "Stock")];
+    // The key-number card says big amounts the way the narrator does.
+    const G = await import("./app/graphics.js");
+    const said = (spec) => { const c = document.createElement("canvas"); c.width = 1080; c.height = 1920; const ctx = c.getContext("2d"), seen = [];
+      const f = ctx.fillText.bind(ctx); ctx.fillText = (t, ...r) => { seen.push(String(t)); return f(t, ...r); }; new G.StatBg(spec, [255, 214, 10]).draw(ctx, 1); return seen; };
+    out.counter = [said({ type: "money", value: 9.9e12, label: "ASSETS" }), said({ type: "bignum", value: 21e6, prefix: "", suffix: "", label: "BITCOIN" }), said({ type: "money", value: 1550, label: "BENEFIT" }), said({ type: "money", value: 2.25e9, label: "X" })]
+      .map((seen) => seen.find((t) => /\d/.test(t)));
+    out.tips = ["Social Security", "Short", "Short-term capital gains", "Home equity line of credit", "Certificate of deposit", "Stock split", "Ethereum", "Venture capital"].map((t) => ST.adviceFor(t, "investing")[0]);
+    return out;
+  });
+  t.ok(v59.k.length >= 4 && /^A 401\(k\) plan is an employer-sponsored defined-contribution personal pension account\.$/.test(v59.k[0]) && v59.k.some((l) => /9\.9 trillion/.test(l)),
+    "a 401(k) script has its definition (legal tail dropped) and its facts: a topic ending in a bracket is recognised", JSON.stringify(v59.k));
+  t.ok(/^A home equity line of credit is a revolving type of secured loan/.test(v59.heloc[0]) && v59.heloc.some((l) => /^HELOCs are usually/.test(l)) && /Your home secures the loan/.test(v59.heloc.at(-1)),
+    "an article that says \"HELOCs\" is about the home equity line of credit; its definition loses the stray comma and its tip fits", JSON.stringify(v59.heloc));
+  t.ok(JSON.stringify(v59.alias) === '[["ETF"],[],[]]', "an abbreviation counts only when the article uses it in capitals, never as a lower-case word, and is plain letters", JSON.stringify(v59.alias));
+  t.ok(v59.counter.join(" | ") === "$9.9 TRILLION | 21 MILLION | $1,550 | $2.25 BILLION", "the key-number card counts to \"$9.9 TRILLION\", not \"$9,900,000,000,000\"; smaller amounts stay in digits", v59.counter.join(" | "));
+  t.ok(v59.contrast.join() === "false,false", "a sentence opening \"In contrast,\" or \"By contrast,\" leans on one we don't have, and is left out");
+  t.ok(v59.it[0] === null && v59.it[1] === "Bond pays interest every year.", "\"It was true of…\" is about a statement, not the topic: it isn't rewritten as \"Health savings account was true of…\"", JSON.stringify(v59.it));
+  t.ok(v59.risk.join() === "how,how,risk", "\"risk-adjusted\" and \"low risk\" aren't a catch; \"the risk of losing money\" is", v59.risk.join());
+  t.ok(/statement/.test(v59.tips[0]) && /no limit/.test(v59.tips[1]) && !/no limit/.test(v59.tips[2]) && /Your home/.test(v59.tips[3]) && /penalty/.test(v59.tips[4]) && /split doesn't change/.test(v59.tips[5]) && /afford to lose/.test(v59.tips[6]) && /Startup/.test(v59.tips[7]),
+    "each subject gets a takeaway that fits it, not \"check the fees\" (and short-term gains aren't short selling)", v59.tips.join(" | "));
   await page.context().close();
 }

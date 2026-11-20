@@ -1,9 +1,15 @@
 // The app's version and its update notes, shown once in a "What's new" window after each update.
 // When you deploy: bump APP_VERSION, add an entry at the top of UPDATES, and set the same number in
 // sw.js (VERSION = "reelbot-v<APP_VERSION>"). A test checks the two match.
-export const APP_VERSION = 58;
+export const APP_VERSION = 59;
 
 export const UPDATES = [
+  { version: 59, title: "Fuller scripts for your own topics", items: [
+    "Topics like 401(k), ETFs, REITs and home equity lines of credit get real scripts: their research used to be thrown away (a name ending in a bracket, or an article that says \u201cETFs\u201d instead of \u201cexchange-traded fund\u201d), leaving a video with no facts at all.",
+    "Lines are labelled more carefully: \u201cThe catch\u201d is a real catch, and sentences that lean on one that isn't there (\u201cIn contrast, \u2026\u201d) are left out.",
+    "Big numbers on the key-number card read the way they're said: \u201c$9.9 TRILLION\u201d instead of \u201c$9,900,000,000,000\u201d.",
+    "The closing tip fits the subject: Social Security, short selling, day trading, startups, home equity loans, CDs, stock splits and compound interest get their own instead of \u201ccheck the fees\u201d.",
+  ] },
   { version: 58, title: "Captions in step with the voice", items: [
     "Word-by-word captions, big words, chart labels and number pops now follow the narrator much more closely: each word's timing comes from its sounds, not its letters, so \u201c7,176\u201d or \u201cA.I.\u201d no longer throws the words after it off, and a breath the narrator takes mid-sentence holds the next caption back.",
     "Making several videos in one sitting no longer loses the voice: the pronunciation engine ran out of memory after about five videos and was replaced only when the app restarted.",

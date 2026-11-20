@@ -25,6 +25,16 @@ export const ADVICE = {
 export const TOPIC_ADVICE = [
   [/emergency fund|rainy day/i, ["Start with one month of expenses in a separate savings account, then build toward three to six.", "Keep it somewhere easy to reach, not in investments that can drop when you need the cash."]],
   [/dividend/i, ["Don't chase the highest yield; check that the company can keep paying it.", "Reinvesting dividends automatically lets them compound over time."]],
+  // Specific subjects before the general ones below (a stock split isn't "check the fees", a HELOC isn't an investment).
+  [/social security/i, ["Check your Social Security statement once a year to make sure your earnings record is right.", "The age you start claiming changes your monthly check for life, so compare the options before you decide."]],
+  [/^short$|\bshort[- ]?sell|\bshort sales?\b|\bshorting\b/i, ["A short sale can lose more than you put in, because there's no limit to how high a price can rise.", "If you ever short a stock, decide in advance the price at which you'll get out."]],
+  [/day trad|speculat|swing trad|options? trad/i, ["Treat it as speculation: only trade money you can afford to lose, and track every result honestly.", "Write down your rules for getting in and out before you place a trade, and stick to them."]],
+  [/venture capital|private equity|start-?ups?\b|angel invest/i, ["Startup investments can take years to pay off and many fail, so only use money you won't need for a long time.", "Spread small amounts across several companies rather than betting on one."]],
+  [/home equity|heloc|second mortgage|line of credit/i, ["Your home secures the loan, so borrow only what you're sure you can repay.", "Check whether the rate is variable, and what your payment would be if it went up."]],
+  [/certificates? of deposit|\bcds?\b|time deposit/i, ["Check the penalty for taking money out early before you lock it in.", "Compare rates at several banks; the same term can pay very different amounts."]],
+  [/stock split/i, ["A split doesn't change what your shares are worth in total, so don't buy just because of one.", "Look at the company's results, not its share count, when you decide."]],
+  [/compound interest|compounding/i, ["Start early: even small amounts have more years to grow.", "Pay off high-interest debt first; compounding works against you there too."]],
+  [/annuit/i, ["Ask for every fee and surrender charge in writing before you buy.", "Compare a few providers' quotes; payouts for the same money can differ."]],
   [/federal reserve|central bank|monetary policy|interest rates?\b|fed funds|federal funds/i, ["When rates change, check what your savings account pays and what your loans cost.", "If you have variable-rate debt, ask what a rate rise would add to your payment."]],
   [/\brent|landlord|tenant|lease/i, ["Before you sign a lease, read how and when the rent can go up.", "Know your local tenant rules; they vary a lot from place to place."]],
   [/index fund|etf|exchange-traded|mutual fund/i, ["Compare expense ratios before you buy; a small difference in fees compounds over decades.", "Pick a broad fund you can hold for years, and add to it on a schedule."]],
@@ -40,7 +50,7 @@ export const TOPIC_ADVICE = [
   [/tax/i, ["Keep records of income and expenses all year, not just at tax time.", "Check which deductions and credits you qualify for before you file."]],
   [/insur/i, ["Compare quotes every year; loyalty rarely gets you the best price.", "Read what's excluded, not just what's covered, before you buy."]],
   [/budget|saving|emergency fund|frugal|spend/i, ["Set up one automatic transfer to savings, even a small one.", "Track your spending for one month; most people find money they didn't know they were losing."]],
-  [/bitcoin|crypto|coin|token|blockchain|nft|defi/i, ["Never put in more than you could afford to lose completely.", "Use well-known platforms, turn on two-factor login, and never share your recovery phrase."]],
+  [/bitcoin|ethereum|\bether\b|solana|crypto|coin|token|blockchain|nft|defi|smart contract/i, ["Never put in more than you could afford to lose completely.", "Use well-known platforms, turn on two-factor login, and never share your recovery phrase."]],
 ];
 export const ADVICE_ANY = ["Before you decide anything about {t}, compare at least two options side by side.", "Read the fine print and the fees on any {t} offer before you sign."];
 
@@ -61,12 +71,26 @@ export function sameIdea(a, b, threshold = 0.6) {
   let n = 0; for (const w of A) if (B.has(w)) n++;
   return n / Math.min(A.size, B.size) > threshold;
 }
+// The abbreviation an article uses for its topic ("ETF" for "Exchange-traded fund", "HELOC" for "Home equity line of
+// credit"), set by composeStory from the article itself. Sentences that say "ETFs own…" are about the topic too.
+const ALIASES = new Map();
+export function topicAliases(topic, texts) {
+  const base = topic.replace(/\s+\(.*\)$/, ""), w = base.split(/[\s-]+/).filter(Boolean);
+  if (w.length < 2) return [];
+  const all = w.map((x) => x[0]).join("").toUpperCase(), major = w.filter((x) => !/^(of|and|the|for|to|in|on|a|an)$/i.test(x)).map((x) => x[0]).join("").toUpperCase();
+  // Only one the article really uses, in capitals, at least twice ("ETFs", "the ETF's"), and never as an ordinary
+  // lower-case word (the topic's pattern ignores case, so "IF" from "Index fund" would match every "if").
+  return [...new Set([all, major])].filter((a) => /^[A-Z]{3,8}$/.test(a) && texts.filter((t) => new RegExp(`(?<![\\w])${a}(?:s|'s)?(?![\\w])`).test(t)).length >= 2
+    && !texts.some((t) => new RegExp(`(?<![\\w])${a.toLowerCase()}(?![\\w])`).test(t)));
+}
 const topicRe = (topic) => {
   const base = topic.replace(/\s+\(.*\)$/, "");
   let alt = base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").split(/\s+/).join("[\\s-]+") + "(?:s|es|ing)?";
   // A one-word topic for a person or role also matches its word family ("Freelancer" -> "freelance work").
   if (/^[a-z]{6,}(?:er|or|ist)$/i.test(base)) alt += "|" + base.replace(/(?:er|or|ist)$/i, "") + "\\w*";
-  return new RegExp("\\b(?:" + alt + ")\\b", "i");
+  for (const a of ALIASES.get(topic) || []) alt += "|" + a + "(?:s|'s)?";
+  // Edges by lookaround, not \b: "401(k)" ends in a bracket, where \b can never match.
+  return new RegExp("(?<![\\w])(?:" + alt + ")(?![\\w])", "i");
 };
 
 const PRONOUN_START = /^(It|This|These|They|Their|Its|That|Those|Such|He|She|Instead|However|Also|Moreover|Furthermore|Thus|Therefore|Hence|As a result|In addition|For example|For instance)\b,?\s*/;
@@ -74,6 +98,8 @@ const ADVICE_START = /^(?:(?:at minimum|first|then|next|instead|so|and|but|final
 const WHY = /\b(lenders?|banks?|investors?|consumers?|borrowers?|savers?|buyers?|employers?|workers?|households?|people|customers?|individuals?|businesses|companies|governments?|you|your)\b[^.]{0,60}\b(use[sd]?|affects?|determines?|decides?|depends?|matters?|helps?|allows?|lets?|rely|relies|qualif\w+|pays?|saves?|earns?|loses?|gains?|benefits?)\b(?! be\b)|\b(important|so that|in order to|the purpose|advantage|key role|widely used|is used to|are used to)\b/i;
 const RISK_STRONG = /\b(criticis\w*|fraud\w*|collapse\w*|crash\w*|scams?|danger\w*|downside|bankrupt\w*|warn\w*|disadvantage\w*|drawback\w*|limited control|failed|failure)\b/i;
 const RISK = /\b(risks?|risky|volatil\w*)\b/i;
+// "Risk" that isn't a catch for the viewer: "a risk-adjusted return", "thought to be low risk", "risk management".
+const NOT_RISK = /\brisk-(?:adjusted|free|weighted|based)\b|\b(?:low|lower|lowest|little|minimal|no)[- ]risk\b|\brisk (?:management|tolerance|appetite|profile|premium)\b/gi;
 // A figure worth showing: a percentage, an amount of money or a big number (a bare year isn't one).
 const HAS_NUMBER = /\d\s?%|\bpercent\b|[$€£]\s?\d|\b\d[\d,.]*\s?(million|billion|trillion|thousand)\b|\b(half|double[sd]?|twice|triple[sd]?)\b/i;
 // A sentence about a relative, not the person ("His grandfather, Thomas Charles Munger, was a state representative…").
@@ -125,7 +151,7 @@ export function roleOf(text, topic) {
   if (isDefinition(text, topic)) return "definition";
   if (RISK_STRONG.test(text)) return "risk";
   if (WHY.test(text)) return "why";
-  if (RISK.test(text)) return "risk";
+  if (RISK.test(text.replace(NOT_RISK, ""))) return "risk";
   if (HAS_NUMBER.test(text)) return "number";
   if (HAS_YEAR.test(text)) return "history";
   return "how";
@@ -137,7 +163,7 @@ export function fits(text, topic) {
   if (n < 5 || n > 44) return false;
   if (JARGON.test(text) || META.test(text) || stale(text)) return false;
   if (/\b(however|nevertheless|nonetheless|on the other hand|the latter|the former|respectively)\b/i.test(text)) return false;   // leans on a sentence we may not have
-  if (/^(While|Although|Though|Despite|Whereas|Besides|Regarding|Conversely|Similarly|Likewise|Additionally|Meanwhile|Subsequently|Consequently|In contrast,|By contrast,|In response|As such|In this|In that|In these|Under this|Under these)\b/.test(text)) return false;
+  if (/^(While|Although|Though|Despite|Whereas|Besides|Regarding|Conversely|Similarly|Likewise|Additionally|Meanwhile|Subsequently|Consequently|In contrast,|By contrast,|In response|As such|In this|In that|In these|Under this|Under these)(?!\w)/.test(text)) return false;   // (?!\w), not \b: "\b" never matched after "In contrast,"
   if ((text.match(/,/g) || []).length > 4 || /:\s+\S/.test(text.replace(/^[^:]{0,25}:\s/, ""))) return false;      // lists and "X: a, b, c"
   if (/\b(U\.S|U\.K|U\.N|E\.U|Inc|Corp|Co|Ltd|vs|e\.g|i\.e|No|St|Mr|Mrs|Dr|approx)\.$/.test(text.trim())) return false;   // cut off at an abbreviation
   if (LOCAL.test(text) && !LOCAL.test(topic)) return false;
@@ -166,7 +192,7 @@ export function plainWords(text) {
   for (const [re, to] of PLAIN) t = t.replace(re, (...a) => { const r = typeof to === "function" ? to(...a) : to; return /^[A-Z]/.test(a[0]) ? r.replace(/^./, (c) => c.toUpperCase()) : r; });
   return t;
 }
-export function simplify(text, max = 22) {
+export function simplify(text, max = 22, slack = 4) {
   let t = plainWords(text.replace(/\s+/g, " ").trim());
   t = t.replace(/^In (economics|finance|accounting|business|banking|law|investing|macroeconomics|microeconomics|personal finance|real estate|the United States|the U\.S\.),\s+/i, "")
     .replace(/^([A-Z][^,]{2,60}),\s+(?:also|sometimes|often|commonly|formerly|better)?\s*(?:known|called|referred to|abbreviated|spelled) (?:as )?[^,]{2,60},\s+(is|are|was|were|refers|means)\b/, "$1 $2")
@@ -177,11 +203,11 @@ export function simplify(text, max = 22) {
   t = t.replace(/\s+so that (?:it|they|he|she|the|a|an)\b[^.;]*(?=[.;])/, "");          // "...rules so that it can replicate..." -> "...rules."
   if (words(t).length <= max) return t;
   // Too long: cut at the last clause boundary that still leaves a full thought of 8+ words.
-  const cuts = [...t.matchAll(/,\s+(?:which|while|whereas|although|though|including|such as|especially|particularly|typically|usually|often|provided|assuming|unless|and (?:is|are|was|were|has|have|it|they|this)|but|so that|as well as|resulting in|making|allowing|depending|either|to represent|in order to)\b|;\s+|\s+—\s+|:\s+(?=[a-z])/g)].map((m) => m.index);
+  const cuts = [...t.matchAll(/,\s+(?:which|where|while|whereas|although|though|including|such as|especially|particularly|typically|usually|often|provided|assuming|unless|and (?:is|are|was|were|has|have|it|they|this)|but|so that|as well as|resulting in|making|allowing|depending|either|to represent|in order to)\b|;\s+|\s+—\s+|:\s+(?=[a-z])/g)].map((m) => m.index);
   for (const at of cuts.reverse()) {
     const head = t.slice(0, at).trim();
     const n = words(head).length;
-    if (n >= 8 && n <= max + 4 && !/\b(and|or|the|a|an|of|to|in|for|with|by|as|is|are)$/i.test(head)) return head.replace(/[,;:]$/, "") + ".";
+    if (n >= 8 && n <= max + slack && !/\b(and|or|the|a|an|of|to|in|for|with|by|as|is|are)$/i.test(head)) return head.replace(/[,;:]$/, "") + ".";
   }
   return t;
 }
@@ -194,6 +220,8 @@ export function standAlone(text, topic, { plural = false, person = false, pronou
   // A person: "He is…" -> "Buffett is…" (their surname), when the pronoun is theirs.
   const pr = person && text.match(/^(He|She) (?=[a-z])/);
   if (pr) return pr[1] === pronoun ? text.replace(/^(He|She) /, topic.replace(/\s+\(.*\)$/, "").split(/\s+/).at(-1) + " ") : null;
+  // "It was true of…", "It is estimated that…": this "it" is a statement or nothing, not the topic.
+  if (/^It (?:is|was|has been|had been|would be|may be|can be) (?:also |not |often |widely |generally )?(?:true|the case|possible|likely|unlikely|important|necessary|common|unclear|clear|said|estimated|believed|thought|expected|reported|argued|known|noted|claimed|suggested|assumed|easy|hard|difficult)\b/.test(text)) return null;
   const m = text.match(/^(It|They) (?=[a-z])/);
   if (m) {
     const name = /^[A-Z]{2}/.test(topic) ? topic : topic.replace(/^./, (c) => c.toUpperCase());
@@ -206,6 +234,16 @@ export function standAlone(text, topic, { plural = false, person = false, pronou
 const LEADS = { why: "Why it matters:", risk: "The catch:", number: "By the numbers:", takeaway: "The takeaway:" };
 // After a lead-in, an ordinary opening word goes lower case ("The catch: the seller…"); names stay.
 const SOFT = /^(The|A|An|It|Its|They|Their|This|These|Many|Most|Some|In|On|At|When|If|As|For|With|There|Each|Every|One|People|Lenders|Banks|Investors|Borrowers|Sellers|Buyers|Companies|Businesses)\b/;
+// Leftovers of the source's cleaning, fixed by removing words only (the fact check still matches the source):
+// "A home equity line of credit, is…" (its ", or HELOC," was taken out) and a legal tail ("…, as defined in
+// subsection 401 of the U.S. Internal Revenue Code.") that made the 401(k)'s definition read as legalese.
+function tidy(text, topic) {
+  if (!text) return text;
+  let t = text.replace(/,\s+as (?:defined|described|set out|specified|provided) (?:in|by|under) [^,;]*(?=\.$)/i, "");
+  const m = t.match(/^((?:(?:In the United States|In the US|In the U\.S\.), )?(?:An?|The)\s+[^,]{2,60}?), (is|are|was|were)\b/i);
+  if (m && topicRe(topic).test(m[1])) t = t.replace(m[0], `${m[1]} ${m[2]}`);
+  return t;
+}
 const withLead = (role, text) => (LEADS[role] ? `${LEADS[role]} ${role !== "takeaway" && SOFT.test(text) ? text[0].toLowerCase() + text.slice(1) : text}` : text);
 
 // Builds the body of an explainer about `topic` from candidate sentences (in source order).
@@ -214,14 +252,17 @@ export function composeStory(topic, niche, candidates, { max = 5, takeaway = tru
   // The pronoun the article uses for its person (articles are consistent); none when it isn't clear.
   const all = candidates.map((c) => c.text || "").join(" "), he = (all.match(/\b(he|his|him|himself)\b/gi) || []).length, she = (all.match(/\b(she|her|hers|herself)\b/gi) || []).length;
   const pronoun = !person ? null : he >= 2 * she && he >= 2 ? "He" : she >= 2 * he && she >= 2 ? "She" : null;
+  ALIASES.set(topic, topicAliases(topic, candidates.map((c) => (typeof c === "string" ? c : c.text) || "")));
   const pool = [];
   candidates.forEach((c, i) => {
-    const raw = typeof c === "string" ? c : c.text;
+    const raw = tidy(typeof c === "string" ? c : c.text, topic);
     if (!raw || !fits(raw, topic)) return;
     if (typeof c !== "string" && localSection(c.source, topic)) return;
-    const text = simplify(raw);
+    let text = simplify(raw);
+    // The sentence that says what the topic is may keep a little more (it's the one the video can't do without).
+    if (words(text).length > 30 && isDefinition(text, topic)) text = simplify(raw, 22, 6);
     if (words(text).length > 30) return;
-    const prev = i > 0 ? (typeof candidates[i - 1] === "string" ? candidates[i - 1] : candidates[i - 1].text) : null;
+    const prev = i > 0 ? tidy(typeof candidates[i - 1] === "string" ? candidates[i - 1] : candidates[i - 1].text, topic) : null;
     // On topic = names the topic in its first half (a mention in passing at the end doesn't count).
     const at = text.search(topicRe(topic));
     const onTopic = at >= 0 ? at <= text.length * 0.66 : mentions(text.slice(0, Math.ceil(text.length * 0.66)), topic);

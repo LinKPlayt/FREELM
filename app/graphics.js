@@ -147,8 +147,12 @@ export class StatBg {
     label(ctx, this.s.label, W / 2, base + 90, this.a);
   }
   counter(ctx, a, p) {
-    const { cy } = this, v = this.s.value * ease(p / 0.6);
-    const text = this.s.type === "money" ? "$" + fmt(v) : fmt(v) + (this.s.suffix || "");
+    const { cy } = this, k = ease(p / 0.6), v = this.s.value * k;
+    // Millions and up count in the words the narrator says ("$9.9 TRILLION"), not thirteen digits ("$9,900,000,000,000").
+    const scale = [[1e12, "TRILLION"], [1e9, "BILLION"], [1e6, "MILLION"]].find(([n]) => this.s.value >= n);
+    const units = scale && this.s.value / scale[0], tidy = (x, d) => Math.abs(x * 10 ** d - Math.round(x * 10 ** d)) < 1e-6;
+    const num = scale ? fmt(units * k, tidy(units, 0) ? 0 : tidy(units, 1) ? 1 : 2) + " " + scale[1] : fmt(v);
+    const text = this.s.type === "money" ? "$" + num : num + (this.s.suffix || "");
     // a rising stack of coins behind the number
     const coins = Math.round(8 * a);
     for (let i = 0; i < coins; i++) {

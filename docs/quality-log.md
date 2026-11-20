@@ -10,6 +10,81 @@ before and after on the same inputs, and add tests so it can't come back.
 
 ---
 
+## v59 · Scripts · "Your topic" scripts that use their research
+
+**How it was found.** A real render first: a Federal Reserve reel, frame by frame, plus motion measured per
+second. The visuals held up: the photo is sharp and framed, and the only still stretches are the text cards,
+where the words appearing are the motion. The script was the weak part. So 34 "Your topic" scripts for common
+finance subjects were written by the app's own pipeline (no rendering) and every line was read.
+
+**Weakest area found.**
+- **Research thrown away.** 401(k) and Home equity line of credit got no facts at all; ETF, REIT and Student
+  loan got one. Their reels were a hook, maybe a definition, a tip and the end card. Causes:
+  - The topic pattern ended in `\b`, which can't match after "401(k)"'s bracket, so no sentence was ever "about
+    the 401(k)".
+  - The ETF, REIT and HELOC articles call their subject "ETFs", "REITs", "HELOCs", so those sentences counted as
+    off-topic.
+  - HELOC's definition read "A home equity line of credit, is…" (a stray comma where "or HELOC" was removed),
+    and at 34 words it was over the limit.
+  - 401(k)'s definition was rejected as legalese for its tail ("…, as defined in subsection 401 of the U.S.
+    Internal Revenue Code").
+- **Wrong labels**, said aloud and shown as chips: 5 of the 19 labelled facts.
+  - "Why it matters: in contrast, a few governments have used bitcoin…": the "In contrast," filter ended in
+    `\b`, which never matches after a comma.
+  - "The catch: …a risk-adjusted return" and "The catch: …thought to be low risk".
+  - "By the numbers: Health savings account was true of virtually all…": "It was true of…" was rewritten with the
+    topic's name.
+  - A Swedish ISK rule as "Why it matters" for Capital gains tax.
+- **Takeaways that don't fit**: 8 of 34. "Check the fees on anything you invest in" closed Social Security, Short
+  selling, Day trading, Venture capital, Home equity line of credit, Certificate of deposit and Stock split;
+  Ethereum got the investing tip.
+
+**What changed** (`app/story.js`):
+- `topicRe()`:
+  - edges by lookaround, so "401(k)" matches;
+  - it includes the topic's abbreviation from `topicAliases()`. An abbreviation counts only when the article
+    itself uses it in capitals at least twice, never as a lower-case word, plain letters, 3–8 long.
+- `tidy()` removes the stray comma before "is" and a trailing "as defined in…" clause. It only removes words,
+  so the fact check still matches the source.
+- `simplify()` may cut at ", where …"; the sentence that defines the topic may keep up to 28 words.
+- The opener filter uses `(?!\w)`, so "In contrast," and "By contrast," are caught.
+- `standAlone()` leaves "It is/was true, the case, likely, estimated…" alone.
+- "Risk" in "risk-adjusted", "risk-free", "low risk", "risk management" isn't a catch.
+- New vetted tips: Social Security, short selling, day trading, startups and venture capital, home equity loans,
+  CDs, stock splits, compound interest, annuities. Ethereum and other coins join the crypto tips.
+
+**Measured**, the same 34 topics, the app's own script writer, v58 → v59:
+
+| | Before | After |
+|---|---|---|
+| Facts in the scripts | 92 (2.71 a script) | 102 (3.00) |
+| Scripts with no facts | 2 | 0 |
+| Scripts with at most one fact | 5 | 1 (Student loan: its article is mostly country sections, rightly skipped) |
+| Wrongly labelled facts | 5 of 19 | 1 (the Swedish ISK line) |
+| Takeaways that don't fit the subject | 8 | 0 |
+
+Examples:
+- 401(k): nothing → "A 401(k) plan is an employer-sponsored defined-contribution personal pension account." /
+  contributions come out of paychecks and may be matched / why the pre-tax option attracts employees / $9.9
+  trillion in 401(k) plans.
+- Bitcoin: "Why it matters: in contrast, a few governments have used bitcoin in some capacity." → "The
+  environmental effects of bitcoin are substantial."
+- HSA: the garbled line → "Unlike a flexible spending account, HSA funds roll over and accumulate year to year if
+  they are not spent."
+
+One line got worse: Dollar cost averaging's broken Graham quote was replaced by a worked example out of context
+("Changing the DCA period to every 4 weeks…").
+
+**Also, seen in the new 401(k) render (visuals).** The key-number card counted up to "$9,900,000,000,000",
+thirteen digits shrunk to fit, while the narrator said "$9.9 trillion". `StatBg.counter` (`app/graphics.js`) now
+counts amounts of a million or more in the narrator's words: "$9.9 TRILLION", "21 MILLION", "$2.25 BILLION".
+Smaller amounts stay in digits ("$1,550"). Compared on the same cards, old and new drawn side by side.
+
+**Tests.** `tests/web/logic.mjs`, "\"Your topic\" scripts that use their research (v59)", including the counter's text. The fuzz test caught the
+first abbreviation code turning a hostile topic's brackets into a broken regular expression; fixed before release.
+
+---
+
 ## v58 · Narration · Captions in step with the voice, and a voice that lasts the sitting
 
 **How it was measured (new).** Every word's true start was found by forced alignment (torchaudio's MMS aligner,
@@ -560,13 +635,19 @@ Found on the live feed right after release and added: a trailing fragment that p
 4. **Captions on the hardest lines.** Headlines full of numbers, tickers and names still have 21–30% of words
    more than 200 ms off (v58). eSpeak's sounds for a word on its own differ from how Kokoro says it in the line;
    splitting the line's own phonemes by word would be closer.
-5. **"Your topic" jargon.** Formal words are now plain (v55), but technical terms remain ("distribution",
+5. **"Your topic" leftovers (v59).**
+   - Hedge fund opens on the wrong subject ("Hedge fund replication is…").
+   - Day trading's definition is cut short ("…speculation in securities in.").
+   - Worked examples are read out of context (Dollar cost averaging).
+   - Local rules without a country name (Sweden's ISK) aren't caught.
+   - Encyclopedia register remains ("is composed of several layers").
+6. **"Your topic" jargon.** Formal words are now plain (v55), but technical terms remain ("distribution",
    "securitization"); explaining a term needs a source sentence that does.
-6. **Photo supply.** Where no photo fits by meaning (Inflation, Roth IRA, a mortgage explainer), every scene is an
+7. **Photo supply.** Where no photo fits by meaning (Inflation, Roth IRA, a mortgage explainer), every scene is an
    illustration; other searches (the topic's Wikipedia image, related subjects) could find real photos that fit.
-7. **A measuring tool in the repo.** The Whisper/DNSMOS (v57) and forced-alignment (v58) checks live outside the
+8. **A measuring tool in the repo.** The Whisper/DNSMOS (v57) and forced-alignment (v58) checks live outside the
    repository; adding them under `scripts/` would let every narration change be measured the same way.
-8. **A review-editor timer.** `app/main.js` rechecks an edited line in a timeout that reads `state.plan.fact`
+9. **A review-editor timer.** `app/main.js` rechecks an edited line in a timeout that reads `state.plan.fact`
    after the plan can be cleared (an occasional uncaught error in the fuzz test). UI code, outside these three areas.
 
 (Done: AAPL-like tickers, queue item 5 before v57: spelled letters now come from a table, so "A.A.P.L." keeps both
