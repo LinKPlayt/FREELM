@@ -10,6 +10,29 @@ before and after on the same inputs, and add tests so it can't come back.
 
 ---
 
+## v56 · Scripts · Title Case headlines become sentences
+
+**Weakest area found.** 32 of the day's 72 headlines (44%) are in Title Case (Yahoo Finance, Forbes, U.S. News).
+News lines and their captions read "Fed Poised to Raise Rates Further to Stem Inflation": headline style, not speech.
+
+**What changed** (`app/newswriter.js`): `sentenceCase()`, applied in `spokenStory()`.
+- In a Title Case headline, a word is lowercased only when it's on a built-in list of common English and headline
+  words; hyphenated pairs need both halves on it.
+- Names (Bitcoin, Goolsbee), acronyms (FOMC), mixed-case brands (CoreWeave) and each sentence's first word keep
+  their capitals.
+- If more than two unknown capitalised words would remain, the headline is left as it was: half-converted reads
+  worse than Title Case.
+- "Cryptocurrency" joins the teaser nouns ("This Could Be the Best Cryptocurrency…").
+
+**Measured** on the day's snapshot: 30 of 32 Title Case headlines are now sentences, e.g. "Bitcoin open interest
+drops 20% as Ethereum and Solana slide further", "Fed's Goolsbee won't rule out larger rate increases as inflation
+risks mount". 2 stay as they were. The 72-headline newsroom results are unchanged. The word list was tuned on this
+day's headlines; the safety rule is what protects unseen ones.
+
+**Tests.** "Title Case headlines are said in sentence case…" in `tests/web/logic.mjs`.
+
+---
+
 ## v55 · Scripts · Plain words for formal ones
 
 **Weakest area found.** Researched sentences keep Wikipedia's register: "generally not taxed upon distribution",
@@ -374,8 +397,8 @@ Found on the live feed right after release and added: a trailing fragment that p
 
 ## Queue: weaknesses found, not fixed yet (highest impact first)
 
-1. **Headlinese.** Even complete headlines are written for the eye (Title Case, no articles: "Japan exports in
-   October surge 20.5%"). A spoken rewrite needs care to stay faithful.
+1. **Headlinese.** Title Case is handled (v56); headline grammar remains (no articles, present tense: "Japan
+   exports in October surge 20.5%"). A spoken rewrite needs care to stay faithful.
 2. **Emphasis.** The voice gives every word the same weight; key numbers and contrast words ("but", "only",
    "never") could be stressed (Kokoro takes stress marks in its phonemes).
 3. **"Your topic" jargon.** Formal words are now plain (v55), but technical terms remain ("distribution",

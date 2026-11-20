@@ -52,7 +52,7 @@ const TRAILING = [
   /^(?:see|find out|learn|discover|read on to see) (?:who|what|how|why|where|which|if)\b/i,
   /^(?:how|why|what|who)\b[^?]*$/i,                 // a fragment that promises the story: "How one investor is preparing."
 ];
-const HIDDEN = /\b(?:this|these)\s+(?:[\w'-]+\s+){0,3}?(?:stocks?|names?|risks?|reasons?|mistakes?|moves?|tricks?|things?|sectors?|compan(?:y|ies)|charts?|signals?|numbers?|funds?|etfs?|coins?|tokens?|strateg(?:y|ies)|rules?|tips?|analysts?|investors?|gurus?|experts?|ways?|picks?|plays?|trades?|states?|cities|habits?|signs?|investments?|assets?|millionaires?|billionaires?)\b/i;
+const HIDDEN = /\b(?:this|these)\s+(?:[\w'-]+\s+){0,3}?(?:stocks?|cryptocurrenc(?:y|ies)|names?|risks?|reasons?|mistakes?|moves?|tricks?|things?|sectors?|compan(?:y|ies)|charts?|signals?|numbers?|funds?|etfs?|coins?|tokens?|strateg(?:y|ies)|rules?|tips?|analysts?|investors?|gurus?|experts?|ways?|picks?|plays?|trades?|states?|cities|habits?|signs?|investments?|assets?|millionaires?|billionaires?)\b/i;
 const NOT_HIDDEN = /\b(?:this|these)\s+(?:week|month|year|quarter|fall|spring|summer|winter|morning|afternoon|evening|time|season)(?:'s)?\b/i;
 // A numbered list that doesn't give its items ("Debunking 7 Social Security myths", "4 dividend stocks paying…").
 const LISTICLE = /^(?:debunking |the |these )?\d+\s+(?:[\w&'-]+\s+){0,5}?(?:myths?|milestones?|things?|ways?|tips?|stocks?|reasons?|mistakes?|signs?|rules?|steps?|habits?|secrets?|facts?|questions?|picks?|funds?|etfs?|moves?)\b/i;
@@ -89,6 +89,51 @@ function untease(t) {
   });
 }
 
+// Title Case headlines ("Bitcoin Open Interest Drops 20% as Ethereum and Solana Slide Further") read like
+// headlines in the captions. Common words go lower case; names, acronyms and the first word stay.
+const COMMON = new Set(("a an the and or but nor for so yet as at by in of on to up via with from into onto over under after before amid " +
+  "against about above below between during despite through toward towards without within until since than then this that these those " +
+  "is are was were be been being has have had do does did will would can could may might must shall should not no all any some more most " +
+  "less least new old big small high low higher lower top best worst first last next its it his her their our your my who what when where why how " +
+  "says said say warns warn sees see sets set gets get makes make takes take adds add cuts cut hikes hike raises raise rises rise falls fall " +
+  "drops drop jumps jump slides slide surges surge plunges plunge tumbles tumble soars soar sinks sink climbs climb gains gain loses lose " +
+  "ends end opens open closes close holds hold hits hit nears near tops top beats beat misses miss rallies rally slips slip edges edge " +
+  "extends extend fails fail leaves leave follows follow suffers suffer accelerates accelerate slows slow mounts mount looms loom " +
+  "shows show reports report expects expect plans plan wants want needs need could won't can't doesn't isn't aren't rule out " +
+  "rate rates price prices market markets stock stocks shares share bond bonds yield yields fund funds investors investor traders trader " +
+  "inflation interest economy jobs job wages growth recession earnings profit profits revenue sales demand supply trade tariffs tariff " +
+  "home homes housing mortgage mortgages rent rents buyers sellers banks bank loans loan debt credit card cards savings tax taxes " +
+  "futures index points day days week weeks month months year years today tomorrow straight losses loss gain record lows highs quarter " +
+  "consumer consumers spending policy views calls call options table communication clear larger large risks risk adjustment confidence " +
+  "adequate trading debut pricing range profit-taking focus deck strong report weak hot cold further again still just only even now " +
+  "time times way ways people money cash cryptocurrency cryptocurrencies coin coins token tokens chip chips company companies firm firms " +
+  "deal deals plan plans move moves bet bets data guide guides increase increases decline declines government officials minutes stem " +
+  "poised likely set around across here there why it's what's provide provides give gives allow allows expand protect help helps adding " +
+  "rising falling lowering raising qualify grow strengthen earn earns highlights retirees monthly others payments access fast personal " +
+  "experience workers contractors legislation goal goals small businesses business presence technology statistics trends news currencies " +
+  "alone friends spring until introduces introduce launches launch unveils unveil boosts boost hurt hurts pressure costs cost buy sell " +
+  "should you each same hike hikes major hubs frenzy real estate predictable refinance built upward downward tech afford gig " +
+  "contribution contributions income entrepreneurship workforce profit taking newer veteran short track matter founders build teams " +
+  "labor protection gaps face faces paycheck paychecks owners owner partner check checks keeps working triple federal contracting " +
+  "affordable renters homebuyers plan unveils legislation would don't doesn't didn't isn't wasn't them they we us he she him women men " +
+  "owned hibernate").split(" "));
+export function sentenceCase(t) {
+  const words = String(t).split(/(\s+)/), caps = words.filter((w) => /[A-Za-z]{4,}/.test(w));
+  if (caps.length < 3 || caps.filter((w) => /^[A-Z]/.test(w.replace(/^\W+/, ""))).length / caps.length < 0.8) return t;   // not Title Case
+  let start = true, left = 0;
+  const common = (c) => c.toLowerCase().replace(/’/g, "'").split("-").every((p) => COMMON.has(p));
+  const out = words.map((w) => {
+    if (/^\s+$/.test(w)) return w;
+    const core = w.replace(/^[^A-Za-z]+|[^A-Za-z'’-]+$/g, ""), first = start;
+    start = /[.:!?]["”']?$/.test(w);
+    if (first || !core || !/^[A-Z][a-z'’]+(?:-[A-Z]?[a-z]+)*$/.test(core)) return w;
+    if (!common(core)) { left++; return w; }
+    return w.replace(core, core.toLowerCase());
+  }).join("");
+  // Half converted reads worse than Title Case: more than two unknown capitalised words left, keep it as it was.
+  return left > 2 ? t : out;
+}
+
 // The story as one or two spoken sentences, or null when it can't be told honestly.
 //   item: { title, summary, source }. Returns { text, resolved } (resolved: the summary filled a gap).
 export function spokenStory(item, { maxWords = 30 } = {}) {
@@ -99,7 +144,7 @@ export function spokenStory(item, { maxWords = 30 } = {}) {
   let head = stripSource(raw, item.source || "");
   if (/^(?:I|I'm|I've|I'd|My|We|We're|We've|Our)\b/.test(head)) return null;
   if (/^\W*c\s?o\s?r\s?r\s?e\s?c\s?t\s?i\s?o\s?n\b|^\//i.test(head)) return null;      // wire corrections
-  head = cleanHeadline(head, 99).replace(/\.$/, "");
+  head = sentenceCase(cleanHeadline(head, 99).replace(/\.$/, ""));
   // A column's byline ("Peterson: The Fed's chairman sees…"): one word before a colon that neither the rest
   // of the headline nor the summary mentions is the writer's name, not the story's subject ("Nvidia: Shares
   // jump…" keeps it: the story is about Nvidia).

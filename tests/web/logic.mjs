@@ -457,10 +457,12 @@ export default async function ({ t, newPage }) {
     const rl = ST.composeStory("Charlie Munger", "investing", ["Charles Thomas Munger was an American businessman, investor, and philanthropist.", "He was the vice chairman of Berkshire Hathaway from 1978 until his death in 2023.",
       "His grandfather, Thomas Charles Munger, was a state representative and later a U.S. district court judge.", "Munger enrolled in the University of Michigan, where he studied mathematics."].map((text) => ({ text, source: "Wikipedia" })), { max: 4, takeaway: false, person: true, born: 1924 }).lines.map((l) => l.text).join(" | ");
     out.relative = [/grandfather/.test(rl), /Michigan/.test(rl)];
+    const NW = await import("./app/newswriter.js");
+    out.cased = [NW.sentenceCase("Bitcoin Open Interest Drops 20% as Ethereum and Solana Slide Further"), NW.sentenceCase("Fed's Goolsbee Won't Rule Out Larger Rate Increases as Inflation Risks Mount"),
+      NW.sentenceCase("Fed minutes: Higher interest rates needed in December"), NW.sentenceCase("Spanberger Zorbles Quixotic Virginia Flumph Plan")];
     out.plain = ["A Roth IRA is generally not taxed upon distribution.", "Individuals who own it can vote, in order to steer it.", "It was utilized prior to 2002.", "It refers to individuals' rights.", "The value is obtained independently.", "It has an approximately 89 percent ratio."].map(ST.plainWords);
     out.def = [ST.isDefinition("A Roth IRA can also be an individual retirement annuity.", "Roth IRA"), ST.isDefinition("A Roth IRA is generally not taxed on the way out.", "Roth IRA")];
     out.say = SC.speakable("Shares of TSLA fell; AGNC and USDS rose, CNBC said. NOT a STOP sign for NASA.");
-    const NW = await import("./app/newswriter.js");
     out.byline = [NW.spokenStory({ title: "Peterson: The Fed's chairman sees an AI revolution coming. Now he has to figure out what it means", summary: "Kevin Warsh sees AI at a turning point." })?.text,
       NW.spokenStory({ title: "Nvidia: Shares jump after a record quarter", summary: "Nvidia beat estimates again." })?.text];
     return out;
@@ -469,6 +471,8 @@ export default async function ({ t, newPage }) {
   t.ok(v53.order[0] >= 0 && v53.order[1] > v53.order[0] && v53.year.join() === "1941,1947,9999", "a life is told in time order: an age becomes a year from the birth year", JSON.stringify(v53));
   t.ok(v53.pronoun.join() === "false,true", "\"She…\" after \"Munger married Nancy…\" is about her: it never becomes \"Munger was…\"", JSON.stringify(v53.pronoun));
   t.ok(v53.relative.join() === "false,true", "a biography doesn't spend a line on a relative (\"His grandfather… was a state representative\")", JSON.stringify(v53.relative));
+  t.ok(v53.cased.join(" | ") === "Bitcoin open interest drops 20% as Ethereum and Solana slide further | Fed's Goolsbee won't rule out larger rate increases as inflation risks mount | Fed minutes: Higher interest rates needed in December | Spanberger Zorbles Quixotic Virginia Flumph Plan",
+    "Title Case headlines are said in sentence case, names kept; a headline it can't convert cleanly stays as it was", v53.cased.join(" | "));
   t.ok(v53.plain.join(" | ") === "A Roth IRA is generally not taxed on distribution. | People who own it can vote, to steer it. | It was used before 2002. | It refers to people's rights. | The value is obtained independently. | It has an approximately 89 percent ratio.",
     "formal words become plain ones only where the meaning stays the same", v53.plain.join(" | "));
   t.ok(v53.def.join() === "true,false", "a second definition (\"can also be an…\") is recognised and dropped", JSON.stringify(v53.def));

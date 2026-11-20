@@ -1,9 +1,12 @@
 // The app's version and its update notes, shown once in a "What's new" window after each update.
 // When you deploy: bump APP_VERSION, add an entry at the top of UPDATES, and set the same number in
 // sw.js (VERSION = "reelbot-v<APP_VERSION>"). A test checks the two match.
-export const APP_VERSION = 55;
+export const APP_VERSION = 56;
 
 export const UPDATES = [
+  { version: 56, title: "Headlines read like sentences", items: [
+    "News headlines written in Title Case (\u201cBitcoin Open Interest Drops 20% as Ethereum and Solana Slide Further\u201d) are said and captioned as normal sentences, with names kept capitalised.",
+  ] },
   { version: 55, title: "Plainer words", items: [
     "Researched sentences use plain words instead of formal ones, where the meaning stays the same (\u201ctaxed upon distribution\u201d becomes \u201ctaxed on distribution\u201d, \u201cindividuals\u201d becomes \u201cpeople\u201d, \u201cprior to\u201d becomes \u201cbefore\u201d).",
   ] },
