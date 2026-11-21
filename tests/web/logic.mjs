@@ -244,7 +244,7 @@ export default async function ({ t, newPage }) {
   t.ok(r.heads[0][0] === "The Fed's chairman sees an AI revolution coming." && !/Dow Jones, S&P/.test(r.heads[1][0]) && r.heads[2][1] === true, "headlines lose labels, outlet names and ticker lists; non-news is spotted", JSON.stringify(r.heads));
   t.ok(r.thread.theme === "interest rates" && r.thread.order.join() === "0,2,1" && /^The thread today/.test(r.thread.text), "related headlines are grouped and their common thread explained", JSON.stringify(r.thread));
   t.ok(/fell across the board/.test(r.mood[0]) && /barely moved/.test(r.mood[1]) && /mixed/.test(r.mood[2]), "market recaps say how the day went", JSON.stringify(r.mood));
-  t.ok(/the catch/i.test(r.drama[0][0]) && /^Here's the catch: many/.test(r.drama[2][0]) && r.drama[2][1], "a hook that promises the catch is paid off by the catch line", JSON.stringify(r.drama.map((x) => x[0])));
+  t.ok(/\bcatch\b/i.test(r.drama[0][0]) && /^Here's the catch: many/.test(r.drama[2][0]) && r.drama[2][1], "a hook that promises the catch is paid off by the catch line", JSON.stringify(r.drama.map((x) => x[0])));
   t.ok(r.drama[0][2] >= 0.3 && r.drama[1][2] >= 0.25, "a beat after the hook and before the payoff", JSON.stringify(r.drama.map((x) => x[2])));
   t.ok(/^Bottom line: /.test(r.drama[3][0]) && /^So here's what to do: never/.test(r.drama[4][0]), "a clear bottom line, then the takeaway, spoken naturally", JSON.stringify(r.drama.map((x) => x[0])));
   t.ok(r.drama[5][3] && /comments/.test(r.drama[5][0]) && r.drama.length === 7, "a comment question sits right before the ending", JSON.stringify(r.drama.map((x) => x[0])));
@@ -678,5 +678,24 @@ export default async function ({ t, newPage }) {
   t.ok(v62.before < -3, "it starts dipping before the voice comes in (look-ahead), not after", v62.before.toFixed(1));
   t.ok(v62.gap < -6 && v62.longPause > -1.5, "it stays down through a short gap between lines, and comes back up in a long pause (no pumping)", `${v62.gap.toFixed(1)} / ${v62.longPause.toFixed(1)}`);
   t.ok(v62.dry && v62.finite, "without music the voice is untouched; the mix never clips");
+
+  t.section("Logic: hooks that open on something specific (v63)");
+  const v63 = await page.evaluate(async () => {
+    const H = await import("./app/hook.js");
+    const sc = (title, lines) => ({ title, kind: "custom", lines: [{ text: "x", kind: "media" }, ...lines.map((text) => ({ text, kind: "media" })), { text: "Follow.", kind: "outro" }] });
+    const pick = (s) => { H.dramatize(s); return s.lines[0].text; };
+    const genericHook = (t) => `${t}, explained in thirty seconds.`;
+    const k = sc("401(k)", ["A 401(k) plan is an employer-sponsored retirement account.", "By the numbers: assets held in 401(k) plans were estimated at $9.9 trillion."]); k.lines[0].text = genericHook("401(k)");
+    const d = sc("Dollar cost averaging", ["Dollar cost averaging is an investment strategy.", "By the numbers: it cuts the cost of the brokerage to 2% of the amount."]); d.lines[0].text = genericHook("Dollar cost averaging");
+    const st = sc("Stablecoin", ["A stablecoin is a cryptocurrency pegged to a reference asset.", "The catch: many stablecoins have failed to keep their value."]); st.lines[0].text = genericHook("Stablecoin");
+    const plain = ["Penny stock", "Private equity", "Leverage", "Market trend", "Cash flow", "Escrow", "Amortization", "Liquidity", "Junk bond"].map((t) => H.smartHooks(sc(t, [])).find((o) => o.kind === "plain").text);
+    return { k: pick(k), d: pick(d), st: pick(st), ss: H.smartHooks(sc("Social Security", ["By the numbers: the average monthly benefit was $1,551."])).map((o) => o.text), plain };
+  });
+  t.ok(v63.k === "$9.9T. That's a 401(k) figure most people never hear.", "a striking number opens the video itself, not a tease about it", v63.k);
+  t.ok(/^Investing the same amount on a schedule/.test(v63.d), "a small side figure doesn't beat the subject's stakes as the opening", v63.d);
+  t.ok(v63.st === "Stablecoins are built to feel as safe as a dollar. But there's a catch.", "the catch is set up with the subject's real stakes", v63.st);
+  t.ok(!v63.ss.some((h) => /Social Security number/.test(h)), "never \"a Social Security number\" (it's a figure)", JSON.stringify(v63.ss));
+  t.ok(new Set(v63.plain.map((h) => h.split(" ").slice(-3).join(" "))).size >= 3 && !v63.plain.some((h) => /heard of [a-z]+ [a-z]+\. |understood [a-z]/.test(h) && /\b(a|an) term\b/.test(h)),
+    "subjects with nothing specific get one of several openings, not all the same sentence", JSON.stringify(v63.plain));
   await page.context().close();
 }

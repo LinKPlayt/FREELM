@@ -10,6 +10,63 @@ before and after on the same inputs, and add tests so it can't come back.
 
 ---
 
+## v63 · Scripts · Openings that say something
+
+**How it was found.** The opening line of every "Your topic" script for 34 common finance subjects, as viewers hear
+it: after `dramatize()` replaces the generic opener with one of `smartHooks()`'s.
+
+**Weakest area found.** 17 of 33 openings were fill-in-the-blank templates:
+- "X: most people never learn how it actually works. Here's the short version." (8);
+- "X: there's one number most people never hear. Stay for it." (5);
+- "X: everyone talks about it. Almost nobody mentions the catch." (4).
+
+A channel posting daily would open most videos with the same three sentences. They also held back the one concrete
+thing they had: the number tease knew the number. And 9 of the 14 hand-written "stakes" openings ended with the
+same "Here's how it works."
+
+**Technique.** Short-form openings hold viewers with something specific in the first second: a concrete stake, a
+real tension, a striking figure. A vague promise does less. Nothing may be invented, so everything comes from the
+script's own lines, or from the hand-written, true and general stakes lines.
+
+**What changed** (`app/hook.js`):
+- Stakes lines for 27 more subjects people search for: bonds, stock splits, hedge funds, annuities, day trading,
+  HSAs, HELOCs, CDs, dollar-cost averaging, venture capital, REITs, short selling, Social Security, payday loans,
+  mutual funds, Treasury bills, gold, net worth, savings accounts, credit unions, minimum wage, GDP,
+  hyperinflation, bank runs, bubbles, crypto, ETFs. All true and general, with no figures. "Inflation" no longer
+  catches "hyperinflation".
+- The number opening says the number first: "$9.9T. That's a 401(k) figure most people never hear." Only when the
+  figure is striking (billions, trillions) or the subject has no stakes line: "2%" or "$50M" from a side detail
+  made a weaker opening than the stakes. It says "figure", because "a Social Security number" is something else.
+- The catch tease is set up with the subject's stakes: "Stablecoins are built to feel as safe as a dollar. But
+  there's a catch."
+- Subjects with nothing specific get one of several openings, picked by a hash of the subject (FNV-1a), each
+  promising what the next line gives. So do catch teases without stakes, and the stakes lines' tails.
+
+**Measured.**
+
+| | Before | After |
+|---|---|---|
+| 34 common subjects (tuning set): specific openings | 16 of 33 | 33 of 33 |
+| … template openings | 17 | 0 |
+| 22 fresh subjects never looked at: specific openings | 0 of 17 | 2 of 18 |
+| … template openings | 17 (one sentence used 13 times) | 16 (no sentence more than 5 times) |
+
+The honest reading: specific openings come from a hand-written table, so they reach the common subjects people are
+likely to type but not the long tail of the 20,038-article library. There, the change is variety, not
+specificity. A general opening writer that adds nothing untrue would need language generation beyond the on-phone
+model. "$9.9T." is spoken "nine point nine trillion dollars".
+
+**Tests.** `tests/web/logic.mjs`, "hooks that open on something specific (v63)":
+- the number first;
+- a small figure doesn't beat the stakes;
+- the catch set up with stakes;
+- never "a Social Security number";
+- the openings vary.
+
+The v28-era catch test now accepts "a catch".
+
+---
+
 ## v62 · Narration · The music ducks under the voice like a broadcast mix
 
 **How it was measured (new).** The mix was split into its parts on real narration. 42 synthesized lines were laid
@@ -826,21 +883,23 @@ Found on the live feed right after release and added: a trailing fragment that p
 4. **Captions on the hardest lines.** Headlines full of numbers, tickers and names still have 21–30% of words
    more than 200 ms off (v58). eSpeak's sounds for a word on its own differ from how Kokoro says it in the line;
    splitting the line's own phonemes by word would be closer.
-5. **Literal pictures.** "Long-term habits build wealth" draws a hammer ("build"); a verb used figuratively still
+5. **Openings for the long tail (v63).** Most of the 20,038 library subjects still open on a (varied) template. A
+   general opening writer that adds nothing untrue (from the definition's own words, say) is the next step.
+6. **Literal pictures.** "Long-term habits build wealth" draws a hammer ("build"); a verb used figuratively still
    picks its literal object.
-6. **"Your topic" leftovers (v59).**
+7. **"Your topic" leftovers (v59).**
    - Hedge fund opens on the wrong subject ("Hedge fund replication is…").
    - Day trading's definition is cut short ("…speculation in securities in.").
    - Worked examples are read out of context (Dollar cost averaging).
    - Local rules without a country name (Sweden's ISK) aren't caught.
    - Encyclopedia register remains ("is composed of several layers").
-7. **"Your topic" jargon.** Formal words are now plain (v55), but technical terms remain ("distribution",
+8. **"Your topic" jargon.** Formal words are now plain (v55), but technical terms remain ("distribution",
    "securitization"); explaining a term needs a source sentence that does.
-8. **Photo supply.** Where no photo fits by meaning (Inflation, Roth IRA, a mortgage explainer), every scene is an
+9. **Photo supply.** Where no photo fits by meaning (Inflation, Roth IRA, a mortgage explainer), every scene is an
    illustration; other searches (the topic's Wikipedia image, related subjects) could find real photos that fit.
-9. **A measuring tool in the repo.** The Whisper/DNSMOS (v57) and forced-alignment (v58) checks live outside the
+10. **A measuring tool in the repo.** The Whisper/DNSMOS (v57) and forced-alignment (v58) checks live outside the
    repository; adding them under `scripts/` would let every narration change be measured the same way.
-10. **A review-editor timer.** `app/main.js` rechecks an edited line in a timeout that reads `state.plan.fact`
+11. **A review-editor timer.** `app/main.js` rechecks an edited line in a timeout that reads `state.plan.fact`
    after the plan can be cleared (an occasional uncaught error in the fuzz test). UI code, outside these three areas.
 
 (Done: the same story told three times and ticker lists read aloud, v61. AAPL-like tickers, queue item 5 before v57: spelled letters now come from a table, so "A.A.P.L." keeps both

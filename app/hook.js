@@ -14,8 +14,9 @@ import { statFor } from "./script.js";
 export const STAKES = [
   [/credit (score|report|rating)|fico/i, "Your credit score quietly decides what you pay to borrow."],
   [/emergency fund|rainy day/i, "One surprise bill can knock your whole budget over."],
-  [/inflation|cost of living/i, "Inflation is why the same paycheck buys less every year."],
-  [/index fund|etf|exchange-traded/i, "Index funds are how a lot of ordinary people build real wealth."],
+  [/(?<!hyper)inflation|cost of living/i, "Inflation is why the same paycheck buys less every year."],
+  [/\betfs?\b|exchange-traded/i, "An ETF lets you buy hundreds of companies in a single trade."],
+  [/index fund/i, "Index funds are how a lot of ordinary people build real wealth."],
   [/stablecoin/i, "Stablecoins are built to feel as safe as a dollar."],
   [/bitcoin/i, "Bitcoin can swing more in a day than most stocks do in a month."],
   [/ethereum/i, "A lot of what happens in crypto runs on Ethereum."],
@@ -29,6 +30,33 @@ export const STAKES = [
   [/compound interest/i, "Compound interest can work for you, or against you."],
   [/dividend/i, "Dividends can pay you just for owning a stock."],
   [/budget/i, "Most people who feel broke don't know where their money goes."],
+  // More subjects people search for (v63). True and general, no figures: why a viewer should care.
+  [/\bbonds?\b/i, "Bonds are how governments and companies borrow money from people like you."],
+  [/stock split/i, "A stock split can double your shares without making you a cent richer."],
+  [/hedge fund/i, "Hedge funds manage trillions, and most people aren't even allowed to invest in one."],
+  [/annuit/i, "An annuity turns a pile of savings into a paycheck, for a price."],
+  [/day trad/i, "Day traders try to beat the market in hours instead of years."],
+  [/health savings|\bhsa\b/i, "A health savings account can be tax-free going in, while it grows, and coming out for medical bills."],
+  [/home equity|heloc/i, "A home equity line of credit lets you borrow against your house, and your house is the guarantee."],
+  [/certificates? of deposit|\bcds?\b/i, "A CD pays you more for promising not to touch your money for a while."],
+  [/dollar[- ]cost/i, "Investing the same amount on a schedule takes the guessing out of when to buy."],
+  [/venture capital/i, "Venture capital is the money that bets on startups before anyone else will."],
+  [/real estate investment trust|\breits?\b/i, "A REIT lets you own a slice of buildings without buying a building."],
+  [/^short$|short[- ]?sell|\bshorting\b/i, "Short sellers make money when a stock falls, and can lose far more than they put in."],
+  [/social security/i, "Social Security is a check most Americans count on in retirement."],
+  [/payday loan/i, "A payday loan can cost far more than the amount you borrow."],
+  [/mutual fund/i, "A mutual fund pools money from thousands of people into one portfolio."],
+  [/treasury (bill|bond|note)|t-bills?/i, "Treasury bills are how the U.S. government borrows money for a few weeks or months."],
+  [/\bgold\b/i, "Gold has been treated as money for thousands of years."],
+  [/net worth/i, "Your net worth is the one number that sums up your whole financial life."],
+  [/savings account/i, "Where you keep your savings changes how much they earn."],
+  [/credit union/i, "A credit union is a bank owned by the people who use it."],
+  [/minimum wage/i, "The minimum wage sets the floor for millions of paychecks."],
+  [/gross domestic product|\bgdp\b/i, "GDP is the scoreboard for the whole economy."],
+  [/hyperinflation/i, "Hyperinflation can make a lifetime of savings worthless in months."],
+  [/bank run/i, "A bank run can sink a bank in a matter of days."],
+  [/bubble/i, "A bubble feels like easy money right up until it pops."],
+  [/cryptocurrenc|\bcrypto\b/i, "Crypto is money with no bank in the middle, and no one to call if something goes wrong."],
   [/\btax/i, "Taxes are one of the biggest bills you'll ever pay."],
   [/insur/i, "The right insurance is boring until the day it saves you."],
   [/stock market|stock exchange|s&p|nasdaq|dow jones/i, "The stock market moves your retirement money every single day."],
@@ -133,11 +161,31 @@ export function smartHooks(script) {
   const stake = STAKES.find(([re]) => re.test(topic))?.[1];
   const risk = content.find(([l]) => l.role === "risk" || /^The catch:/i.test(l.text));
   const num = content.find(([l]) => (l.role === "number" || /^By the numbers:/i.test(l.text)) && statFor(body(l.text)));
+  // Specific beats vague (v63): the number itself opens the video, and the catch is set up with the subject's real
+  // stakes. The old templates ("X: there's one number most people never hear. Stay for it.", "X: most people never
+  // learn how it actually works") opened most videos with the same sentence and said nothing.
+  // A stakes line gets a short tail, varied by subject so a channel doesn't end every hook the same way.
+  // FNV-1a of the subject: the same subject always gets the same wording, different subjects spread evenly.
+  const seed = [...topic.toLowerCase()].reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0, 2166136261), vary = (list) => list[seed % list.length];
+  const tail = vary(["Here's how it works.", "Here's what to know.", "Here's the short version."]);
   // Short enough to land in the first two seconds (14 words or fewer).
-  if (stake) out.push({ kind: "stakes", text: stake.split(/\s+/).length <= 10 ? `${stake} Here's how it works.` : stake });
-  if (risk) out.push({ kind: "catch", text: `${cap(topic)}: everyone talks about it. Almost nobody mentions the catch.`, payoff: risk[1], lead: "Here's the catch:" });
-  if (num) out.push({ kind: "number", text: `${cap(topic)}: there's one number most people never hear. Stay for it.`, payoff: num[1], lead: "Here's that number:" });
-  out.push({ kind: "plain", text: `${cap(topic)}: most people never learn how it actually works. Here's the short version.` });
+  if (stake) out.push({ kind: "stakes", text: stake.split(/\s+/).length <= 10 ? `${stake} ${tail}` : stake });
+  if (risk) out.push({ kind: "catch", text: stake ? `${stake} But there's a catch.` : vary([`${cap(topic)}: everyone talks about it. Almost nobody mentions the catch.`, `${cap(topic)} sounds simple. There's a catch most people miss.`]), payoff: risk[1], lead: "Here's the catch:" });
+  // The number opens the video when it's striking (billions, trillions), or when the subject has no stakes line to
+  // open with: "2%" or "$50M" from a side detail would make a weaker opening than the stakes.
+  const figure = num && statFor(body(num[0].text));
+  if (num && (!stake || /\d[TB]$/.test(figure))) {
+    const noun = /^[A-Z][a-z]+(?: [a-z]+)*$/.test(topic) ? topic.toLowerCase() : topic;
+    const article = /^(?:[aeio]|8|11|18|8\d\b)/i.test(noun) || /^(?:[FHLMNRSX]|ETF|S&P|SEC|FHA|HSA|IRA|IPO|LLC|MBA)\b/.test(noun) && /^[A-Z]{2,}|^S&P/.test(noun) ? "an" : "a";
+    // "figure", not "number": "a Social Security number" is something else.
+    out.push({ kind: "number", text: `${figure}. That's ${article} ${noun} figure most people never hear.`, payoff: num[1], lead: "Here's that number:" });
+  }
+  // Subjects with nothing specific to open on (most of the 20,000 in the library) still get a template, but one of
+  // several, so a channel's videos don't all open with the same sentence. Each promises what the next line gives:
+  // the plain explanation.
+  out.push({ kind: "plain", text: vary([`${cap(topic)}: most people never learn how it actually works. Here's the short version.`,
+    `You've heard the term ${/^[A-Z][a-z]+(?: [a-z]+)*$/.test(topic) ? topic.toLowerCase() : topic}. Here's what it means, in one breath.`,
+    `Never quite understood the term ${/^[A-Z][a-z]+(?: [a-z]+)*$/.test(topic) ? topic.toLowerCase() : topic}? This takes thirty seconds.`]) });
   return out;
 }
 
