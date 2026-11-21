@@ -659,5 +659,24 @@ export default async function ({ t, newPage }) {
     "labels and leftovers aren't read out: \"Watch\", \"(1)\", a bare ticker list", JSON.stringify(v61.told.slice(3)));
   t.ok(v61.news.filter((l) => /Anthropic/.test(l)).length === 1 && v61.news.some((l) => /Citi/.test(l)) && v61.news.some((l) => /Nvidia/.test(l)),
     "a news reel tells the Anthropic IPO once, then two other stories", JSON.stringify(v61.news));
+
+  t.section("Logic: the music ducks under the voice like a broadcast mix (v62)");
+  const v62 = await page.evaluate(async () => {
+    const M = await import("./app/music.js"), SR = M.SR;
+    // Voice: speech from 1.0-3.0 s and 3.4-5.0 s (a 0.4 s gap between lines), then a 1.2 s pause, then 6.2-7.5 s.
+    const n = Math.round(8.5 * SR), voice = new Float32Array(n), music = new Float32Array(n);
+    const talk = [[1.0, 3.0], [3.4, 5.0], [6.2, 7.5]];
+    for (const [a, b] of talk) for (let i = Math.round(a * SR); i < Math.round(b * SR); i++) voice[i] = 0.3 * Math.sin(i * 0.05) * (0.6 + 0.4 * Math.sin(i * 0.0007));
+    for (let i = 0; i < n; i++) music[i] = 0.5 * Math.sin(i * 0.01);                    // a steady low tone (below the carved band)
+    const out = M.mix(voice, music, 0.2);
+    const lvl = (a, b) => { let e = 0, k = 0; for (let i = Math.round(a * SR); i < Math.round(b * SR); i++) { const m = out[i] - voice[i] * 0.95; e += m * m; k++; } return 10 * Math.log10(e / k); };
+    const pause = lvl(0.2, 0.8);
+    return { under: lvl(1.5, 2.5) - pause, before: lvl(0.93, 1.0) - pause, gap: lvl(3.05, 3.35) - pause, longPause: lvl(5.9, 6.1) - pause,
+      dry: M.mix(voice, null, 0.2).every((x, i) => Math.abs(x - voice[i] * 0.95) < 1e-6), finite: out.every((x) => Number.isFinite(x) && Math.abs(x) <= 1) };
+  });
+  t.ok(v62.under < -7 && v62.under > -9.5, "under speech the music sits about 8 dB lower than in the pauses", v62.under.toFixed(1));
+  t.ok(v62.before < -3, "it starts dipping before the voice comes in (look-ahead), not after", v62.before.toFixed(1));
+  t.ok(v62.gap < -6 && v62.longPause > -1.5, "it stays down through a short gap between lines, and comes back up in a long pause (no pumping)", `${v62.gap.toFixed(1)} / ${v62.longPause.toFixed(1)}`);
+  t.ok(v62.dry && v62.finite, "without music the voice is untouched; the mix never clips");
   await page.context().close();
 }

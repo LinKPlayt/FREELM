@@ -1,9 +1,12 @@
 // The app's version and its update notes, shown once in a "What's new" window after each update.
 // When you deploy: bump APP_VERSION, add an entry at the top of UPDATES, and set the same number in
 // sw.js (VERSION = "reelbot-v<APP_VERSION>"). A test checks the two match.
-export const APP_VERSION = 61;
+export const APP_VERSION = 62;
 
 export const UPDATES = [
+  { version: 62, title: "A clearer voice over the music", items: [
+    "The music now makes room for the narrator the way a broadcast mix does: it dips just before each line starts, stays down while it's said, and comes back up in the longer pauses. The quietest parts of the voice sit about 4 dB clearer of the music, and the music no longer swells after every sentence.",
+  ] },
   { version: 61, title: "News videos with three different stories", items: [
     "A news video no longer tells one event three times (\u201cfutures fall\u201d, \u201cfutures plunge\u201d, \u201cthe S&P enters a correction\u201d, or three takes on the same IPO): each event is told once and the next stories are different ones.",
     "Press releases and promotions (\u201cCompany salutes\u2026\u201d, \u201c\u2026named global champion\u201d, \u201c\u2026 and more\u201d) aren't read as news.",

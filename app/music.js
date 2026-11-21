@@ -108,18 +108,50 @@ export function resample(samples, from, to = SR) {
   return out;
 }
 
-// Mix voice and music, lowering the music while someone is speaking.
+// Mix voice and music, the music ducked under the voice the way a broadcast mix does it (sidechain ducking).
+// Measured on the old mix (v62): the music was only 2.7 dB quieter under speech than in the pauses, and the
+// quietest tenth of the speech sat just 2-6 dB above it (0.6 dB at the start of phrases with the cinematic bed):
+// it followed a trailing quarter-second average of the voice, so it dipped only after a word had begun.
+//   Where the narrator speaks: 10 ms frames within 34 dB of the loudest, pauses up to 0.5 s bridged.
+//   The music starts dipping 80 ms before a phrase (look-ahead), sits DUCK lower while it's said, and comes back
+//   over about 350 ms after it. Between lines, before the first and after the last, it's as loud as before.
+//   While ducked, the music also loses some of its 1-4 kHz band, where consonants live, so words cut through
+//   without the music dropping further (a dynamic EQ "carve").
+const DUCK = 0.4, CARVE = 0.55;   // -8 dB under speech; about -7 dB more at 2.5 kHz
 export function mix(voice, music, volume) {
   const n = voice.length, out = new Float32Array(n);
-  const win = Math.floor(0.25 * SR);
-  let acc = 0, envPeak = 0; const env = new Float32Array(n);
-  for (let i = 0; i < n; i++) { acc += Math.abs(voice[i]); if (i >= win) acc -= Math.abs(voice[i - win]); env[i] = acc / win; envPeak = Math.max(envPeak, env[i]); }
+  if (music) {
+    const hop = Math.round(0.01 * SR), nf = Math.ceil(n / hop), rms = new Float32Array(nf);
+    let top = 0;
+    for (let f = 0; f < nf; f++) { let e = 0; const a = f * hop, b = Math.min(n, a + hop); for (let i = a; i < b; i++) e += voice[i] * voice[i]; rms[f] = Math.sqrt(e / Math.max(1, b - a)); top = Math.max(top, rms[f]); }
+    const on = new Uint8Array(nf), floor = top * 0.02;
+    for (let f = 0; f < nf; f++) on[f] = rms[f] > floor ? 1 : 0;
+    // The music stays down through the ordinary gaps between lines (up to 0.5 s) and rises only in the longer,
+    // deliberate pauses (the beat before a payoff, the hold after the hook): it breathes with the story instead of
+    // pumping after every sentence.
+    for (let f = 0, last = -1; f < nf; f++) if (on[f]) { if (last >= 0 && f - last > 1 && f - last <= 50) on.fill(1, last + 1, f); last = f; }
+    // Gain per frame: the target looks 80 ms ahead; down fast (40 ms), up slowly (about 350 ms to settle).
+    const g = new Float32Array(nf), ahead = 8, down = Math.exp(-1 / 4), up = Math.exp(-1 / 12);
+    let cur = 1;
+    for (let f = 0; f < nf; f++) {
+      let want = 1; for (let k = f; k <= Math.min(nf - 1, f + ahead); k++) if (on[k]) { want = DUCK; break; }
+      cur = want < cur ? want + (cur - want) * down : want + (cur - want) * up;
+      g[f] = cur;
+    }
+    // The speech band of the music (RBJ band-pass, 2.5 kHz, Q 0.8), taken out in proportion to the duck.
+    const w = 2 * Math.PI * 2500 / SR, al = Math.sin(w) / (2 * 0.8), a0 = 1 + al;
+    const b0 = al / a0, b2 = -al / a0, a1 = -2 * Math.cos(w) / a0, a2 = (1 - al) / a0;
+    let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+    for (let i = 0; i < n; i++) {
+      const x = music[i] || 0, y = b0 * x + b2 * x2 - a1 * y1 - a2 * y2;
+      x2 = x1; x1 = x; y2 = y1; y1 = y;
+      const fp = i / hop, f0 = Math.min(nf - 1, Math.floor(fp)), f1 = Math.min(nf - 1, f0 + 1), gg = g[f0] + (g[f1] - g[f0]) * (fp - f0);
+      const depth = (1 - gg) / (1 - DUCK);                         // 0 in the pauses, 1 fully ducked
+      out[i] = voice[i] * 0.95 + volume * gg * (x - CARVE * depth * y);
+    }
+  } else for (let i = 0; i < n; i++) out[i] = voice[i] * 0.95;
   let peak = 0;
-  for (let i = 0; i < n; i++) {
-    const duck = 1 - 0.5 * Math.min(1, (env[i] / (envPeak || 1)) * 4);
-    out[i] = voice[i] * 0.95 + (music ? (music[i] || 0) * volume * duck : 0);
-    peak = Math.max(peak, Math.abs(out[i]));
-  }
+  for (let i = 0; i < n; i++) peak = Math.max(peak, Math.abs(out[i]));
   if (peak > 1) for (let i = 0; i < n; i++) out[i] *= 0.97 / peak;
   return out;
 }

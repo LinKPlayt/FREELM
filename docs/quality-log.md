@@ -10,6 +10,61 @@ before and after on the same inputs, and add tests so it can't come back.
 
 ---
 
+## v62 · Narration · The music ducks under the voice like a broadcast mix
+
+**How it was measured (new).** The mix was split into its parts on real narration. 42 synthesized lines were laid
+out as six reels with a reel's gaps and levelled as the app does. Each got the app's own music in five moods
+(lofi, upbeat, cinematic, calm, suspense) and went through the app's `mix()`. The voice's share is known exactly,
+so the music's share is the rest. Measured in 20 ms frames:
+- the voice-to-music ratio while speaking, the worst tenth of it, and the first 160 ms of each phrase;
+- how far the music dips under speech, and its swings of 3 dB or more per minute (pumping);
+- intelligibility, by extended STOI against the clean voice, and Whisper;
+- loudness, by EBU R128 on a full render.
+
+**Weakest area found.**
+- The music barely made room: on average only 2.7 dB quieter under speech than in the pauses.
+- The quietest tenth of the speech sat just 2–6 dB above it (cinematic 2.1 dB).
+- The start of a phrase was worst (cinematic, worst tenth: 0.6 dB).
+
+The ducking followed a trailing quarter-second average of the voice, so the music dipped only after a word had
+begun, and it rose and fell around every short pause (35.6 swings a minute).
+
+**Technique.** Broadcast voice-over mixing: sidechain ducking with look-ahead (the bed dips just before the voice),
+fast attack and slower release, holding through short gaps so it doesn't pump. Plus a dynamic EQ "carve" of the
+music's consonant band while the voice is on.
+
+**What changed** (`app/music.js`, `mix()`):
+- Voice detection on 10 ms frames (within 34 dB of the loudest); gaps up to 0.5 s are bridged.
+- The music's gain looks 80 ms ahead and goes down to −8 dB under speech (40 ms attack, about 350 ms release).
+  Between lines, before the first and after the last, it's as loud as before, and it rises in the longer pauses
+  (the beat before a payoff, the hold after the hook).
+- While ducked, the music's 2.5 kHz band (RBJ band-pass, Q 0.8) is taken down a further ~7 dB in proportion to the
+  duck.
+
+**Measured**, the same voice and the same music, v61 → v62:
+
+| | lofi | upbeat | cinematic | calm | suspense |
+|---|---|---|---|---|---|
+| Voice over music while speaking, median (dB) | 17.6 → 20.2 | 18.5 → 21.0 | 14.1 → 16.6 | 16.8 → 19.8 | 15.6 → 18.2 |
+| … worst tenth (dB) | 5.5 → 9.2 | 6.5 → 9.6 | 2.1 → 5.5 | 4.8 → 8.5 | 3.5 → 7.0 |
+| … first 160 ms of phrases, worst tenth (dB) | 4.3 → 8.4 | 5.0 → 8.7 | 0.6 → 4.7 | 3.5 → 7.8 | 2.2 → 6.1 |
+| Extended STOI (intelligibility, 1 = clean) | 0.974 → 0.987 | 0.989 → 0.994 | 0.961 → 0.979 | 0.965 → 0.981 | 0.968 → 0.983 |
+
+- Music swings of 3 dB or more: 35.6 → 26.2 a minute (what's left is mostly the music's own beat). A first
+  version with a fast release had 27.3; the bridged gaps took it lower.
+- Whisper: 0.54% word errors before and after. It isn't troubled by music at these levels, so it can't show the
+  difference; extended STOI models human listeners.
+- Loudness, the same Emergency Fund reel rendered with v61 and v62: −13.9 LUFS, LRA 4.5 LU and peak −0.9 dBFS
+  both times. The voice carries the loudness; only the music moved.
+
+**Tests.** `tests/web/logic.mjs`, "the music ducks under the voice like a broadcast mix (v62)":
+- about 8 dB down under speech;
+- the dip starts before the voice;
+- it stays down through a short gap and recovers in a long pause;
+- without music the voice is untouched, and the mix never clips.
+
+---
+
 ## v61 · Scripts · The news editor: three different stories
 
 **How it was found.** The news reel rendered in v60 told one story three times. Here, news scripts for all six
