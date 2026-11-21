@@ -10,6 +10,86 @@ before and after on the same inputs, and add tests so it can't come back.
 
 ---
 
+## v60 · Visuals · Graphics that say what the line says (and market recaps render again)
+
+**How it was found.** Real renders of a news reel (investing) and an explainer (Emergency fund), frame by frame.
+
+**Weakest area found.** The pictures contradicted or garbled the narration.
+- **Rising charts for falling markets.** "Futures Fall as Trump Weighs…" opened on a rising chart; so did "Stocks
+  fell for a fifth day" and "The Dow fell 1.1% while the Nasdaq rose". An illustration's main subject is the
+  first concept in the line, and the market's own picture is a rising chart: "stocks / Dow / S&P" come before
+  "fell", which is also on the weak-word list. Over 39 news and market lines that say something rose or fell,
+  16 (41%) had a main picture going the other way.
+- **Timelines that say something else.** "…Nasdaq suffers worst week since 2020" became a 1990 → 2020 history
+  timeline ("6 YEARS AGO"). "Since 2020" is a comparison, not an event. Future and current years got timelines
+  too ("in 2027", "December 2026"), which show nothing but TODAY.
+- **Labels under the numbers.** 22 of 47 stat graphics (47%) in the app's own lines had a wrong label:
+  - verbs and adverbs: "FEE SOUNDS TINY", "YEAR DOUBLES", "OFTEN MEANS PAYING", "ASSETS PROPORTIONATELY";
+  - the next clause: "RATE FEARS WEIGH" under a bitcoin price, "ANTHROPIC'S DEBUT FAILED" under the Nasdaq's fall;
+  - time frames: "DAY" for "The Dow Jones is at 49,097, down 2.2% on the day…". In a market recap that line is
+    shown as a real chart, so this one only reached the screen in other reels' lines like it;
+  - missed subjects: "ESTIMATED", "MID-", "HE", or none for "the average monthly Social Security benefit… was $1,551";
+  - all three timelines gone wrong: "THIRD DOW S&P".
+
+**What changed.**
+- `app/illustrator.js`:
+  - `moveOf()` reads which way the line says things moved; the first move word wins.
+  - `artOptions()` swaps or drops pictures that contradict it: rising chart ↔ falling chart, arrows likewise; no
+    rocket, trophy or thumbs-up on a fall; no bomb or thumbs-down on a rise.
+- `app/visuals.js`, how a number's label is found. A label names what the number counts, so it's a noun phrase:
+  - after the number, filler is skipped and the phrase stops at any verb, adverb or "per". If a new clause starts
+    there ("as…", "while…", "so…"), or a verb other than an allocation verb ("goes to NEEDS", "invested in CDS"),
+    nothing after the number names it.
+  - before the number, the verb and filler next to it are skipped, and a date ("for November 2022"), then the
+    noun phrase is taken.
+  - a time frame or a pronoun is never a label; the sentence's subject is used instead, past a lead-in ("On the
+    Chain:", "By mid-2003,"), or there's no label at all.
+  - names containing a number stay whole ("401(K) PLANS", "S&P 500").
+- Year timelines only for past years the line places something in. Not "since/than/until YEAR", and not this
+  year or later.
+
+**Measured.**
+
+| | Before | After |
+|---|---|---|
+| Lines whose main picture goes against the move they describe (39 news and market lines, two snapshots) | 16 | 0 |
+| Same, counting all 3 pictures | 22 | 0 |
+| Wrong labels or misleading timelines on the app's own stat lines (47, used for tuning; 3 of them are market-recap index lines, drawn as charts) | 22 | 1 ("VALUE" for the VOC's dividends) |
+| Same on held-out headlines (a snapshot taken 8 hours later; 16 stat graphics) | 11 | 1 ("CENTER CONSTRUCTION COSTS": the 3-word limit cut "data") |
+| Held-out "Your topic" scripts (22 new topics; 8 stat lines) | unchanged except one label added | |
+| Stat graphics with no label (no label rather than a wrong one) | 1 | 4 |
+
+**Seen in a render.** The same three headlines, rendered with v59 and v60. Story 1 ("Futures Fall…") went from a
+rising chart to a falling one. Story 3 ("…worst week since 2020") went from a 1990 → 2020 timeline labelled "THIRD
+DOW S&P" to a newspaper with a falling arrow.
+
+Examples, before → after:
+- "DAY" → "DOW JONES", "NASDAQ", "S&P 500"
+- "ESTIMATED" → "401(K) PLANS"
+- "RATE FEARS WEIGH" → "BITCOIN"
+- "OFTEN MEANS PAYING" → "DOWN PAYMENT"
+- "SOCIAL SECURITY'S" → "COLA INCREASE"
+- "MID-" → "VENTURE CAPITAL INDUSTRY"
+
+The market recap's index lines show real charts rather than drawings or stat cards, so both fixes matter most for
+news stories and explainers.
+
+**Found on the way: market recaps didn't render at all (since v53).** Rendering a market recap to check the
+labels, it died in its opening scene: `ReferenceError: pctTxt is not defined`. v53 removed the helper that writes
+"▲ 1.2%" / "FLAT" while the market board and the live charts' Today / This month pills still used it. So from
+v53 to v59, every market recap failed to render, after the encoder fell back through its other methods. So did
+any news reel whose "Meanwhile, the S&P is down…" extra brought in a live chart. The end-to-end tests only
+checked that market scripts get written; nothing drew their frames.
+- Fix: the helper is back (`app/render.js`).
+- Proof: drawing a board frame throws on v59 and works now. A full market recap renders again: the board, three
+  live charts with their pills, the closing line and the end card, 39 s.
+- Guard: a new test draws a frame of all 19 kinds of scene (board, live charts, every data graphic, kinetic
+  words, quiz, answer, chapter, recap, illustration, end card, fallback) and fails on any error.
+
+**Tests.** `tests/web/logic.mjs`, "graphics that say what the line says (v60)" and "every kind of scene draws (v60)".
+
+---
+
 ## v59 · Scripts · "Your topic" scripts that use their research
 
 **How it was found.** A real render first: a Federal Reserve reel, frame by frame, plus motion measured per
@@ -635,19 +715,25 @@ Found on the live feed right after release and added: a trailing fragment that p
 4. **Captions on the hardest lines.** Headlines full of numbers, tickers and names still have 21–30% of words
    more than 200 ms off (v58). eSpeak's sounds for a word on its own differ from how Kokoro says it in the line;
    splitting the line's own phonemes by word would be closer.
-5. **"Your topic" leftovers (v59).**
+5. **The same story told three times (news).** On a falling day the news reel's three "big stories" were one
+   story (futures fall / futures plunge / indexes enter a correction): the duplicate check compares words, not
+   meaning. The on-phone sentence model (v52) could judge sameness by meaning.
+6. **Literal pictures.** "Long-term habits build wealth" draws a hammer ("build"); a verb used figuratively still
+   picks its literal object.
+7. **Ticker lists read aloud.** "…Iran Decision — INTU, ROST." ends a news line with bare tickers.
+8. **"Your topic" leftovers (v59).**
    - Hedge fund opens on the wrong subject ("Hedge fund replication is…").
    - Day trading's definition is cut short ("…speculation in securities in.").
    - Worked examples are read out of context (Dollar cost averaging).
    - Local rules without a country name (Sweden's ISK) aren't caught.
    - Encyclopedia register remains ("is composed of several layers").
-6. **"Your topic" jargon.** Formal words are now plain (v55), but technical terms remain ("distribution",
+9. **"Your topic" jargon.** Formal words are now plain (v55), but technical terms remain ("distribution",
    "securitization"); explaining a term needs a source sentence that does.
-7. **Photo supply.** Where no photo fits by meaning (Inflation, Roth IRA, a mortgage explainer), every scene is an
+10. **Photo supply.** Where no photo fits by meaning (Inflation, Roth IRA, a mortgage explainer), every scene is an
    illustration; other searches (the topic's Wikipedia image, related subjects) could find real photos that fit.
-8. **A measuring tool in the repo.** The Whisper/DNSMOS (v57) and forced-alignment (v58) checks live outside the
+11. **A measuring tool in the repo.** The Whisper/DNSMOS (v57) and forced-alignment (v58) checks live outside the
    repository; adding them under `scripts/` would let every narration change be measured the same way.
-9. **A review-editor timer.** `app/main.js` rechecks an edited line in a timeout that reads `state.plan.fact`
+12. **A review-editor timer.** `app/main.js` rechecks an edited line in a timeout that reads `state.plan.fact`
    after the plan can be cleared (an occasional uncaught error in the fuzz test). UI code, outside these three areas.
 
 (Done: AAPL-like tickers, queue item 5 before v57: spelled letters now come from a table, so "A.A.P.L." keeps both

@@ -582,5 +582,49 @@ export default async function ({ t, newPage }) {
   t.ok(v59.risk.join() === "how,how,risk", "\"risk-adjusted\" and \"low risk\" aren't a catch; \"the risk of losing money\" is", v59.risk.join());
   t.ok(/statement/.test(v59.tips[0]) && /no limit/.test(v59.tips[1]) && !/no limit/.test(v59.tips[2]) && /Your home/.test(v59.tips[3]) && /penalty/.test(v59.tips[4]) && /split doesn't change/.test(v59.tips[5]) && /afford to lose/.test(v59.tips[6]) && /Startup/.test(v59.tips[7]),
     "each subject gets a takeaway that fits it, not \"check the fees\" (and short-term gains aren't short selling)", v59.tips.join(" | "));
+
+  t.section("Logic: graphics that say what the line says (v60)");
+  const v60 = await page.evaluate(async () => {
+    const V = await import("./app/visuals.js"), IL = await import("./app/illustrator.js");
+    const lab = (t) => { const s = V.analyzeLine(t).stat; return s ? `${s.type}:${s.label}` : "none"; };
+    return {
+      labels: ["A one percent fee sounds tiny. Over a lifetime, it can cost you a fortune.", "The Dow Jones is at 49,097, down 2.2% on the day and down 7.1% this month.",
+        "On the Chain: Bitcoin falls below US$62,000 as rate fears weigh on crypto.", "The Nasdaq Composite lost more than 2% as Anthropic's debut failed to revive the AI trade.",
+        "At the end of the first quarter of 2026, assets held in 401(k) plans were estimated at $9.9 trillion.", "The average monthly Social Security benefit for November 2022 was $1,551.",
+        "The S&P 500 is at 7,176, down 2.0% on the day and down 7.5% this month.", "With a conventional loan, a down payment under 20 percent often means paying for mortgage insurance.",
+        "Fifty percent goes to needs, like rent, groceries, insurance and minimum debt payments.", "They often run around two to five percent, so budget for them on top of your down payment."].map(lab),
+      years: ["Dow, S&P 500 enter correction as Nasdaq suffers worst week since 2020.", "China home prices seen falling again in 2099, Reuters poll shows.", "The Roth IRA was introduced in 1997."].map(lab),
+      art: ["Dow Jones, S&P 500, Nasdaq 100 Futures Fall as Trump Weighs Iran Decision.", "The Dow Jones fell 1.1% while the Nasdaq rose 0.4%.", "Stocks rose to a record.", "Index funds track the market."].map((t) => IL.artOptions(t, "")[0][0]),
+    };
+  });
+  t.ok(v60.labels.join(" | ") === "percent:FEE | move:DOW JONES | money:BITCOIN | percent:NASDAQ COMPOSITE | money:401(K) PLANS | money:SOCIAL SECURITY BENEFIT | move:S&P 500 | percent:DOWN PAYMENT | percent:NEEDS | percent:null",
+    "a number's label names what it counts: no verbs, not the next clause, not \"DAY\"; none rather than a wrong one", v60.labels.join(" | "));
+  t.ok(v60.years.join(" | ") === "none | none | year:ROTH IRA", "no history timeline for a year the line only compares with (\"since 2020\") or one still to come", v60.years.join(" | "));
+  t.ok(v60.art.join() === "chartDown,chartDown,chartUp,chartUp", "a line about a fall never gets a rising chart (the market's own picture turns down), and the reverse", v60.art.join());
+
+  // Every kind of scene must draw. v53 removed a helper the market board and the chart pills still used, and every
+  // market recap failed to render from then until v60; only scripts were tested for that type, never frames.
+  t.section("Logic: every kind of scene draws (v60)");
+  const frames = await page.evaluate(async () => {
+    const R = await import("./app/render.js"); await R.loadFonts();
+    const vals = Array.from({ length: 22 }, (_, i) => 7600 - i * 30 + (i % 3) * 20);
+    const sp = { name: "S&P 500", symbol: "^GSPC", last: 6910.4, day_pct: -3.7, month_pct: -9.8, values: vals, is_yield: false };
+    const tsy = { name: "10-Year Treasury", symbol: "^TNX", last: 4.31, day_pct: 0.02, month_pct: 1.2, values: vals.map((v) => v / 1700), is_yield: true };
+    const words = "The S&P 500 is at 6,910, down 3.7% on the day and down 9.8% this month, so here's the bottom line for you.".split(" ").map((text, i) => ({ text, start: i * 0.25, end: i * 0.25 + 0.22 }));
+    const kinds = [["board", { markets: [sp, { ...sp, name: "Nasdaq", day_pct: 1.4 }, tsy] }], ["chart", { chart: sp }], ["chart", { chart: tsy }],
+      ["stat", { spec: { type: "money", value: 9.9e12, label: "401(K) PLANS" } }], ["stat", { spec: { type: "percent", value: 50, label: "NEEDS" } }], ["stat", { spec: { type: "move", value: 2.3, dir: -1, label: "NASDAQ" } }],
+      ["stat", { spec: { type: "split", parts: [50, 30, 20], labels: ["NEEDS", "WANTS", "SAVINGS"], title: "50/30/20" } }], ["stat", { spec: { type: "range", lo: 3, hi: 6, unit: "MONTHS", label: "EXPENSES" } }],
+      ["stat", { spec: { type: "growth", every: 9, label: "DOUBLES EVERY 9 YEARS" } }], ["stat", { spec: { type: "year", year: 1997, label: "ROTH IRA" } }], ["stat", { spec: { type: "compare", mult: 2, label: "TWICE AS MUCH" } }],
+      ["kinetic", {}], ["quiz", { num: 1, of: 2, countStart: 2, countEnd: 4 }], ["answer", { answer: false, num: 1, of: 2 }], ["section", { num: 2, label: "THE CATCH" }],
+      ["recap", { items: ["Save first", "Invest the rest"] }], ["illus", { icon: "piggy", label: "SAVINGS" }], ["outro", {}], ["fallback", {}]];
+    const fails = [], c = document.createElement("canvas"); c.width = 1080; c.height = 1920;
+    for (const [kind, extra] of kinds) {
+      const job = { title: "Market Check", brand: "Money Minute", accent: "#FFD60A", words, audio: new Float32Array(48000 * 6), captionStyle: "bold", captionPos: "low", handle: "", logo: null, hookTitle: false, cta: "follow",
+        scenes: [{ start: 0, end: 6, kind, label: "MONEY", seed: 1, ...extra }] };
+      for (const t of [0.3, 2.5, 5.8]) { try { R.previewFrame(job, c, t); } catch (e) { fails.push(`${kind}${extra.spec ? "/" + extra.spec.type : ""} at ${t}s: ${e.message}`); break; } }
+    }
+    return { n: kinds.length, fails };
+  });
+  t.ok(frames.fails.length === 0, `all ${frames.n} kinds of scene draw (market board, live charts, every data graphic, quiz, chapter, recap, end card…)`, frames.fails.join(" | "));
   await page.context().close();
 }

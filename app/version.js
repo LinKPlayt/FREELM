@@ -1,9 +1,15 @@
 // The app's version and its update notes, shown once in a "What's new" window after each update.
 // When you deploy: bump APP_VERSION, add an entry at the top of UPDATES, and set the same number in
 // sw.js (VERSION = "reelbot-v<APP_VERSION>"). A test checks the two match.
-export const APP_VERSION = 59;
+export const APP_VERSION = 60;
 
 export const UPDATES = [
+  { version: 60, title: "Market recaps work again, and graphics that say what the line says", items: [
+    "Market recaps render again. Since version 53 they failed while drawing the day's board (and news videos failed whenever they showed a live chart).",
+    "A story about a fall never shows a rising chart any more (and the reverse): \u201cFutures fall\u201d used to open on a chart going up.",
+    "The label under a key number names what it counts: \u201cDOW JONES\u201d instead of \u201cDAY\u201d, \u201c401(K) PLANS\u201d instead of \u201cESTIMATED\u201d, \u201cFEE\u201d instead of \u201cFEE SOUNDS TINY\u201d. When nothing names it clearly, there's no label rather than a wrong one.",
+    "No history timeline for a year the line only compares with (\u201cworst week since 2020\u201d) or for this year.",
+  ] },
   { version: 59, title: "Fuller scripts for your own topics", items: [
     "Topics like 401(k), ETFs, REITs and home equity lines of credit get real scripts: their research used to be thrown away (a name ending in a bracket, or an article that says \u201cETFs\u201d instead of \u201cexchange-traded fund\u201d), leaving a video with no facts at all.",
     "Lines are labelled more carefully: \u201cThe catch\u201d is a real catch, and sentences that lean on one that isn't there (\u201cIn contrast, \u2026\u201d) are left out.",

@@ -163,6 +163,25 @@ export const RELATED = {
   cap: ["graduate", "student", "ladder"], newspaper: ["megaphone", "mic", "eye"], goldbars: ["vault", "crown", "coinStack"],
 };
 
+// Which way the line says things moved: -1 down, 1 up, 0 neither. The first move word wins ("The Dow fell 1.1%
+// while the Nasdaq rose" leads with the fall).
+const DOWN_WORDS = /\b(?:fell|falls?|falling|drops?|dropped|dropping|plunge[sd]?|plunging|slump\w*|slid|slides?|sliding|tumble[sd]?|tumbling|sank|sinks?|sinking|declin\w*|lost|loses|losses|lower|crash\w*|correction|sell-?offs?|selloffs?|bear market|slips?|slipped|retreat\w*|down \d)/i;
+const UP_WORDS = /\b(?:rose|rises?|rising|gains?|gained|jump\w*|surg\w*|soar\w*|rall\w*|climb\w*|higher|record high|boom\w*|up \d)/i;
+export function moveOf(text) {
+  const d = DOWN_WORDS.exec(text || ""), u = UP_WORDS.exec(text || "");
+  return !d && !u ? 0 : d && (!u || d.index < u.index) ? -1 : 1;
+}
+// Pictures that would contradict that move: a rising chart under "Futures fall" (the market's own picture is a
+// rising chart, and "stocks" came before "fall" in the line), a rocket under a slump.
+const AGAINST = { "-1": { chartUp: "chartDown", arrowUp: "arrowDown", rocket: null, trophy: null, thumbsUp: null, seedling: null },
+  1: { chartDown: "chartUp", arrowDown: "arrowUp", thumbsDown: null, bomb: null } };
+function withMove(option, dir) {
+  if (!dir) return option;
+  const swap = AGAINST[dir], out = [];
+  for (const m of option) { const v = m in swap ? swap[m] : m; if (v && !out.includes(v)) out.push(v); }
+  return out;
+}
+
 // Every way to illustrate a line, best first: what it mentions (each one as the main subject in turn),
 // then related ways to show the same idea. A scene's "Another illustration" steps through these.
 export function artOptions(text, topic = "") {
@@ -170,7 +189,9 @@ export function artOptions(text, topic = "") {
   const add = (hero, rest) => { const k = hero; if (seen.has(k) || !MOTIFS[hero]) return; seen.add(k); out.push([hero, ...rest.filter((m) => m !== hero)].slice(0, 3)); };
   found.forEach((m) => add(m, found));
   for (const m of found) for (const r of RELATED[m] || []) add(r, [m, ...found]);
-  return out.length ? out : [["coins", "chartUp", "bulb"]];
+  const dir = moveOf(text), fixed = [], keys = new Set();
+  for (const o of (out.length ? out : [["coins", "chartUp", "bulb"]]).map((o) => withMove(o, dir))) if (o.length && !keys.has(o[0])) { keys.add(o[0]); fixed.push(o); }
+  return fixed.length ? fixed : [["coins"]];
 }
 export const motifsFor = (line, topic = "") => { const opts = artOptions(line.text, topic); return opts[(line.artPick || 0) % opts.length]; };
 // Like motifsFor, but avoids a main subject that was just shown (so two scenes in a row don't look the

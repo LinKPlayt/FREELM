@@ -141,6 +141,9 @@ class ImageBg {
   dispose() { this.base.width = this.base.height = 0; }
 }
 
+// A move as the market pills and the board say it: "▲ 1.2%", "▼ 0.8%", or "FLAT". (Restored in v60: v53 removed it
+// while the chart pills and the market board still used it, so every market recap failed to render.)
+const pctTxt = (v) => (Math.abs(v) < 0.05 ? "FLAT" : `${v >= 0 ? "▲" : "▼"} ${Math.abs(v).toFixed(1)}%`);
 class ChartBg {
   constructor(chart, words = []) {
     let values = chart?.values;
