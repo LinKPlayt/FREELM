@@ -626,5 +626,38 @@ export default async function ({ t, newPage }) {
     return { n: kinds.length, fails };
   });
   t.ok(frames.fails.length === 0, `all ${frames.n} kinds of scene draw (market board, live charts, every data graphic, quiz, chapter, recap, end card…)`, frames.fails.join(" | "));
+
+  t.section("Logic: the news editor (v61)");
+  const v61 = await page.evaluate(async () => {
+    const NW = await import("./app/newswriter.js"), S = await import("./app/script.js");
+    const pairs = [["US Stock Futures Fall as Anthropic Shares Retreat and AI Concerns Weigh on Global Markets.", "Anthropic soared in its debut as stocks tanked. Only one other IPO has done that since 1990."],
+      ["Futures Plunge After 6 Straight Days of Losses for S&P 500.", "Red Friday: S&P 500 and the Dow hit correction territory, Nasdaq turns negative for the year."],
+      ["Bitcoin drops for third straight day as Asian tech shares slide.", "Bitcoin sell-off versus the tech sell-off, and the SEC finds eight fake crypto trading platforms."],
+      ["Bitcoin drops for third straight day as Asian tech shares slide.", "Bitcoin ETF outflows show waning crypto appetite ahead of Anthropic's Nasdaq debut."],
+      ["The Fed's chairman sees an AI revolution coming. Now he has to figure out what it means.", "A 'Shock' rate hike by the Fed? In this economy?"],
+      ["Ron Johnson's Social Security plan would add $190 trillion to the national debt, CRFB says.", "Social Security's 3.6% 2027 COLA increase could give some retirees a monthly raise."],
+      ["Nvidia's stock heads for a stretch of weekly losses not seen since 2008.", "Red Friday: S&P 500 and the Dow hit correction territory, Nasdaq turns negative for the year."],
+      ["Rising rents draw Wall Street money to industrial outdoor storage lot investments.", "With home sales at a record low, buyers are calling the shots."],
+      ["MSG Rangers stock is a 'trophy asset at a deep discount,' JPMorgan says.", "Here are Friday's biggest analyst calls: Anthropic, SpaceX, Tesla, Apple, Netflix, MSG Rangers, UnitedHealth."]];
+    const told = (title, summary = "") => NW.spokenStory({ title, summary, source: "CNBC" })?.text ?? null;
+    const news = S.buildNews([
+      { title: "US Stock Futures Fall as Anthropic Shares Retreat and AI Concerns Weigh on Global Markets", summary: "" },
+      { title: "Anthropic soared in its debut as stocks tanked. Only one other IPO has done that since 1990", summary: "" },
+      { title: "Major Index Futures Soar as Anthropic Shares Set to Start Trading on Nasdaq After Blockbuster IPO", summary: "" },
+      { title: "Citi warns a key stock-market signal is close to flashing red", summary: "" },
+      { title: "Nvidia's stock heads for a stretch of weekly losses not seen since 2008", summary: "" }], [], { niche: "investing", generic: ["x"], cta: "Follow." });
+    return { same: pairs.map(([a, b]) => NW.sameEvent(a, b)),
+      told: [told("Asure Software Salutes Small Business Saturday with Recruiting and HR Milestones"), told("Bilt Rent Day December 2026: statement credit bonus, JetBlue status, and more"),
+        told("Sophie Keane from Ireland Named Global Champion at NFTE's 2026 World Youth Entrepreneurship Challenge"), told("New Trump DOL rule allows more gig workers to be contractors (1)"),
+        told("Watch US Economy: Fed's Cook Sees Growing Urgency to Tackle Inflation"), told("Dow Jones, S&P 500, Nasdaq 100 futures fall as Trump weighs Iran decision — INTU, ROST")],
+      news: news.lines.slice(1, 4).map((l) => l.text) };
+  });
+  t.ok(v61.same.join() === "true,true,true,false,false,false,false,false,false",
+    "one event told once: the same company, the market's move or bitcoin's move twice is the same story; two Fed or Social Security stories, or a roundup that names everyone, aren't", v61.same.join());
+  t.ok(v61.told.slice(0, 3).every((x) => x === null), "press releases and promotions aren't read as news", JSON.stringify(v61.told.slice(0, 3)));
+  t.ok(v61.told[3] === "New Trump DOL rule allows more gig workers to be contractors." && /^US Economy: Fed's Cook/.test(v61.told[4]) && /Iran decision\.$/.test(v61.told[5]),
+    "labels and leftovers aren't read out: \"Watch\", \"(1)\", a bare ticker list", JSON.stringify(v61.told.slice(3)));
+  t.ok(v61.news.filter((l) => /Anthropic/.test(l)).length === 1 && v61.news.some((l) => /Citi/.test(l)) && v61.news.some((l) => /Nvidia/.test(l)),
+    "a news reel tells the Anthropic IPO once, then two other stories", JSON.stringify(v61.news));
   await page.context().close();
 }

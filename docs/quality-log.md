@@ -10,6 +10,62 @@ before and after on the same inputs, and add tests so it can't come back.
 
 ---
 
+## v61 · Scripts · The news editor: three different stories
+
+**How it was found.** The news reel rendered in v60 told one story three times. Here, news scripts for all six
+niches were written from two snapshots (morning and evening), and every story was judged by hand.
+
+**Weakest area found.** 9 of 36 stories (25%) shouldn't have been there:
+- **The same event again**, 4. The morning investing reel told the Anthropic IPO three times, and contradicted
+  itself ("futures fall…", later "futures soar…", from different hours of the day). The evening ones: "Futures
+  plunge…" and "S&P 500 and the Dow hit correction territory"; "Bitcoin drops…" and "Bitcoin sell-off…". The
+  duplicate check compared words, and these share few.
+- **Not news**, 3:
+  - "Asure Software Salutes Small Business Saturday with Recruiting and HR Milestones";
+  - "Bilt Rent Day December 2026: statement credit bonus, JetBlue status, and more";
+  - "Sophie Keane… Named Global Champion at…".
+- **Leftovers read aloud**, 2: "…to be contractors (1)."; "Watch US Economy: …".
+
+**Technique, and a dead end.** Judging sameness by meaning was tried first. The on-phone sentence model (v52)
+scored the duplicates 0.40–0.46 and pairs of different stories up to 0.46 (two Fed stories, two Social Security
+stories), so no threshold separates them. What makes two headlines one story is the event. So it's read directly
+(`eventKeys()` / `sameEvent()` in `app/newswriter.js`):
+- the broad market moving: an index, "stocks", "futures" or "Wall Street", followed by a move;
+- an asset moving: crypto, gold, oil, bonds, the dollar;
+- a company or person at the centre: a name in both stories. A capitalised word counts only if it isn't an
+  ordinary headline word, and only from a sentence-case headline (in Title Case, "Retreat" and "Global" are
+  capitalised too). Names that appear in many unrelated stories (the Fed, Trump, the SEC) don't count, nor do the
+  names in a roundup that lists everyone.
+
+Also in `app/newswriter.js`:
+- `notNews()`: press-release wording ("salutes", "celebrates", "named… champion", "wins… award", "webinar") and
+  promotions that end "…, and more".
+- `spokenStory()` drops a leading "Watch" / "Live news:" / "Video:" label, a trailing "(1)", and a trailing bare
+  ticker list ("— INTU, ROST.", queue item 7).
+- `buildNews()` (`app/script.js`) skips a story that is the same event as one already chosen; the higher-ranked
+  one stays.
+
+**Measured.**
+
+| | Before | After |
+|---|---|---|
+| Bad stories in 12 news reels (36 stories, used for tuning) | 9 | 1 (a "US Economy:" show label) |
+| … the same event again | 4 | 0 |
+| … press releases and promotions | 3 | 0 |
+| … leftovers read aloud | 2 | 1 |
+| Held out: 4 reels from live feeds fetched later, with the snapshot blocked | no bad stories | unchanged (nothing good removed) |
+| Held out: all 406 pairs of 29 live investing headlines, pairs called the same event | | 46: 45 right (11 takes on the Anthropic IPO; two takes on the Nasdaq's drop), 1 borderline ("prediction markets' outlook for stocks dims amid AI sell-off") |
+
+Found on the way: the first version of the roundup check let "Here are Friday's biggest analyst calls: Anthropic,
+SpaceX, Tesla, Apple, Netflix, MSG Rangers, UnitedHealth" collide with the real Rangers and UnitedHealth stories
+(fixed). And my edit script wrote `\b` as a backspace character into 16 regular expressions, so nothing
+matched until the file was scanned and fixed.
+
+**Tests.** `tests/web/logic.mjs`, "the news editor (v61)": the nine judged pairs, press releases, leftovers, and a
+news reel telling the Anthropic IPO once.
+
+---
+
 ## v60 · Visuals · Graphics that say what the line says (and market recaps render again)
 
 **How it was found.** Real renders of a news reel (investing) and an explainer (Emergency fund), frame by frame.
@@ -715,26 +771,22 @@ Found on the live feed right after release and added: a trailing fragment that p
 4. **Captions on the hardest lines.** Headlines full of numbers, tickers and names still have 21–30% of words
    more than 200 ms off (v58). eSpeak's sounds for a word on its own differ from how Kokoro says it in the line;
    splitting the line's own phonemes by word would be closer.
-5. **The same story told three times (news).** On a falling day the news reel's three "big stories" were one
-   story (futures fall / futures plunge / indexes enter a correction): the duplicate check compares words, not
-   meaning. The on-phone sentence model (v52) could judge sameness by meaning.
-6. **Literal pictures.** "Long-term habits build wealth" draws a hammer ("build"); a verb used figuratively still
+5. **Literal pictures.** "Long-term habits build wealth" draws a hammer ("build"); a verb used figuratively still
    picks its literal object.
-7. **Ticker lists read aloud.** "…Iran Decision — INTU, ROST." ends a news line with bare tickers.
-8. **"Your topic" leftovers (v59).**
+6. **"Your topic" leftovers (v59).**
    - Hedge fund opens on the wrong subject ("Hedge fund replication is…").
    - Day trading's definition is cut short ("…speculation in securities in.").
    - Worked examples are read out of context (Dollar cost averaging).
    - Local rules without a country name (Sweden's ISK) aren't caught.
    - Encyclopedia register remains ("is composed of several layers").
-9. **"Your topic" jargon.** Formal words are now plain (v55), but technical terms remain ("distribution",
+7. **"Your topic" jargon.** Formal words are now plain (v55), but technical terms remain ("distribution",
    "securitization"); explaining a term needs a source sentence that does.
-10. **Photo supply.** Where no photo fits by meaning (Inflation, Roth IRA, a mortgage explainer), every scene is an
+8. **Photo supply.** Where no photo fits by meaning (Inflation, Roth IRA, a mortgage explainer), every scene is an
    illustration; other searches (the topic's Wikipedia image, related subjects) could find real photos that fit.
-11. **A measuring tool in the repo.** The Whisper/DNSMOS (v57) and forced-alignment (v58) checks live outside the
+9. **A measuring tool in the repo.** The Whisper/DNSMOS (v57) and forced-alignment (v58) checks live outside the
    repository; adding them under `scripts/` would let every narration change be measured the same way.
-12. **A review-editor timer.** `app/main.js` rechecks an edited line in a timeout that reads `state.plan.fact`
+10. **A review-editor timer.** `app/main.js` rechecks an edited line in a timeout that reads `state.plan.fact`
    after the plan can be cleared (an occasional uncaught error in the fuzz test). UI code, outside these three areas.
 
-(Done: AAPL-like tickers, queue item 5 before v57: spelled letters now come from a table, so "A.A.P.L." keeps both
+(Done: the same story told three times and ticker lists read aloud, v61. AAPL-like tickers, queue item 5 before v57: spelled letters now come from a table, so "A.A.P.L." keeps both
 A's.)

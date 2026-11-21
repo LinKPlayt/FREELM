@@ -1,9 +1,14 @@
 // The app's version and its update notes, shown once in a "What's new" window after each update.
 // When you deploy: bump APP_VERSION, add an entry at the top of UPDATES, and set the same number in
 // sw.js (VERSION = "reelbot-v<APP_VERSION>"). A test checks the two match.
-export const APP_VERSION = 60;
+export const APP_VERSION = 61;
 
 export const UPDATES = [
+  { version: 61, title: "News videos with three different stories", items: [
+    "A news video no longer tells one event three times (\u201cfutures fall\u201d, \u201cfutures plunge\u201d, \u201cthe S&P enters a correction\u201d, or three takes on the same IPO): each event is told once and the next stories are different ones.",
+    "Press releases and promotions (\u201cCompany salutes\u2026\u201d, \u201c\u2026named global champion\u201d, \u201c\u2026 and more\u201d) aren't read as news.",
+    "Labels and leftovers aren't read out: \u201cWatch\u201d, \u201c(1)\u201d, or a list of tickers at the end of a headline.",
+  ] },
   { version: 60, title: "Market recaps work again, and graphics that say what the line says", items: [
     "Market recaps render again. Since version 53 they failed while drawing the day's board (and news videos failed whenever they showed a live chart).",
     "A story about a fall never shows a rising chart any more (and the reverse): \u201cFutures fall\u201d used to open on a chart going up.",

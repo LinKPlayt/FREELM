@@ -134,14 +134,66 @@ export function sentenceCase(t) {
   return left > 2 ? t : out;
 }
 
+// Not a news story: a press release or a promotion syndicated as a headline ("Asure Software Salutes Small Business
+// Saturday with Recruiting and HR Milestones", "Sophie Keane… Named Global Champion at…", "Bilt Rent Day December
+// 2026: statement credit bonus, JetBlue status, and more").
+export const notNews = (t) => /\b(?:salutes|celebrates|honou?red|recogni[sz]ed (?:as|for|by|among)|named (?:\w+ ){0,3}(?:champion|winner|finalist|honoree)|wins (?:\w+ ){0,3}awards?|award-winning|to host|hosts (?:a )?webinar|webinar)\b/i.test(t)
+  || /\b(?:with|and) [\w&' -]{0,40}milestones\b/i.test(t) || /,? and more\.?$/i.test(t.trim());
+
+// What event a story is about, so a reel doesn't tell one event three times ("Futures fall…", "Futures plunge after
+// 6 straight days…", "S&P 500 and the Dow hit correction territory"). Wording alone can't tell (the on-phone
+// sentence model scores these duplicates 0.40-0.46, and two different Fed stories 0.45), so the event is read:
+//   the broad market moving: an index, "stocks", "futures" or "Wall Street" followed by a move;
+//   an asset moving (crypto, gold, oil, bonds, the dollar);
+//   a company or person at the centre (a name in both, apart from ones in many unrelated stories: the Fed, Trump).
+const MOVE = "(?:falls?|fell|falling|plunge[sd]?|plunging|drops?|dropped|dropping|slides?|slid|sliding|tumbles?|tumbled|slumps?|slumped|sinks?|sank|tank(?:s|ed)?|" +
+  "rall(?:y|ies|ied)|surges?|surged|soars?|soared|jumps?|jumped|rises?|rose|rising|climbs?|climbed|gains?|gained|rebound(?:s|ed)?|losses|lost|loses|losing|(?:down|up) \\d|correction|sell-?off|selloff|" +
+  "rout|record|worst|best|red|green|lows?|highs?|turns? negative|turns? positive)";
+const MARKET = new RegExp(String.raw`\b(?:s&p(?: 500)?|dow(?: jones)?|nasdaq(?: 100| composite)?|russell 2000|stocks|futures|wall street|stock market|equities|markets)\b[^.;]{0,60}?\b` + MOVE + String.raw`\b`, "i");
+const ASSETS = [["crypto", /\b(?:bitcoin|btc|crypto(?:currenc(?:y|ies))?|ether(?:eum)?|solana)\b/i], ["gold", /\bgold\b/i], ["oil", /\b(?:oil|crude|brent)\b/i], ["bonds", /\b(?:treasur(?:y|ies)|bond yields?|yields)\b/i], ["dollar", /\b(?:the )?dollar\b/i]];
+const PUBLIC = new Set("fed federal reserve sec irs ftc doj congress senate house white trump biden harris powell vance musk america american americans china chinese japan japanese europe european britain british india canada mexico ai ipo etf etfs ceo cfo gop wall street social security medicare medicaid treasury nasdaq dow nyse bitcoin ethereum ether solana crypto gold oil friday monday tuesday wednesday thursday saturday sunday january february march april june july august september october november december watch live news exclusive breaking update".split(" "));
+export function eventKeys(text) {
+  const keys = new Set(), t = String(text || "");
+  if (MARKET.test(t)) keys.add("market");
+  for (const [k, re] of ASSETS) { const m = re.exec(t); if (m && new RegExp(String.raw`\b` + MOVE + String.raw`\b`, "i").test(t.slice(m.index))) keys.add(k); }
+  // Names: capitalised words that aren't ordinary headline words ("Anthropic", "Nvidia", "CoreWeave"). Capitals only
+  // mean a name in a sentence-case headline (in Title Case "Retreat" and "Global" are capitalised too), where the
+  // first word counts as well ("Anthropic soared in its debut…").
+  const ws = t.split(/\s+/), long = ws.filter((w) => /[A-Za-z]{4,}/.test(w));
+  const titleCase = long.length >= 4 && long.filter((w) => /^[^A-Za-z]*[A-Z]/.test(w)).length / long.length >= 0.7;
+  // A roundup that lists names ("Friday's biggest analyst calls: Anthropic, SpaceX, Tesla, Apple, Netflix…") is about
+  // none of them in particular.
+  if ((t.match(/,/g) || []).length >= 3) return keys;
+  ws.forEach((w) => {
+    const core = w.replace(/[’']s$/, "").replace(/^[^A-Za-z]+|[^A-Za-z]+$/g, "");
+    if (/^[A-Z][A-Za-z]{3,}$/.test(core) && !COMMON.has(core.toLowerCase()) && !PUBLIC.has(core.toLowerCase())) keys.add((titleCase ? "title:" : "name:") + core.toLowerCase());
+  });
+  return keys;
+}
+export function sameEvent(a, b) {
+  const A = eventKeys(a), B = eventKeys(b);
+  for (const k of A) {
+    if (!k.startsWith("title:") && B.has(k)) return true;
+    // A name counts when at least one of the two headlines is in sentence case.
+    if (k.startsWith("name:") && B.has("title:" + k.slice(5))) return true;
+    if (k.startsWith("title:") && B.has("name:" + k.slice(6))) return true;
+  }
+  return false;
+}
+
 // The story as one or two spoken sentences, or null when it can't be told honestly.
 //   item: { title, summary, source }. Returns { text, resolved } (resolved: the summary filled a gap).
 export function spokenStory(item, { maxWords = 30 } = {}) {
   const raw = String(item?.title || "");
-  if (!raw || seoPage(raw)) return null;
+  if (!raw || seoPage(raw) || notNews(raw)) return null;
   // Columns and first-person essays ("I left a corporate job…") would sound like the narrator's own story.
   if (/^(?:column|opinion|commentary|perspective)\s*[|:–—]/i.test(raw)) return null;
-  let head = stripSource(raw, item.source || "");
+  let head = stripSource(raw, item.source || "")
+    // Labels and leftovers that aren't part of the story: "Watch US Economy: …", "Live news: …", "… contractors (1)",
+    // and a bare list of tickers at the end ("… Iran Decision— INTU, ROST.").
+    .replace(/^(?:watch|video|live news|live|listen|exclusive|breaking|update)\s*(?:[:|–—-]\s*|\s+(?=[A-Z]))/i, "")
+    .replace(/\s*\((?:\d{1,2}|video|exclusive|updated?)\)\s*$/i, "")
+    .replace(/\s*[—–-]\s*(?:[A-Z]{1,5}(?:,\s*|\s+and\s+|\s*$))+\.?$/, "");
   if (/^(?:I|I'm|I've|I'd|My|We|We're|We've|Our)\b/.test(head)) return null;
   if (/^\W*c\s?o\s?r\s?r\s?e\s?c\s?t\s?i\s?o\s?n\b|^\//i.test(head)) return null;      // wire corrections
   head = sentenceCase(cleanHeadline(head, 99).replace(/\.$/, ""));

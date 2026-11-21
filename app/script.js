@@ -1,5 +1,5 @@
 import { composeStory, cleanHeadline, headlineThread, marketMood, isDefinition, junkHeadline, fits } from "./story.js";
-import { spokenStory, sentencesOf, stripSource, teaserIn } from "./newswriter.js";
+import { spokenStory, sentencesOf, stripSource, teaserIn, sameEvent } from "./newswriter.js";
 // Script writer: turns research into a short spoken script (hook -> points -> call to action).
 // A JavaScript port of reelbot/script.py so reels can be written on the phone.
 
@@ -159,7 +159,8 @@ export function buildNews(headlines, markets, opts) {
     if (!story || t.split(/\s+/).length < 4) continue;
     const key = (x) => new Set(x.toLowerCase().match(/[a-z]{4,}/g) || []);
     const a = key(t);
-    if (distinct.some((d) => { const b = key(d.said); let n = 0; for (const w of a) if (b.has(w)) n++; return n / Math.max(1, Math.min(a.size, b.size)) > 0.6; })) continue;
+    // Not the same words, and not the same event told again ("Futures fall…" then "S&P 500 hits correction territory").
+    if (distinct.some((d) => { const b = key(d.said); let n = 0; for (const w of a) if (b.has(w)) n++; return n / Math.max(1, Math.min(a.size, b.size)) > 0.6 || sameEvent(t, d.said); })) continue;
     distinct.push({ ...h, said: t });
     if (distinct.length >= 4) break;
   }
